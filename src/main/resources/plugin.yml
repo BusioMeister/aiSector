@@ -1,0 +1,16 @@
+name: aiSECTOR
+version: 1.1
+main: ai.aisector.SectorPlugin
+api-version: 1.20
+description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
+commands:
+  sectorinfo:
+    description: Wyświetla informacje o bieżącym sektorze.
+    usage: /sectorinfo
+    permission: ai.sector.info
+permissions:
+  ai.sector.info:
+    description: Pozwala na użycie komendy /sectorinfo.
+    default: true
+    depend:
+      - ProtocolLib
