@@ -69,7 +69,7 @@
 
     <build>
         <plugins>
-            <!-- Kompilator Maven -->
+            <!-- Kompilator -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -79,7 +79,8 @@
                     <target>9</target>
                 </configuration>
             </plugin>
-            <!-- Maven Shade Plugin (do łączenia zależności w jednym JAR) -->
+
+            <!-- Tworzenie JAR-a z Main-Class -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -92,10 +93,23 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>ai.aisector.SectorPlugin</mainClass>
+                                </transformer>
+                            </transformers>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
+
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
     </build>
+
 </project>
