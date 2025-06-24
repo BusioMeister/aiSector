@@ -14,52 +14,51 @@ public class PlayerListener implements Listener {
 
     private final SectorManager sectorManager;
     private final RedisManager redisManager;
-    private final WorldBorderManager borderManager = new WorldBorderManager();
+    private final WorldBorderManager borderManager;
 
-    public PlayerListener(SectorManager sectorManager, RedisManager redisManager) {
+    public PlayerListener(SectorManager sectorManager, RedisManager redisManager, WorldBorderManager borderManager) {
         this.sectorManager = sectorManager;
         this.redisManager = redisManager;
+        this.borderManager = borderManager;
     }
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-        int x = player.getLocation().getBlockX();
-        int z = player.getLocation().getBlockZ();
 
-        String sectorName = sectorManager.getSectorForLocation(x,z);
-            if (Objects.equals(sectorName, ""))return;
-
-        SectorData sectorData = sectorManager.calculateSectorData(sectorName);
         Location from = event.getFrom();
         Location to = event.getTo();
 
         if (to == null || (from.getBlockX() == to.getBlockX() && from.getBlockZ() == to.getBlockZ())) {
             return;
         }
-        UUID playerId = event.getPlayer().getUniqueId();
+
+        UUID playerId = player.getUniqueId();
         String previousSectorId = sectorManager.getSectorForLocation(from.getBlockX(), from.getBlockZ());
         String newSectorId = sectorManager.getSectorForLocation(to.getBlockX(), to.getBlockZ());
-        Location location = Direction.fromLocations(from,to).add(to.clone(),3);
-
-        long start = System.currentTimeMillis();
-
 
         if (!previousSectorId.equals(newSectorId)) {
+            Location location = Direction.fromLocations(from, to).add(to.clone(), 3);
+            long start = System.currentTimeMillis();
+
             try (Jedis jedis = redisManager.getJedis()) {
                 String key = "player:data:" + playerId;
-                String data = PlayerDataSerializer.serialize(event.getPlayer(),location);
+                String data = PlayerDataSerializer.serialize(player, location);
                 jedis.set(key, data);
-                jedis.expire(key, 60 * 5); // Dane wygasają po 5 minutach
+                jedis.expire(key, 60 * 5); // wygasa po 5 minutach
             }
 
             long end = System.currentTimeMillis();
-            System.out.println("Gracz " + event.getPlayer().getName() + " przeszedł z sektora " + previousSectorId +
-                    " do sektora " + newSectorId + " " + (end - start));
+            System.out.println("Gracz " + player.getName() + " przeszedł z sektora " + previousSectorId +
+                    " do sektora " + newSectorId + " (" + (end - start) + "ms)");
 
             sectorManager.transferPlayer(playerId, newSectorId);
+
+            SectorData sectorData = sectorManager.calculateSectorData(newSectorId);
+            borderManager.sendWorldBorder(player,
+                    sectorData.getCenterX(),
+                    sectorData.getCenterZ(),
+                    sectorData.getSize() + 0.5);
         }
-
     }
-
 }

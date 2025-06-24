@@ -15,13 +15,13 @@ public class PlayerJoinListener implements Listener {
     private final JavaPlugin plugin;
     private final SectorManager sectorManager;
     private final RedisManager redisManager;
-    private final WorldBorderManager borderManager = new WorldBorderManager();
+    private final WorldBorderManager borderManager;
 
-
-    public PlayerJoinListener(JavaPlugin plugin, SectorManager sectorManager, RedisManager redisManager) {
+    public PlayerJoinListener(JavaPlugin plugin, SectorManager sectorManager, RedisManager redisManager, WorldBorderManager borderManager) {
+        this.plugin = plugin;
         this.sectorManager = sectorManager;
         this.redisManager = redisManager;
-        this.plugin = plugin;
+        this.borderManager = borderManager;
     }
 
     @EventHandler
@@ -34,13 +34,19 @@ public class PlayerJoinListener implements Listener {
             if (data != null) {
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     PlayerDataSerializer.deserialize(event.getPlayer(), data);
-                    String sectorName = sectorManager.getSectorForLocation(event.getPlayer().getLocation().getBlockX(),event.getPlayer().getLocation().getBlockZ());
-                    if (Objects.equals(sectorName, ""))return;
+                    String sectorName = sectorManager.getSectorForLocation(
+                            event.getPlayer().getLocation().getBlockX(),
+                            event.getPlayer().getLocation().getBlockZ());
+
+                    if (Objects.equals(sectorName, "")) return;
 
                     SectorData sectorData = sectorManager.calculateSectorData(sectorName);
-                    borderManager.sendWorldBorder(event.getPlayer(),sectorData.getCenterX(),sectorData.getCenterZ(),sectorData.getSize()+3);
+                    borderManager.sendWorldBorder(event.getPlayer(),
+                            sectorData.getCenterX(),
+                            sectorData.getCenterZ(),
+                            sectorData.getSize() + 3);
                     plugin.getLogger().info("Dane gracza " + event.getPlayer().getName() + " zostały załadowane.");
-                }, 2L); // Odczekanie 1 sekundy po dołączeniu
+                }, 2L); // odczekaj chwilę po dołączeniu
             }
         } catch (Exception e) {
             plugin.getLogger().severe("Błąd podczas wczytywania danych gracza: " + e.getMessage());

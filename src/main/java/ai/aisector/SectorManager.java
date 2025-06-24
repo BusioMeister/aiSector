@@ -1,47 +1,78 @@
 package ai.aisector;
 
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import redis.clients.jedis.Jedis;
 
-import java.util.List;
-import java.util.UUID;
-
+import java.io.File;
+import java.util.*;
 
 public class SectorManager {
 
-    private RedisManager redisManager;
-    private List<Sector> SECTORS =  List.of(
-            new Sector("Sector1", 0, 100, 0, 100),  // Pierwszy sektor o wymiarach 100x100
-            new Sector("Sector2", 100, 200, 0, 100) // Drugi sektor obok pierwszego, również 100x100
-    );
+    private final RedisManager redisManager;
+    private final List<Sector> SECTORS = new ArrayList<>();
+
+    public SectorManager(RedisManager redisManager) {
+        this.redisManager = redisManager;
+        loadSectorsFromFile(); // załaduj sektory z pliku
+    }
+
+    public void loadSectorsFromFile() {
+        File file = new File("plugins/AISector/sectors.yml");
+        if (!file.exists()) {
+            System.out.println("[AISector] Plik sectors.yml nie istnieje. Tworzenie domyślnego...");
+            file.getParentFile().mkdirs();
+
+            // Domyślny sektor
+            YamlConfiguration config = new YamlConfiguration();
+            ConfigurationSection section = config.createSection("sectors.Sector1");
+            section.set("minX", 0);
+            section.set("maxX", 100);
+            section.set("minZ", 0);
+            section.set("maxZ", 100);
+            try {
+                config.save(file);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection sectorSection = config.getConfigurationSection("sectors");
+        if (sectorSection == null) return;
+
+        for (String key : sectorSection.getKeys(false)) {
+            ConfigurationSection s = sectorSection.getConfigurationSection(key);
+            if (s == null) continue;
+
+            int minX = s.getInt("minX");
+            int maxX = s.getInt("maxX");
+            int minZ = s.getInt("minZ");
+            int maxZ = s.getInt("maxZ");
+            SECTORS.add(new Sector(key, minX, maxX, minZ, maxZ));
+        }
+
+        System.out.println("[AISector] Załadowano sektory: " + SECTORS.size());
+    }
+
     public SectorData calculateSectorData(String sectorName) {
         for (Sector sector : SECTORS) {
             if (sector.getName().equalsIgnoreCase(sectorName)) {
-                // Obliczanie środka (centerX, centerZ)
                 double centerX = (sector.getMinX() + sector.getMaxX()) / 2.0;
                 double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
-
-                // Obliczanie rozmiaru (największa odległość między granicami sektora)
                 double size = Math.max(
                         sector.getMaxX() - sector.getMinX(),
                         sector.getMaxZ() - sector.getMinZ()
                 );
-
                 return new SectorData(centerX, centerZ, size);
             }
         }
         throw new IllegalArgumentException("Nie znaleziono sektora o nazwie: " + sectorName);
     }
 
-    public SectorManager(RedisManager redisManager) {
-        this.redisManager = redisManager;
-
-    }
-
-    // Przykładowa metoda do transferu gracza między sektorami
     public void transferPlayer(UUID uuid, String sectorId) {
         Jedis jedis = redisManager.getJedis();
         try {
-            // Przykładowa operacja na Redis
             jedis.publish("sector-transfer", uuid + ":" + sectorId);
         } catch (Exception e) {
             e.printStackTrace();
@@ -49,25 +80,22 @@ public class SectorManager {
             redisManager.releaseJedis(jedis);
         }
     }
+
     public String getSectorForLocation(int x, int z) {
-        for (Sector SECTOR : SECTORS) {
-            if (SECTOR.isInside(x, z)) {
-                return SECTOR.getName();
-            }
+        for (Sector s : SECTORS) {
+            if (s.isInside(x, z)) return s.getName();
         }
         return "";
+    }
+
+    public Sector getSector(int x, int z) {
+        for (Sector s : SECTORS) {
+            if (s.isInside(x, z)) return s;
+        }
+        return null;
     }
 
     public List<Sector> getSECTORS() {
         return SECTORS;
     }
-    public Sector getSector(int x, int z) {
-        for (Sector SECTOR : SECTORS) {
-            if (SECTOR.isInside(x, z)) {
-                return SECTOR;
-            }
-        }
-        return null;
-    }
-
 }
