@@ -1,6 +1,7 @@
 package ai.aisector;
 
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -26,30 +27,48 @@ public class PlayerJoinListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        UUID playerId = event.getPlayer().getUniqueId();
+        Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
         String key = "player:data:" + playerId;
+
 
         try (Jedis jedis = redisManager.getJedis()) {
             String data = jedis.get(key);
             if (data != null) {
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    PlayerDataSerializer.deserialize(event.getPlayer(), data);
+                    PlayerDataSerializer.deserialize(player, data);
+
+                    Bukkit.getLogger().info("Player " + player.getName() + " joined at: " + player.getLocation());
+
+
                     String sectorName = sectorManager.getSectorForLocation(
-                            event.getPlayer().getLocation().getBlockX(),
-                            event.getPlayer().getLocation().getBlockZ());
+                            player.getLocation().getBlockX(),
+                            player.getLocation().getBlockZ());
 
-                    if (Objects.equals(sectorName, "")) return;
+                    if (sectorName == null || sectorName.isEmpty()) {
+                        plugin.getLogger().warning("Gracz " + player.getName() + " nie znajduje się w żadnym sektorze.");
+                        return;
+                    }
 
-                    SectorData sectorData = sectorManager.calculateSectorData(sectorName);
-                    borderManager.sendWorldBorder(event.getPlayer(),
-                            sectorData.getCenterX(),
-                            sectorData.getCenterZ(),
-                            sectorData.getSize() + 3);
-                    plugin.getLogger().info("Dane gracza " + event.getPlayer().getName() + " zostały załadowane.");
-                }, 2L); // odczekaj chwilę po dołączeniu
+                    Sector sector = sectorManager.getSector(
+                            player.getLocation().getBlockX(),
+                            player.getLocation().getBlockZ());
+
+                    if (sector == null) {
+                        plugin.getLogger().warning("Nie znaleziono sektora dla gracza " + player.getName());
+                        return;
+                    }
+
+                    borderManager.sendWorldBorder(player, sector);
+
+
+                    plugin.getLogger().info("Dane gracza " + player.getName() + " zostały załadowane i ustawiono border sektora " + sectorName);
+
+                }, 2L);
             }
         } catch (Exception e) {
             plugin.getLogger().severe("Błąd podczas wczytywania danych gracza: " + e.getMessage());
         }
     }
+
 }

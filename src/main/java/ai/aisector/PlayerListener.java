@@ -7,7 +7,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
 import redis.clients.jedis.Jedis;
 
-import java.util.Objects;
 import java.util.UUID;
 
 public class PlayerListener implements Listener {
@@ -38,14 +37,23 @@ public class PlayerListener implements Listener {
         String newSectorId = sectorManager.getSectorForLocation(to.getBlockX(), to.getBlockZ());
 
         if (!previousSectorId.equals(newSectorId)) {
-            Location location = Direction.fromLocations(from, to).add(to.clone(), 3);
+
+            // Brak sektora docelowego — cofnij gracza i pokaż wiadomość
+            if (newSectorId == null || newSectorId.isEmpty()) {
+                event.setCancelled(true);
+                player.sendMessage("§cNie możesz przejść dalej — ten obszar nie należy do żadnego sektora.");
+                return;
+            }
+
+            Location location = Direction.fromLocations(from, to).add(to.clone());
+
             long start = System.currentTimeMillis();
 
             try (Jedis jedis = redisManager.getJedis()) {
                 String key = "player:data:" + playerId;
                 String data = PlayerDataSerializer.serialize(player, location);
                 jedis.set(key, data);
-                jedis.expire(key, 60 * 5); // wygasa po 5 minutach
+                jedis.expire(key, 60 * 5); // 5 minut wygasania
             }
 
             long end = System.currentTimeMillis();
@@ -55,10 +63,9 @@ public class PlayerListener implements Listener {
             sectorManager.transferPlayer(playerId, newSectorId);
 
             SectorData sectorData = sectorManager.calculateSectorData(newSectorId);
-            borderManager.sendWorldBorder(player,
-                    sectorData.getCenterX(),
-                    sectorData.getCenterZ(),
-                    sectorData.getSize() + 0.5);
+            if (sectorData != null) {
+                // borderManager.sendWorldBorder(player, sectorData.getCenterX(), sectorData.getCenterZ());
+            }
         }
     }
 }

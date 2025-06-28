@@ -27,9 +27,9 @@ public class SectorManager {
             YamlConfiguration config = new YamlConfiguration();
             ConfigurationSection section = config.createSection("sectors.Sector1");
             section.set("minX", 0);
-            section.set("maxX", 100);
+            section.set("maxX", 99);
             section.set("minZ", 0);
-            section.set("maxZ", 100);
+            section.set("maxZ", 99);
             try {
                 config.save(file);
             } catch (Exception e) {
@@ -60,14 +60,13 @@ public class SectorManager {
             if (sector.getName().equalsIgnoreCase(sectorName)) {
                 double centerX = (sector.getMinX() + sector.getMaxX()) / 2.0;
                 double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
-                double size = Math.max(
-                        sector.getMaxX() - sector.getMinX(),
-                        sector.getMaxZ() - sector.getMinZ()
-                );
+                double sizeX = (sector.getMaxX() - sector.getMinX() + 1);
+                double sizeZ = (sector.getMaxZ() - sector.getMinZ() + 1);
+                double size = Math.max(sizeX, sizeZ);
                 return new SectorData(centerX, centerZ, size);
             }
         }
-        throw new IllegalArgumentException("Nie znaleziono sektora o nazwie: " + sectorName);
+        return null; // zamiast rzucania wyjątku
     }
 
     public void transferPlayer(UUID uuid, String sectorId) {

@@ -15,11 +15,12 @@ public class SectorPlugin extends JavaPlugin {
 
         PlayerListener playerListener = new PlayerListener(sectorManager, redisManager, borderManager);
         PlayerJoinListener playerJoinListener = new PlayerJoinListener(this, sectorManager, redisManager, borderManager);
-
         getServer().getPluginManager().registerEvents(playerJoinListener, this);
         getServer().getPluginManager().registerEvents(playerListener, this);
-
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(sectorManager));
+
+        GlobalChatPlugin globalChat = new GlobalChatPlugin(this);
+        globalChat.register();
     }
 
     @Override

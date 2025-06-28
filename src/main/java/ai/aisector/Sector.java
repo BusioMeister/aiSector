@@ -1,8 +1,5 @@
 package ai.aisector;
 
-import org.bukkit.World;
-import org.bukkit.WorldBorder;
-
 public class Sector {
     private final String name;
     private final int xMin, xMax, zMin, zMax;
@@ -32,11 +29,10 @@ public class Sector {
     }
 
     public int getMinZ() {
-        return xMin;
+        return zMin; // poprawione
     }
 
     public int getMaxZ() {
         return zMax;
     }
-
 }
