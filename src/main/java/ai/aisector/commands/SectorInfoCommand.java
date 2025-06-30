@@ -1,5 +1,6 @@
-package ai.aisector;
+package ai.aisector.commands;
 
+import ai.aisector.sectors.SectorManager;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;

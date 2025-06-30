@@ -1,15 +1,15 @@
-package ai.aisector;
+package ai.aisector.player;
 
+import ai.aisector.utils.ItemStackUtil;
+import ai.aisector.utils.JsonUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class PlayerDataSerializer {
 

@@ -1,4 +1,4 @@
-package ai.aisector;
+package ai.aisector.sectors;
 
 public class Sector {
     private final String name;

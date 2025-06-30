@@ -1,4 +1,4 @@
-package ai.aisector;
+package ai.aisector.sectors;
 
 public class SectorData {
     private final double centerX;

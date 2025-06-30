@@ -1,5 +1,6 @@
-package ai.aisector;
+package ai.aisector.sectors;
 
+import ai.aisector.sectors.Sector;
 import net.minecraft.network.protocol.game.ClientboundInitializeBorderPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,7 +22,7 @@ public class WorldBorderManager {
         double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
         double sizeX = sector.getMaxX() - sector.getMinX() + 1;
         double sizeZ = sector.getMaxZ() - sector.getMinZ() + 1;
-        double finalSize = Math.max(sizeX, sizeZ) + 1.5;
+        double finalSize = Math.max(sizeX, sizeZ) + 3;
 
         WorldBorder border = new WorldBorder();
         border.setCenter(centerX, centerZ);

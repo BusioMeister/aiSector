@@ -12,5 +12,3 @@ permissions:
   ai.sector.info:
     description: Pozwala na użycie komendy /sectorinfo.
     default: true
-    depend:
-      - ProtocolLib

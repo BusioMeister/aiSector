@@ -1,4 +1,4 @@
-package ai.aisector;
+package ai.aisector.database;
 
 import com.mongodb.Block;
 import com.mongodb.client.MongoClient;
@@ -7,6 +7,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import org.bson.Document;
 import org.bson.conversions.Bson;
+import org.bukkit.Bukkit;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,14 +33,14 @@ public class MongoDBManager {
     public void insertOne(String collectionName, Document document) {
         MongoCollection<Document> collection = getCollection(collectionName);
         collection.insertOne(document);
-        System.out.println("Dokument został dodany do kolekcji: " + collectionName);
+        Bukkit.getLogger().info("Dokument został dodany do kolekcji: " + collectionName);
     }
 
     // Metoda zapisu wielu dokumentów
     public void insertMany(String collectionName, List<Document> documents) {
         MongoCollection<Document> collection = getCollection(collectionName);
         collection.insertMany(documents);
-        System.out.println("Dodano " + documents.size() + " dokumentów do kolekcji: " + collectionName);
+        Bukkit.getLogger().info("Dodano " + documents.size() + " dokumentów do kolekcji: " + collectionName);
     }
 
     // Metoda odczytu wszystkich dokumentów
@@ -65,7 +66,7 @@ public class MongoDBManager {
     public void close() {
         if (mongoClient != null) {
             mongoClient.close();
-            System.out.println("Połączenie z MongoDB zostało zamknięte.");
+            Bukkit.getLogger().info("Połączenie z MongoDB zostało zamknięte.");
         }
     }
 }

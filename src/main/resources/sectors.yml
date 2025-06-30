@@ -4,7 +4,6 @@ sectors:
     maxX: 99
     minZ: 0
     maxZ: 99
-
   Sector2:
     minX: 100
     maxX: 199

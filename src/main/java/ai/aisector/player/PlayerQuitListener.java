@@ -1,10 +1,10 @@
-package ai.aisector;
+package ai.aisector.player;
 
+import ai.aisector.database.RedisManager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import redis.clients.jedis.Jedis;
 
 public class PlayerQuitListener implements Listener {
 

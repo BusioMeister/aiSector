@@ -1,4 +1,4 @@
-package ai.aisector;
+package ai.aisector.utils;
 
 import org.bukkit.Location;
 

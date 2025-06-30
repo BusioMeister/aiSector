@@ -1,5 +1,10 @@
-package ai.aisector;
+package ai.aisector.player;
 
+import ai.aisector.utils.Direction;
+import ai.aisector.sectors.SectorManager;
+import ai.aisector.sectors.WorldBorderManager;
+import ai.aisector.database.RedisManager;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -57,15 +62,11 @@ public class PlayerListener implements Listener {
             }
 
             long end = System.currentTimeMillis();
-            System.out.println("Gracz " + player.getName() + " przeszedł z sektora " + previousSectorId +
+            Bukkit.getLogger().info("Gracz " + player.getName() + " przeszedł z sektora " + previousSectorId +
                     " do sektora " + newSectorId + " (" + (end - start) + "ms)");
 
             sectorManager.transferPlayer(playerId, newSectorId);
 
-            SectorData sectorData = sectorManager.calculateSectorData(newSectorId);
-            if (sectorData != null) {
-                // borderManager.sendWorldBorder(player, sectorData.getCenterX(), sectorData.getCenterZ());
-            }
         }
     }
 }

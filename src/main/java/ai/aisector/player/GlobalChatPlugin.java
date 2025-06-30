@@ -1,4 +1,4 @@
-package ai.aisector;
+package ai.aisector.player;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;

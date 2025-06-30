@@ -1,7 +1,11 @@
-package ai.aisector;
+package ai.aisector.sectors;
 
+import ai.aisector.database.RedisManager;
+import org.bukkit.Bukkit;
+import org.bukkit.WorldBorder;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import redis.clients.jedis.Jedis;
 
 import java.io.File;
@@ -20,16 +24,24 @@ public class SectorManager {
     public void loadSectorsFromFile() {
         File file = new File("plugins/AISector/sectors.yml");
         if (!file.exists()) {
-            System.out.println("[AISector] Plik sectors.yml nie istnieje. Tworzenie domyślnego...");
+            Bukkit.getLogger().info("[AISector] Plik sectors.yml nie istnieje. Tworzenie domyślnego...");
             file.getParentFile().mkdirs();
 
-            // Domyślny sektor
+            // Tworzenie domyślnej konfiguracji z dwoma sektorami
             YamlConfiguration config = new YamlConfiguration();
-            ConfigurationSection section = config.createSection("sectors.Sector1");
-            section.set("minX", 0);
-            section.set("maxX", 99);
-            section.set("minZ", 0);
-            section.set("maxZ", 99);
+
+            ConfigurationSection section1 = config.createSection("sectors.Sector1");
+            section1.set("minX", 0);
+            section1.set("maxX", 99);
+            section1.set("minZ", 0);
+            section1.set("maxZ", 99);
+
+            ConfigurationSection section2 = config.createSection("sectors.Sector2");
+            section2.set("minX", 100);
+            section2.set("maxX", 199);
+            section2.set("minZ", 0);
+            section2.set("maxZ", 99);
+
             try {
                 config.save(file);
             } catch (Exception e) {
@@ -52,8 +64,9 @@ public class SectorManager {
             SECTORS.add(new Sector(key, minX, maxX, minZ, maxZ));
         }
 
-        System.out.println("[AISector] Załadowano sektory: " + SECTORS.size());
+        Bukkit.getLogger().info("[AISector] Załadowano sektory: " + SECTORS.size());
     }
+
 
     public SectorData calculateSectorData(String sectorName) {
         for (Sector sector : SECTORS) {
@@ -92,6 +105,26 @@ public class SectorManager {
             if (s.isInside(x, z)) return s;
         }
         return null;
+    }
+    public void applyBorder(Player player, Sector sector) {
+        WorldBorder border = player.getWorld().getWorldBorder();
+
+        double centerX = (sector.getMinX() + sector.getMaxX()) / 2.0; // +0.5 by centrować na blok
+        double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
+        double sizeX = sector.getMaxX() - sector.getMinX() + 1;
+        double sizeZ = sector.getMaxZ() - sector.getMinZ() + 1;
+        double size = Math.max(sizeX, sizeZ)+ 3 ;
+
+        border.setCenter(centerX, centerZ);
+        border.setSize(size);
+        border.setWarningDistance(0); // możesz dostosować
+        border.setWarningTime(0);
+    }
+    public Sector getSectorByName(String name) {
+        return SECTORS.stream()
+                .filter(sector -> sector.getName().equalsIgnoreCase(name))
+                .findFirst()
+                .orElse(null);
     }
 
     public List<Sector> getSECTORS() {

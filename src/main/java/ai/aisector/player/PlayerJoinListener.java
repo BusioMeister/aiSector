@@ -1,5 +1,9 @@
-package ai.aisector;
+package ai.aisector.player;
 
+import ai.aisector.sectors.Sector;
+import ai.aisector.sectors.SectorManager;
+import ai.aisector.sectors.WorldBorderManager;
+import ai.aisector.database.RedisManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -8,7 +12,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import redis.clients.jedis.Jedis;
 
-import java.util.Objects;
 import java.util.UUID;
 
 public class PlayerJoinListener implements Listener {
