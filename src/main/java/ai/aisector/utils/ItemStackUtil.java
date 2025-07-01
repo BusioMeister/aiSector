@@ -42,4 +42,31 @@ public class ItemStackUtil {
             throw new RuntimeException("Nie udało się zdeserializować ItemStack[]", e);
         }
     }
+
+    // Serializacja pojedynczego ItemStack do Base64
+    public static String serializeItemStack(ItemStack item) {
+        if (item == null) return "";
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             BukkitObjectOutputStream bukkitOut = new BukkitObjectOutputStream(baos)) {
+
+            bukkitOut.writeObject(item);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
+
+        } catch (IOException e) {
+            throw new RuntimeException("Nie udało się zserializować ItemStack", e);
+        }
+    }
+
+    // Deserializacja pojedynczego ItemStack z Base64
+    public static ItemStack deserializeItemStack(String base64) {
+        if (base64 == null || base64.isEmpty()) return null;
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(Base64.getDecoder().decode(base64));
+             BukkitObjectInputStream bukkitIn = new BukkitObjectInputStream(bais)) {
+
+            return (ItemStack) bukkitIn.readObject();
+
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException("Nie udało się zdeserializować ItemStack", e);
+        }
+    }
 }

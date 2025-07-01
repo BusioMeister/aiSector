@@ -11,6 +11,13 @@ public class Sector {
         this.zMin = zMin;
         this.zMax = zMax;
     }
+    public double distanceToBorder(int x, int z) {
+        int dx = Math.min(Math.abs(x - xMin), Math.abs(x - xMax));
+        int dz = Math.min(Math.abs(z - zMin), Math.abs(z - zMax));
+        return Math.min(dx, dz);
+    }
+
+
 
     public String getName() {
         return name;

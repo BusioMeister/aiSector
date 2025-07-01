@@ -19,7 +19,7 @@ public enum Direction {
     }
 
     public Location add(Location base) {
-        return add(base, 5);
+        return add(base, 1);
     }
 
     public static Direction fromLocation(Location location) {
@@ -51,6 +51,19 @@ public enum Direction {
         }
 
         return Direction.UP_DOWN;
+    }
+    public static String cardinal(float yaw) {
+        yaw = (yaw % 360 + 360) % 360;
+
+        if (yaw >= 315 || yaw < 45) {
+            return "SOUTH";
+        } else if (yaw < 135) {
+            return "WEST";
+        } else if (yaw < 225) {
+            return "NORTH";
+        } else {
+            return "EAST";
+        }
     }
 }
 

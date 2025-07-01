@@ -3,6 +3,7 @@ package ai.aisector;
 import ai.aisector.commands.SectorInfoCommand;
 import ai.aisector.database.RedisManager;
 import ai.aisector.player.GlobalChatPlugin;
+import ai.aisector.player.OnlinePlayersPublisherTask;
 import ai.aisector.player.PlayerJoinListener;
 import ai.aisector.player.PlayerListener;
 
@@ -25,12 +26,14 @@ public class SectorPlugin extends JavaPlugin {
         redisManager = new RedisManager("127.0.0.1", 6379);
         sectorManager = new SectorManager(redisManager);
         worldBorderManager = new WorldBorderManager();
-
+        RedisManager redisManager = new RedisManager("localhost", 6379); // Podstaw swoje dane
         PlayerListener playerListener = new PlayerListener(sectorManager, redisManager, worldBorderManager);
         PlayerJoinListener playerJoinListener = new PlayerJoinListener(this, sectorManager, redisManager, worldBorderManager);
         getServer().getPluginManager().registerEvents(playerJoinListener, this);
         getServer().getPluginManager().registerEvents(playerListener, this);
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(sectorManager));
+        new OnlinePlayersPublisherTask(redisManager, "Sector1").runTaskTimer(this, 0L, 100L); // 100 ticks = 5 sekund
+        new OnlinePlayersPublisherTask(redisManager, "Sector2").runTaskTimer(this, 0L, 100L);
 
         List<String> channels = sectorManager.getSECTORS().stream()
                 .map(sector -> "sector-border-init:" + sector.getName())

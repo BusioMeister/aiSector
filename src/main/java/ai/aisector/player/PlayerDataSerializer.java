@@ -16,6 +16,10 @@ public class PlayerDataSerializer {
 
     public static String serialize(Player player,Location loc) {
         Map<String, Object> data = new HashMap<>();
+        int heldSlot = player.getInventory().getHeldItemSlot();
+        data.put("heldSlot", heldSlot);
+        data.put("heldItem", ItemStackUtil.serializeItemStack(player.getInventory().getItem(heldSlot)));
+
         // Pozycja gracza
         data.put("x", loc.getX());
         data.put("y", loc.getY());
@@ -35,7 +39,9 @@ public class PlayerDataSerializer {
         data.put("level", player.getLevel());
         data.put("exp", player.getExp());
         data.put("gameMode", player.getGameMode().name());
-
+        data.put("isFlying", player.isFlying());
+        data.put("isGliding", player.isGliding());
+        data.put("isSprinting", player.isSprinting());
 
         // Ekwipunek
         data.put("inventory", ItemStackUtil.serializeItemStackArray(player.getInventory().getContents()));
@@ -66,24 +72,31 @@ public class PlayerDataSerializer {
     }
 
     public static void deserialize(Player player, String JSON) {
-        Map<String,Object>data = JsonUtil.fromJson(JSON, Map.class);
+        Map<String,Object> data = JsonUtil.fromJson(JSON, Map.class);
+
         Location loc = new Location(
                 Bukkit.getWorld((String) data.get("world")),
-                (double) data.get("x"),
-                (double) data.get("y"),
-                (double) data.get("z"),
+                ((Number) data.get("x")).doubleValue(),
+                ((Number) data.get("y")).doubleValue(),
+                ((Number) data.get("z")).doubleValue(),
                 ((Number) data.get("yaw")).floatValue(),
                 ((Number) data.get("pitch")).floatValue()
         );
 
-        // Ustawienie pozycji
+        // Ustaw pozycję przed innymi operacjami
         player.teleport(loc);
 
+        // Bezpieczne pobieranie booleani
+        player.setFlying(getBooleanSafe(data, "isFlying"));
+        player.setGliding(getBooleanSafe(data, "isGliding"));
+        player.setSprinting(getBooleanSafe(data, "isSprinting"));
+        player.setSneaking(getBooleanSafe(data, "isSneaking"));
+
         // Stan gracza
-        player.setHealth((double) data.get("health"));
+        player.setHealth(((Number) data.get("health")).doubleValue());
         player.setFoodLevel(((Number) data.get("hunger")).intValue());
         player.setSaturation(((Number) data.get("saturation")).floatValue());
-        player.setAbsorptionAmount((double) data.get("absorption"));
+        player.setAbsorptionAmount(((Number) data.get("absorption")).doubleValue());
         player.setRemainingAir(((Number) data.get("air")).intValue());
         player.setFireTicks(((Number) data.get("fireTicks")).intValue());
         player.setTotalExperience(((Number) data.get("experience")).intValue());
@@ -92,12 +105,32 @@ public class PlayerDataSerializer {
         player.setGameMode(GameMode.valueOf((String) data.get("gameMode")));
 
         // Ekwipunek
-        player.getInventory().setContents(ItemStackUtil.deserializeItemStackArray( (String) data.get("inventory")));
-        player.getEnderChest().setContents(ItemStackUtil.deserializeItemStackArray( (String) data.get("enderChest")));
+        player.getInventory().setContents(ItemStackUtil.deserializeItemStackArray((String) data.get("inventory")));
+        player.getEnderChest().setContents(ItemStackUtil.deserializeItemStackArray((String) data.get("enderChest")));
+
+        // Przedmiot w ręce — jeśli masz go osobno zapisany
+        if (data.containsKey("heldSlot")) {
+            int heldSlot = ((Number) data.get("heldSlot")).intValue();
+            player.getInventory().setHeldItemSlot(heldSlot);
+        }
+        if (data.containsKey("heldItem")) {
+            Object heldItemJson = data.get("heldItem");
+            if (heldItemJson instanceof String) {
+                player.getInventory().setItem(player.getInventory().getHeldItemSlot(),
+                        ItemStackUtil.deserializeItemStack((String) heldItemJson));
+            }
+        }
 
         // Efekty mikstur
         player.addPotionEffects(deserializePotionEffects((List<Map<String, Object>>) data.get("effects")));
     }
+
+    private static boolean getBooleanSafe(Map<String, Object> map, String key) {
+        Object val = map.get(key);
+        if (val instanceof Boolean) return (Boolean) val;
+        return false;
+    }
+
 
     public static Set<PotionEffect> deserializePotionEffects(List<Map<String, Object>> serializedEffects) {
         Set<PotionEffect> effects = new HashSet<>();

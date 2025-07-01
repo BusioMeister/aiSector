@@ -106,6 +106,42 @@ public class SectorManager {
         }
         return null;
     }
+    public Sector getNextSector(Sector current, String direction) {
+        for (Sector s : SECTORS) {
+            switch (direction.toUpperCase()) {
+                case "NORTH":
+                    if (current.getMinZ() - 1 == s.getMaxZ() &&
+                            current.getMinX() <= s.getMaxX() && current.getMaxX() >= s.getMinX()) {
+                        return s;
+                    }
+                    break;
+                case "SOUTH":
+                    if (current.getMaxZ() + 1 == s.getMinZ() &&
+                            current.getMinX() <= s.getMaxX() && current.getMaxX() >= s.getMinX()) {
+                        return s;
+                    }
+                    break;
+                case "EAST":
+                    if (current.getMaxX() + 1 == s.getMinX() &&
+                            current.getMinZ() <= s.getMaxZ() && current.getMaxZ() >= s.getMinZ()) {
+                        return s;
+                    }
+                    break;
+                case "WEST":
+                    if (current.getMinX() - 1 == s.getMaxX() &&
+                            current.getMinZ() <= s.getMaxZ() && current.getMaxZ() >= s.getMinZ()) {
+                        return s;
+                    }
+                    break;
+            }
+        }
+        return null;
+    }
+
+
+
+
+
     public void applyBorder(Player player, Sector sector) {
         WorldBorder border = player.getWorld().getWorldBorder();
 
