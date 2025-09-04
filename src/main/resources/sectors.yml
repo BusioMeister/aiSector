@@ -9,3 +9,9 @@ sectors:
     maxX: 199
     minZ: 0
     maxZ: 99
+  Sector3:
+    minX: -100
+    maxX: -1
+    minZ: 0
+    maxZ: 99
+

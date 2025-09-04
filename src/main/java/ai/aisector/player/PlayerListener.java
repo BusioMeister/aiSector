@@ -1,17 +1,14 @@
 package ai.aisector.player;
 
-import ai.aisector.player.PlayerDataSerializer;
 import ai.aisector.utils.Direction;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
 import ai.aisector.database.RedisManager;
-import ai.aisector.utils.MessageUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
-import org.bukkit.boss.BossBar;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;

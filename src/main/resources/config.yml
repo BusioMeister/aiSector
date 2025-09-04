@@ -1,9 +1,13 @@
 servers:
   Sector1:
-    address: 127.0.0.1:25565
+    address: 127.0.0.1:25567
     motd: "Sektor 1"
     restricted: false
   Sector2:
-    address: 127.0.0.1:25566
+    address: 127.0.0.1:25568
+    motd: "Sektor 2"
+    restricted: false
+  Sector3:
+    address: 127.0.0.1:25569
     motd: "Sektor 2"
     restricted: false

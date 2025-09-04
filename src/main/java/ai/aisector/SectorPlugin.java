@@ -34,6 +34,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(sectorManager));
         new OnlinePlayersPublisherTask(redisManager, "Sector1").runTaskTimer(this, 0L, 100L); // 100 ticks = 5 sekund
         new OnlinePlayersPublisherTask(redisManager, "Sector2").runTaskTimer(this, 0L, 100L);
+        new OnlinePlayersPublisherTask(redisManager, "Sector3").runTaskTimer(this, 0L, 100L);
 
         List<String> channels = sectorManager.getSECTORS().stream()
                 .map(sector -> "sector-border-init:" + sector.getName())

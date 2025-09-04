@@ -1,6 +1,6 @@
 package ai.aisector.sectors;
 
-import ai.aisector.sectors.Sector;
+
 import net.minecraft.network.protocol.game.ClientboundInitializeBorderPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;

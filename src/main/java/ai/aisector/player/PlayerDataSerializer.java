@@ -87,10 +87,28 @@ public class PlayerDataSerializer {
         player.teleport(loc);
 
         // Bezpieczne pobieranie booleani
-        player.setFlying(getBooleanSafe(data, "isFlying"));
-        player.setGliding(getBooleanSafe(data, "isGliding"));
-        player.setSprinting(getBooleanSafe(data, "isSprinting"));
-        player.setSneaking(getBooleanSafe(data, "isSneaking"));
+        boolean isFlying = getBooleanSafe(data, "isFlying");
+        boolean isGliding = getBooleanSafe(data, "isGliding");
+        boolean isSprinting = getBooleanSafe(data, "isSprinting");
+        boolean isSneaking = getBooleanSafe(data, "isSneaking");
+
+// Latanie tylko jeśli gracz ma tryb, który na to pozwala
+        if (isFlying) {
+            if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) {
+                player.setAllowFlight(true);
+                player.setFlying(true);
+            }
+        }
+
+// Elytra
+        if (isGliding) {
+            player.setGliding(true);
+        }
+
+// Sprint i kucanie
+        player.setSprinting(isSprinting);
+        player.setSneaking(isSneaking);
+
 
         // Stan gracza
         player.setHealth(((Number) data.get("health")).doubleValue());
