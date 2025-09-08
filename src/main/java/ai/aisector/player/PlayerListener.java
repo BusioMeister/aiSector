@@ -36,10 +36,10 @@ public class PlayerListener implements Listener {
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-
         Location from = event.getFrom();
         Location to = event.getTo();
 
+        // Ignoruj drobne ruchy (np. obracanie kamery), które nie zmieniają pozycji bloku
         if (to == null || (from.getBlockX() == to.getBlockX() && from.getBlockZ() == to.getBlockZ())) {
             return;
         }
@@ -48,8 +48,9 @@ public class PlayerListener implements Listener {
         String previousSectorId = sectorManager.getSectorForLocation(from.getBlockX(), from.getBlockZ());
         String newSectorId = sectorManager.getSectorForLocation(to.getBlockX(), to.getBlockZ());
 
-        // 🟥 BossBar: ostrzegaj jeśli zbliża się do granicy
         Sector currentSector = sectorManager.getSector(to.getBlockX(), to.getBlockZ());
+
+        // 🟥 Logika BossBar'a - bez zmian, działa poprawnie
         if (currentSector != null) {
             double distanceToEdge = currentSector.distanceToBorder(to.getBlockX(), to.getBlockZ());
             if (distanceToEdge <= WARNING_DISTANCE) {
@@ -57,7 +58,6 @@ public class PlayerListener implements Listener {
                 Sector next = sectorManager.getNextSector(currentSector, facingDirection);
 
                 if (next != null) {
-                    // Pokaż pasek tylko jeśli za granicą jest sektor
                     showBossBar(player, distanceToEdge);
                 } else {
                     removeBossBar(player);
@@ -67,7 +67,13 @@ public class PlayerListener implements Listener {
             }
         }
 
-        // 🟩 Przejście między sektorami
+        // 🟦 KLUCZOWA ZMIANA: Wysyłanie pakietu granicy przy KAŻDYM ruchu gracza.
+        // Ta linijka jest teraz w głównym nurcie metody, aby zapewnić ciągłą aktualizację.
+        if (currentSector != null) {
+            borderManager.sendWorldBorder(player, currentSector);
+        }
+
+        // 🟩 Przejście między sektorami - bez zmian, działa poprawnie
         if (!previousSectorId.equals(newSectorId)) {
 
             if (newSectorId == null || newSectorId.isEmpty()) {
@@ -77,14 +83,13 @@ public class PlayerListener implements Listener {
             }
 
             Location location = Direction.fromLocations(from, to).add(to.clone());
-
             long start = System.currentTimeMillis();
 
             try (Jedis jedis = redisManager.getJedis()) {
                 String key = "player:data:" + playerId;
                 String data = PlayerDataSerializer.serialize(player, location);
                 jedis.set(key, data);
-                jedis.expire(key, 60 * 5);
+                jedis.expire(key, 60 * 5); // 5 minut
             }
 
             long end = System.currentTimeMillis();

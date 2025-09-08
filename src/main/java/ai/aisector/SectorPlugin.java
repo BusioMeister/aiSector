@@ -23,10 +23,11 @@ public class SectorPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        redisManager = new RedisManager("127.0.0.1", 6379);
+        // Używaj tej instancji RedisManager dla wszystkich klas
+        redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
         worldBorderManager = new WorldBorderManager();
-        RedisManager redisManager = new RedisManager("localhost", 6379); // Podstaw swoje dane
+
         PlayerListener playerListener = new PlayerListener(sectorManager, redisManager, worldBorderManager);
         PlayerJoinListener playerJoinListener = new PlayerJoinListener(this, sectorManager, redisManager, worldBorderManager);
         getServer().getPluginManager().registerEvents(playerJoinListener, this);

@@ -31,22 +31,22 @@ public class SectorManager {
             YamlConfiguration config = new YamlConfiguration();
 
             ConfigurationSection section1 = config.createSection("sectors.Sector1");
-            section1.set("minX", 0);
-            section1.set("maxX", 99);
-            section1.set("minZ", 0);
-            section1.set("maxZ", 99);
+            section1.set("minX", -50);
+            section1.set("maxX", 50);
+            section1.set("minZ", -50);
+            section1.set("maxZ", 50);
 
             ConfigurationSection section2 = config.createSection("sectors.Sector2");
-            section2.set("minX", 100);
-            section2.set("maxX", 199);
-            section2.set("minZ", 0);
-            section2.set("maxZ", 99);
+            section2.set("minX", -150);
+            section2.set("maxX", 50);
+            section2.set("minZ", 51);
+            section2.set("maxZ", 150);
 
             ConfigurationSection section3 = config.createSection("sectors.Sector3");
-            section3.set("minX", -100);
-            section3.set("maxX", -1);
-            section3.set("minZ", 0);
-            section3.set("maxZ", 99);
+            section3.set("minX", 51);
+            section3.set("maxX", 150);
+            section3.set("minZ", -150);
+            section3.set("maxZ", 150);
 
             try {
                 config.save(file);
