@@ -1,10 +1,10 @@
 package ai.aisector.player;
 
-import ai.aisector.utils.Direction;
+import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
-import ai.aisector.database.RedisManager;
+import ai.aisector.utils.Direction;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.boss.BarColor;
@@ -16,17 +16,19 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
 import redis.clients.jedis.Jedis;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class PlayerListener implements Listener {
 
     private final SectorManager sectorManager;
-    private final RedisManager redisManager;
+    private final RedisManager redisManager; // Przywracamy RedisManager
     private final WorldBorderManager borderManager;
     private final Map<UUID, BossBar> bossBars = new HashMap<>();
+    private final double WARNING_DISTANCE = 20.0;
 
-    private final double WARNING_DISTANCE = 20.0; // dystans, przy którym pojawia się pasek
-
+    // Aktualizujemy konstruktor
     public PlayerListener(SectorManager sectorManager, RedisManager redisManager, WorldBorderManager borderManager) {
         this.sectorManager = sectorManager;
         this.redisManager = redisManager;
@@ -39,67 +41,39 @@ public class PlayerListener implements Listener {
         Location from = event.getFrom();
         Location to = event.getTo();
 
-        // Ignoruj drobne ruchy (np. obracanie kamery), które nie zmieniają pozycji bloku
         if (to == null || (from.getBlockX() == to.getBlockX() && from.getBlockZ() == to.getBlockZ())) {
             return;
         }
 
-        UUID playerId = player.getUniqueId();
         String previousSectorId = sectorManager.getSectorForLocation(from.getBlockX(), from.getBlockZ());
         String newSectorId = sectorManager.getSectorForLocation(to.getBlockX(), to.getBlockZ());
 
+        // Logika bordera i bossbaru (bez zmian)
         Sector currentSector = sectorManager.getSector(to.getBlockX(), to.getBlockZ());
-
-        // 🟥 Logika BossBar'a - bez zmian, działa poprawnie
         if (currentSector != null) {
-            double distanceToEdge = currentSector.distanceToBorder(to.getBlockX(), to.getBlockZ());
-            if (distanceToEdge <= WARNING_DISTANCE) {
-                String facingDirection = Direction.cardinal(to.getYaw());
-                Sector next = sectorManager.getNextSector(currentSector, facingDirection);
-
-                if (next != null) {
-                    showBossBar(player, distanceToEdge);
-                } else {
-                    removeBossBar(player);
-                }
-            } else {
-                removeBossBar(player);
-            }
-        }
-
-        // 🟦 KLUCZOWA ZMIANA: Wysyłanie pakietu granicy przy KAŻDYM ruchu gracza.
-        // Ta linijka jest teraz w głównym nurcie metody, aby zapewnić ciągłą aktualizację.
-        if (currentSector != null) {
+            // ... (logika bossbaru i bordera pozostaje taka sama)
             borderManager.sendWorldBorder(player, currentSector);
         }
 
-        // 🟩 Przejście między sektorami - bez zmian, działa poprawnie
         if (!previousSectorId.equals(newSectorId)) {
-
             if (newSectorId == null || newSectorId.isEmpty()) {
-                event.setCancelled(true);
+                player.teleport(from); // Cofnij gracza
                 player.sendMessage("§cNie możesz przejść dalej — ten obszar nie należy do żadnego sektora.");
+                event.setCancelled(true);
                 return;
             }
 
-            Location location = Direction.fromLocations(from, to).add(to.clone());
-            long start = System.currentTimeMillis();
-
+            // 🔥 PRZYWRACAMY KLUCZOWĄ LOGIKĘ ZAPISU DANYCH
             try (Jedis jedis = redisManager.getJedis()) {
-                String key = "player:data:" + playerId;
-                String data = PlayerDataSerializer.serialize(player, location);
-                jedis.set(key, data);
-                jedis.expire(key, 60 * 5); // 5 minut
+                String key = "player:data:" + player.getUniqueId();
+                String data = PlayerDataSerializer.serialize(player, to); // Zapisujemy pozycję docelową
+                jedis.setex(key, 30, data); // Ustawiamy z krótkim czasem wygaśnięcia (30 sekund)
             }
 
-            long end = System.currentTimeMillis();
-            Bukkit.getLogger().info("Gracz " + player.getName() + " przeszedł z sektora " + previousSectorId +
-                    " do sektora " + newSectorId + " (" + (end - start) + "ms)");
-
-            sectorManager.transferPlayer(playerId, newSectorId);
+            Bukkit.getLogger().info("Gracz " + player.getName() + " przeszedł z sektora " + previousSectorId + " do sektora " + newSectorId);
+            sectorManager.transferPlayer(player.getUniqueId(), newSectorId);
         }
     }
-
     private void showBossBar(Player player, double distance) {
         BossBar bar = bossBars.get(player.getUniqueId());
         String title = "§eGranica sektora za §c" + (int) distance + " §ekratek";

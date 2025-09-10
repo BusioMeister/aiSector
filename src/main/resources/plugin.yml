@@ -4,6 +4,58 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
+  commands:
+  v:
+    description: Włącza/wyłącza tryb niewidzialności.
+    aliases: [ vanish ]
+    permissions:
+    aisector.command.vanish:
+      default: op
+  fly:
+    description: Włącza/wyłącza latanie.
+    permissions:
+    aisector.command.fly:
+      default: op
+  speed:
+    description: Ustawia prędkość latania/chodzenia.
+    permissions:
+    aisector.command.speed:
+     default: op
+  heal:
+    description: Leczy gracza.
+    permissions:
+    aisector.command.heal:
+     default: op
+  god:
+    description: Włącza/wyłącza tryb boga.
+    permissions:
+    aisector.command.god:
+     default: op
+  wyjebane:
+    description: Włącza/wyłącza prywatne wiadomości.
+  s:
+    description: Przywołuje gracza do siebie.
+    usage: /s <gracz>
+    permissions:
+    aisector.command.s:
+      default: op
+  tp:
+    description: Teleportuje do graczy w całej sieci.
+    usage: /tp <gracz>
+    permissions:
+    aisector.command.tp:
+      default: op
+  setspawnsector:
+    description: Ustawia globalny spawn dla serwera.
+    usage: /setspawnsector
+    permission: aisector.setspawn
+  spawn: # <-- NOWA KOMENDA
+    description: Teleportuje na spawn serwera.
+    usage: /spawn
+  permissions:
+    aisector.setspawn:
+      description: Pozwala na ustawienie spawnu serwera.
+      default: op
   sectorinfo:
     description: Wyświetla informacje o bieżącym sektorze.
     usage: /sectorinfo

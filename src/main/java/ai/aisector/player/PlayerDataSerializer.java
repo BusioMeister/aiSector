@@ -1,5 +1,6 @@
 package ai.aisector.player;
 
+import ai.aisector.commands.GodCommand;
 import ai.aisector.utils.ItemStackUtil;
 import ai.aisector.utils.JsonUtil;
 import org.bukkit.Bukkit;
@@ -13,22 +14,18 @@ import java.util.*;
 
 public class PlayerDataSerializer {
 
-
-    public static String serialize(Player player,Location loc) {
+    public static String serialize(Player player, Location loc) {
         Map<String, Object> data = new HashMap<>();
-        int heldSlot = player.getInventory().getHeldItemSlot();
-        data.put("heldSlot", heldSlot);
-        data.put("heldItem", ItemStackUtil.serializeItemStack(player.getInventory().getItem(heldSlot)));
 
-        // Pozycja gracza
+        // Twoje istniejące dane...
+        data.put("heldSlot", player.getInventory().getHeldItemSlot());
+        data.put("heldItem", ItemStackUtil.serializeItemStack(player.getInventory().getItem(player.getInventory().getHeldItemSlot())));
         data.put("x", loc.getX());
         data.put("y", loc.getY());
         data.put("z", loc.getZ());
         data.put("yaw", loc.getYaw());
         data.put("pitch", loc.getPitch());
         data.put("world", loc.getWorld().getName());
-
-        // Stan gracza
         data.put("health", player.getHealth());
         data.put("hunger", player.getFoodLevel());
         data.put("saturation", player.getSaturation());
@@ -42,17 +39,16 @@ public class PlayerDataSerializer {
         data.put("isFlying", player.isFlying());
         data.put("isGliding", player.isGliding());
         data.put("isSprinting", player.isSprinting());
-
-        // Ekwipunek
+        data.put("isSneaking", player.isSneaking()); // Warto dodać
         data.put("inventory", ItemStackUtil.serializeItemStackArray(player.getInventory().getContents()));
         data.put("enderChest", ItemStackUtil.serializeItemStackArray(player.getEnderChest().getContents()));
-
-
-
-
-
-        // Efekty mikstur
         data.put("effects", serializePotionEffects(player.getActivePotionEffects()));
+
+        // 🔥 NOWE DANE DO SYNCHRONIZACJI
+        data.put("allowFlight", player.getAllowFlight());
+        data.put("flySpeed", player.getFlySpeed());
+        data.put("walkSpeed", player.getWalkSpeed());
+        data.put("isInvulnerable", player.isInvulnerable()); // God mode
 
         return JsonUtil.toJson(data);
     }
@@ -72,7 +68,7 @@ public class PlayerDataSerializer {
     }
 
     public static void deserialize(Player player, String JSON) {
-        Map<String,Object> data = JsonUtil.fromJson(JSON, Map.class);
+        Map<String, Object> data = JsonUtil.fromJson(JSON, Map.class);
 
         Location loc = new Location(
                 Bukkit.getWorld((String) data.get("world")),
@@ -83,34 +79,40 @@ public class PlayerDataSerializer {
                 ((Number) data.get("pitch")).floatValue()
         );
 
-        // Ustaw pozycję przed innymi operacjami
         player.teleport(loc);
 
-        // Bezpieczne pobieranie booleani
+        // 🔥 ZAKTUALIZOWANA I POPRAWIONA LOGIKA
+        // Ustaw prędkości
+        if (data.containsKey("walkSpeed")) {
+            player.setWalkSpeed(((Number) data.get("walkSpeed")).floatValue());
+        }
+        if (data.containsKey("flySpeed")) {
+            player.setFlySpeed(((Number) data.get("flySpeed")).floatValue());
+        }
+
+        // Ustaw latanie (działa teraz dla każdego trybu gry)
+        boolean allowFlight = getBooleanSafe(data, "allowFlight");
         boolean isFlying = getBooleanSafe(data, "isFlying");
-        boolean isGliding = getBooleanSafe(data, "isGliding");
-        boolean isSprinting = getBooleanSafe(data, "isSprinting");
-        boolean isSneaking = getBooleanSafe(data, "isSneaking");
-
-// Latanie tylko jeśli gracz ma tryb, który na to pozwala
-        if (isFlying) {
-            if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) {
-                player.setAllowFlight(true);
-                player.setFlying(true);
-            }
+        player.setAllowFlight(allowFlight);
+        if (allowFlight && isFlying) {
+            player.setFlying(true);
         }
 
-// Elytra
-        if (isGliding) {
-            player.setGliding(true);
+        // Ustaw God Mode
+        boolean isInvulnerable = getBooleanSafe(data, "isInvulnerable");
+        player.setInvulnerable(isInvulnerable);
+        // Zaktualizuj listę w GodCommand, aby zachować spójność
+        if (isInvulnerable) {
+            GodCommand.gods.add(player.getUniqueId());
+        } else {
+            GodCommand.gods.remove(player.getUniqueId());
         }
 
-// Sprint i kucanie
-        player.setSprinting(isSprinting);
-        player.setSneaking(isSneaking);
+        // Reszta Twoich istniejących danych...
+        player.setGliding(getBooleanSafe(data, "isGliding"));
+        player.setSprinting(getBooleanSafe(data, "isSprinting"));
+        player.setSneaking(getBooleanSafe(data, "isSneaking"));
 
-
-        // Stan gracza
         player.setHealth(((Number) data.get("health")).doubleValue());
         player.setFoodLevel(((Number) data.get("hunger")).intValue());
         player.setSaturation(((Number) data.get("saturation")).floatValue());
@@ -121,27 +123,16 @@ public class PlayerDataSerializer {
         player.setLevel(((Number) data.get("level")).intValue());
         player.setExp(((Number) data.get("exp")).floatValue());
         player.setGameMode(GameMode.valueOf((String) data.get("gameMode")));
-
-        // Ekwipunek
         player.getInventory().setContents(ItemStackUtil.deserializeItemStackArray((String) data.get("inventory")));
         player.getEnderChest().setContents(ItemStackUtil.deserializeItemStackArray((String) data.get("enderChest")));
 
-        // Przedmiot w ręce — jeśli masz go osobno zapisany
         if (data.containsKey("heldSlot")) {
-            int heldSlot = ((Number) data.get("heldSlot")).intValue();
-            player.getInventory().setHeldItemSlot(heldSlot);
-        }
-        if (data.containsKey("heldItem")) {
-            Object heldItemJson = data.get("heldItem");
-            if (heldItemJson instanceof String) {
-                player.getInventory().setItem(player.getInventory().getHeldItemSlot(),
-                        ItemStackUtil.deserializeItemStack((String) heldItemJson));
-            }
+            player.getInventory().setHeldItemSlot(((Number) data.get("heldSlot")).intValue());
         }
 
-        // Efekty mikstur
         player.addPotionEffects(deserializePotionEffects((List<Map<String, Object>>) data.get("effects")));
     }
+
 
     private static boolean getBooleanSafe(Map<String, Object> map, String key) {
         Object val = map.get(key);
