@@ -1,38 +1,39 @@
 package ai.aisector.commands;
 
-import ai.aisector.sectors.SectorManager;
-import org.bukkit.ChatColor;
+import ai.aisector.database.RedisManager;
+import com.google.gson.JsonObject;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Listener;
+import redis.clients.jedis.Jedis;
 
-public class SectorInfoCommand implements Listener,CommandExecutor {
-    private final SectorManager sectorManager;
+public class SectorInfoCommand implements CommandExecutor {
 
-    public SectorInfoCommand(SectorManager sectorManager) {
-        this.sectorManager = sectorManager;
+    private final RedisManager redisManager;
+
+    public SectorInfoCommand(RedisManager redisManager) {
+        this.redisManager = redisManager;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "Tę komendę mogą używać tylko gracze.");
+            sender.sendMessage("GUI jest dostępne tylko dla graczy.");
+            return true;
+        }
+        Player player = (Player) sender;
+        if (!player.hasPermission("aisector.command.sectorinfo")) {
+            player.sendMessage("§cNie masz uprawnień.");
             return true;
         }
 
-        Player player = (Player) sender;
-        int x = player.getLocation().getBlockX();
-        int z = player.getLocation().getBlockZ();
-
-        String sectorId = sectorManager.getSectorForLocation(x, z);
-        if (sectorId != null &&!sectorId.isEmpty()) {
-            player.sendMessage(ChatColor.GREEN + "Znajdujesz się w sektorze: " + sectorId);
-        } else {
-            player.sendMessage(ChatColor.RED + "Nie znajdujesz się w żadnym zdefiniowanym sektorze.");
+        // Wyślij prośbę o dane do Velocity
+        try (Jedis jedis = redisManager.getJedis()) {
+            JsonObject request = new JsonObject();
+            request.addProperty("uuid", player.getUniqueId().toString());
+            jedis.publish("aisector:gui_data_request", request.toString());
         }
-
         return true;
     }
 }

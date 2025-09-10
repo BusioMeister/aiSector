@@ -44,7 +44,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("wyjebane").setExecutor(new WyjebaneCommand(redisManager));
         getCommand("v").setExecutor(new VanishCommand(redisManager));
         getCommand("spawn").setExecutor(new SpawnCommand(this, redisManager, sectorManager, worldBorderManager));
-        getCommand("sectorinfo").setExecutor(new SectorInfoCommand(sectorManager));
+        getCommand("sectorinfo").setExecutor(new SectorInfoCommand(redisManager));
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
         getCommand("tp").setExecutor(new TpCommand(this, redisManager, sectorManager, worldBorderManager));
         getCommand("s").setExecutor(new SummonCommand(this, redisManager, sectorManager, worldBorderManager));
@@ -59,6 +59,10 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("tpa").setTabCompleter(new TpTabCompleter());
         getCommand("sektor").setTabCompleter(new TpTabCompleter());
 
+        String thisSectorName = getConfig().getString("this-sector-name");
+        if(thisSectorName != null && !thisSectorName.isEmpty()){
+            new SectorStatsPublisher(this, redisManager, thisSectorName).runTaskTimerAsynchronously(this, 100L, 100L); // co 5 sekund
+        }
         // Rejestracja listenerów eventów Bukkit
         getServer().getPluginManager().registerEvents(new GodCommand(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(sectorManager, redisManager, worldBorderManager), this);
@@ -66,6 +70,7 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new VanishPlayerListener(vanishManager, redisManager), this);
         getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, sectorManager), this);
+        getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
 
         // Uruchomienie zadań cyklicznych
         new ActionBarTask().runTaskTimer(this, 0L, 20L);
@@ -99,6 +104,11 @@ public class SectorPlugin extends JavaPlugin {
             }
         }, "Redis-Vanish-Listener-Thread").start();
 
+        new Thread(() -> {
+            try (Jedis jedis = redisManager.getJedis()) {
+                jedis.psubscribe(new GuiDataListener(this, sectorManager), "aisector:gui_data_response:*");
+            }
+        }).start();
         // Listener dla Borderów
         List<String> channels = sectorManager.getSECTORS().stream()
                 .map(sector -> "sector-border-init:" + sector.getName())

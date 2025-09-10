@@ -42,4 +42,21 @@ public class Sector {
     public int getMaxZ() {
         return zMax;
     }
+    // 🔥 DODANE METODY
+    /**
+     * Oblicza szerokość sektora (wzdłuż osi X).
+     * @return Szerokość w blokach.
+     */
+    public int getWidth() {
+        return this.xMax - this.xMin + 1;
+    }
+
+    /**
+     * Oblicza głębokość/długość sektora (wzdłuż osi Z).
+     * @return Głębokość w blokach.
+     */
+    public int getDepth() {
+        return this.zMax - this.zMin + 1;
+    }
 }
+
