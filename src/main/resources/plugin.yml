@@ -5,6 +5,12 @@ api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
   commands:
+  tpa:
+    description: Wysyła prośbę o teleportację do gracza.
+  tpaccept:
+    description: Akceptuje prośbę o teleportację.
+  alert:
+    description: Wysyła globalne ogłoszenie.
   v:
     description: Włącza/wyłącza tryb niewidzialności.
     aliases: [ vanish ]

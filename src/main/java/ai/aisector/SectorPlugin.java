@@ -7,7 +7,7 @@ import ai.aisector.sectors.BorderInitListener;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
 import org.bukkit.plugin.java.JavaPlugin;
-import ai.aisector.player.PlayerDeathListener;
+import org.bukkit.scheduler.BukkitTask;
 import redis.clients.jedis.Jedis;
 
 import java.util.HashMap;
@@ -22,21 +22,21 @@ public class SectorPlugin extends JavaPlugin {
     private RedisManager redisManager;
     private WorldBorderManager worldBorderManager;
     private VanishManager vanishManager;
-
-
+    private BukkitTask publisherTask;
     private final Map<UUID, String> playerDeathSectors = new HashMap<>();
 
     @Override
     public void onEnable() {
-        // Ta linia powinna być na samej górze, aby config był dostępny od razu
         saveDefaultConfig();
 
+        // Inicjalizacja managerów
         redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
         worldBorderManager = new WorldBorderManager();
-        this.vanishManager = new VanishManager(this);
+        vanishManager = new VanishManager(this);
 
-        // Rejestracja listenerów
+        // Rejestracja komend
+        getCommand("alert").setExecutor(new AlertCommand(redisManager));
         getCommand("fly").setExecutor(new FlyCommand());
         getCommand("speed").setExecutor(new SpeedCommand());
         getCommand("heal").setExecutor(new HealCommand());
@@ -46,66 +46,90 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("spawn").setExecutor(new SpawnCommand(this, redisManager, sectorManager, worldBorderManager));
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(sectorManager));
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
-        getCommand("tp").setTabCompleter(new TpTabCompleter());
         getCommand("tp").setExecutor(new TpCommand(this, redisManager, sectorManager, worldBorderManager));
         getCommand("s").setExecutor(new SummonCommand(this, redisManager, sectorManager, worldBorderManager));
-        getCommand("s").setTabCompleter(new TpTabCompleter());
+        getCommand("tpa").setExecutor(new TpaCommand(redisManager));
+        getCommand("tpaccept").setExecutor(new TpacceptCommand(redisManager));
 
+        // Ustawienie TabCompleterów
+        getCommand("tp").setTabCompleter(new TpTabCompleter());
+        getCommand("s").setTabCompleter(new TpTabCompleter());
+        getCommand("tpa").setTabCompleter(new TpTabCompleter());
+
+        // Rejestracja listenerów eventów Bukkit
         getServer().getPluginManager().registerEvents(new GodCommand(), this);
-        getServer().getPluginManager().registerEvents(new PlayerListener(sectorManager, redisManager,worldBorderManager), this);
+        getServer().getPluginManager().registerEvents(new PlayerListener(sectorManager, redisManager, worldBorderManager), this);
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(this, sectorManager, redisManager, worldBorderManager), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new VanishPlayerListener(vanishManager, redisManager), this);
         getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, sectorManager), this);
 
+        // Uruchomienie zadań cyklicznych
+        new ActionBarTask().runTaskTimer(this, 0L, 20L);
+        startRedisListeners(); // Uruchomienie wszystkich listenerów Redis w osobnych wątkach
+        startPlayerPublisher(); // Uruchomienie wysyłania listy graczy
+    }
 
-        redisManager.subscribe(new CommandResponseListener(this), "aisector:tp_execute_local", "aisector:send_message");
-        redisManager.subscribe(new GlobalPlayerListListener(), "aisector:global_playerlist_update");
+    private void startRedisListeners() {
+        // Listener dla komend i odpowiedzi
+        new Thread(() -> {
+            try (Jedis jedis = redisManager.getJedis()) {
+                jedis.subscribe(new CommandResponseListener(this, sectorManager, worldBorderManager),
+                        "aisector:tp_execute_local",
+                        "aisector:send_message",
+                        "aisector:alert",
+                        "aisector:tpa_initiate_warmup");
+            }
+        }, "Redis-Command-Listener-Thread").start();
 
+        // Listener dla listy graczy
+        new Thread(() -> {
+            try (Jedis jedis = redisManager.getJedis()) {
+                jedis.subscribe(new GlobalPlayerListListener(), "aisector:global_playerlist_update");
+            }
+        }, "Redis-PlayerList-Listener-Thread").start();
+
+        // Listener dla Vanisha
         new Thread(() -> {
             try (Jedis jedis = redisManager.getJedis()) {
                 jedis.subscribe(new VanishUpdateListener(this, vanishManager), "aisector:vanish_update", "aisector:admin_chat");
-            } catch (Exception e) {
-                e.printStackTrace();
             }
-        }, "Redis-Vanish-Subscriber-Thread").start();
-        new ActionBarTask().runTaskTimer(this, 0L, 20L); // 20L = 1 sekunda
+        }, "Redis-Vanish-Listener-Thread").start();
 
-
-        // Odczyt nazwy sektora i uruchomienie JEDNEGO zadania raportującego
-        String thisSectorName = getConfig().getString("this-sector-name");
-
-        if (thisSectorName == null || thisSectorName.isEmpty()) {
-            getLogger().severe("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            getLogger().severe("Nie ustawiono 'this-sector-name' w config.yml!");
-            getLogger().severe("Plugin nie będzie poprawnie raportował graczy.");
-            getLogger().severe("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        } else {
-            // Uruchom tylko JEDNO zadanie dla TEGO sektora
-            new OnlinePlayersPublisherTask(redisManager, thisSectorName).runTaskTimer(this, 0L, 100L); // 100 ticks = 5 sekund
-            getLogger().info("Uruchomiono raportowanie graczy dla sektora: " + thisSectorName);
-        }
-
-        // Reszta Twojej logiki
+        // Listener dla Borderów
         List<String> channels = sectorManager.getSECTORS().stream()
                 .map(sector -> "sector-border-init:" + sector.getName())
                 .collect(Collectors.toList());
-
-        BorderInitListener listener = new BorderInitListener(sectorManager, this);
-        redisManager.subscribe(listener, channels.toArray(new String[0]));
-
-        GlobalChatPlugin globalChat = new GlobalChatPlugin(this);
-        globalChat.register();
+        new Thread(() -> {
+            try (Jedis jedis = redisManager.getJedis()) {
+                jedis.subscribe(new BorderInitListener(sectorManager, this), channels.toArray(new String[0]));
+            }
+        }, "Redis-Border-Listener-Thread").start();
     }
-    public Map<UUID, String> getPlayerDeathSectors() {
-        return playerDeathSectors;
+
+    private void startPlayerPublisher() {
+        String thisSectorName = getConfig().getString("this-sector-name");
+        if (thisSectorName == null || thisSectorName.isEmpty()) {
+            getLogger().severe("Nie ustawiono 'this-sector-name' w config.yml!");
+        } else {
+            this.publisherTask = new OnlinePlayersPublisherTask(redisManager, thisSectorName).runTaskTimer(this, 0L, 100L);
+            getLogger().info("Uruchomiono raportowanie graczy dla sektora: " + thisSectorName);
+        }
     }
 
     @Override
     public void onDisable() {
+        if (this.publisherTask != null && !this.publisherTask.isCancelled()) {
+            this.publisherTask.cancel();
+        }
         if (redisManager != null) {
-            redisManager.unsubscribe();
+            redisManager.unsubscribe(); // To powinno zamknąć wszystkie subskrypcje
             redisManager.closePool();
         }
     }
+
+    // Gettery
+    public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
+    public RedisManager getRedisManager() { return redisManager; }
+    public SectorManager getSectorManager() { return sectorManager; }
 }
