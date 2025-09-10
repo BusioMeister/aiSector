@@ -5,7 +5,8 @@ import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
 import ai.aisector.utils.MessageUtil;
-import org.bson.Document;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -24,6 +25,7 @@ public class PlayerJoinListener implements Listener {
     private final SectorManager sectorManager;
     private final RedisManager redisManager;
     private final WorldBorderManager borderManager;
+    private final Gson gson = new Gson();
 
     public PlayerJoinListener(JavaPlugin plugin, SectorManager sectorManager, RedisManager redisManager, WorldBorderManager borderManager) {
         this.plugin = plugin;
@@ -37,32 +39,75 @@ public class PlayerJoinListener implements Listener {
         Player player = event.getPlayer();
 
         try (Jedis jedis = redisManager.getJedis()) {
-
-            // --- KROK 1: Sprawdź, czy gracz ma być siłowo wysłany na spawn sektora (TYLKO przez /send) ---
-            String forceSpawnKey = "player:force_spawn:" + player.getUniqueId();
-            if (jedis.exists(forceSpawnKey)) {
-                jedis.del(forceSpawnKey); // Usuń znacznik
-                teleportToSectorSpawn(player);
-                return; // Zakończ, akcja wykonana.
+            // KROK 1: ZAWSZE próbuj wczytać dane gracza (ekwipunek, zdrowie etc.)
+            String playerDataKey = "player:data:" + player.getUniqueId();
+            String playerData = jedis.get(playerDataKey);
+            boolean dataLoaded = false;
+            if (playerData != null) {
+                jedis.del(playerDataKey);
+                PlayerDataSerializer.deserialize(player, playerData);
+                dataLoaded = true;
             }
 
-            // --- KROK 2: Obsłuż specjalne akcje (tp, summon, respawn, spawn) ---
-            if (handleSpecialJoins(player, jedis)) {
+            // KROK 2: Obsługa /send
+            String forceSpawnKey = "player:force_spawn:" + player.getUniqueId();
+            if (jedis.exists(forceSpawnKey)) {
+                jedis.del(forceSpawnKey);
+                teleportToSectorSpawn(player);
                 return;
             }
 
-            // --- KROK 3: Obsłuż normalny transfer między sektorami ---
-            String playerDataKey = "player:data:" + player.getUniqueId();
-            String playerData = jedis.get(playerDataKey);
-            if (playerData != null) {
-                jedis.del(playerDataKey); // Zawsze kasujemy "bilet" po użyciu
-                PlayerDataSerializer.deserialize(player, playerData);
-                sendWelcomePackage(player);
+            // KROK 3: Obsługa teleportacji do konkretnej lokalizacji (/s, /tpa)
+            String teleportLocationKey = "player:teleport_location:" + player.getUniqueId();
+            String locationJson = jedis.get(teleportLocationKey);
+            if (locationJson != null) {
+                jedis.del(teleportLocationKey);
+                JsonObject locData = gson.fromJson(locationJson, JsonObject.class);
+                World world = Bukkit.getWorld(locData.get("world").getAsString());
+                if (world != null) {
+                    Location targetLocation = new Location(world, locData.get("x").getAsDouble(), locData.get("y").getAsDouble(), locData.get("z").getAsDouble(), locData.get("yaw").getAsFloat(), locData.get("pitch").getAsFloat());
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        player.teleport(targetLocation);
+                        player.sendMessage("§aZostałeś pomyślnie przeteleportowany.");
+                        sendWelcomePackage(player);
+                    }, 5L); // Zwiększone opóźnienie
+                }
+                return;
             }
 
-            // 🔥 WAŻNA ZMIANA: Jeśli żaden z powyższych warunków nie jest spełniony
-            // (czyli jest to zwykły relog), nie robimy NIC. Gracz pojawi się w swoim
-            // ostatnim zapisanym miejscu, co jest poprawnym zachowaniem.
+            // KROK 4: Obsługa teleportacji do gracza (/tp)
+            String tpTargetKey = "player:tp_target_uuid:" + player.getUniqueId();
+            String targetUuidStr = jedis.get(tpTargetKey);
+            if (targetUuidStr != null) {
+                jedis.del(tpTargetKey);
+                UUID targetUuid = UUID.fromString(targetUuidStr);
+                // 🔥 ZMIANA: Zwiększamy opóźnienie do 5 ticków (1/4 sekundy)
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    Player targetPlayer = Bukkit.getPlayer(targetUuid);
+                    if (targetPlayer != null && targetPlayer.isOnline()) {
+                        player.teleport(targetPlayer.getLocation());
+                        player.sendMessage("§aPomyślnie przeteleportowano do §e" + targetPlayer.getName());
+                        sendWelcomePackage(player);
+                    } else {
+                        player.sendMessage("§cCel teleportacji jest już niedostępny.");
+                        sendWelcomePackage(player);
+                    }
+                }, 5L);
+                return;
+            }
+
+            // KROK 5: Obsługa respawn lub /spawn
+            if (jedis.exists("player:respawn:" + player.getUniqueId()) || jedis.exists("player:spawn_teleport:" + player.getUniqueId())) {
+                jedis.del("player:respawn:" + player.getUniqueId());
+                jedis.del("player:spawn_teleport:" + player.getUniqueId());
+                teleportToGlobalSpawn(player, jedis);
+                return;
+            }
+
+            // KROK 6: Jeśli dane zostały wczytane (normalny transfer), wyślij pakiet powitalny
+            if (dataLoaded) {
+                sendWelcomePackage(player);
+            }
 
         } catch (Exception e) {
             plugin.getLogger().severe("Błąd podczas przetwarzania dołączenia gracza: " + e.getMessage());
@@ -70,85 +115,38 @@ public class PlayerJoinListener implements Listener {
         }
     }
 
-    /**
-     * Obsługuje specjalne przypadki dołączenia, takie jak /tp, /s, respawn.
-     * @return true, jeśli wykonano specjalną akcję, w przeciwnym razie false.
-     */
-    private boolean handleSpecialJoins(Player player, Jedis jedis) {
-        // --- Sprawdź, czy gracz został przywołany przez /s ---
-        String summonLocationJson = jedis.get("player:summon_location:" + player.getUniqueId());
-        if (summonLocationJson != null) {
-            jedis.del("player:summon_location:" + player.getUniqueId());
-            Document locationData = Document.parse(summonLocationJson);
-            World world = Bukkit.getWorld(locationData.getString("world"));
-            if (world != null) {
-                Location summonLocation = new Location(world, locationData.getDouble("x"), locationData.getDouble("y"), locationData.getDouble("z"), locationData.getDouble("yaw").floatValue(), locationData.getDouble("pitch").floatValue());
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    player.teleport(summonLocation);
-                    player.sendMessage("§aZostałeś przywołany.");
-                    sendWelcomePackage(player);
-                }, 1L);
-            }
-            return true;
+    // Wklej tutaj pełną zawartość metod pomocniczych z poprzedniej odpowiedzi, jeśli ich nie masz
+    private void teleportToGlobalSpawn(Player player, Jedis jedis) {
+        String spawnDataJson = jedis.get("aisector:global_spawn");
+        if (spawnDataJson != null && !spawnDataJson.isEmpty()) {
+            JsonObject spawnData = gson.fromJson(spawnDataJson, JsonObject.class);
+            World world = Bukkit.getWorlds().get(0);
+            Location spawnLocation = new Location(world,
+                    spawnData.get("x").getAsDouble(),
+                    spawnData.get("y").getAsDouble(),
+                    spawnData.get("z").getAsDouble(),
+                    spawnData.get("yaw").getAsFloat(),
+                    spawnData.get("pitch").getAsFloat()
+            );
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                player.teleport(spawnLocation);
+                sendWelcomePackage(player);
+            }, 1L);
         }
-
-        // --- Sprawdź, czy to teleportacja z /tp ---
-        String targetUUIDString = jedis.get("player:tp_target:" + player.getUniqueId());
-        if (targetUUIDString != null) {
-            jedis.del("player:tp_target:" + player.getUniqueId());
-            UUID targetUUID = UUID.fromString(targetUUIDString);
-            Player targetPlayer = Bukkit.getPlayer(targetUUID);
-            if (targetPlayer != null) {
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    player.teleport(targetPlayer.getLocation());
-                    player.sendMessage("§aPomyślnie przeteleportowano do §e" + targetPlayer.getName());
-                    sendWelcomePackage(player);
-                }, 1L);
-            } else {
-                player.sendMessage("§cCel teleportacji wylogował się.");
-            }
-            return true;
-        }
-
-        // --- Sprawdź, czy to respawn lub /spawn ---
-        if (jedis.exists("player:respawn:" + player.getUniqueId()) || jedis.exists("player:spawn_teleport:" + player.getUniqueId())) {
-            jedis.del("player:respawn:" + player.getUniqueId());
-            jedis.del("player:spawn_teleport:" + player.getUniqueId());
-            String spawnDataJson = jedis.get("aisector:global_spawn");
-            if (spawnDataJson != null && !spawnDataJson.isEmpty()) {
-                Document spawnData = Document.parse(spawnDataJson);
-                World world = Bukkit.getWorlds().get(0);
-                Location spawnLocation = new Location(world, spawnData.getDouble("x"), spawnData.getDouble("y"), spawnData.getDouble("z"), spawnData.getDouble("yaw").floatValue(), spawnData.getDouble("pitch").floatValue());
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    player.teleport(spawnLocation);
-                    sendWelcomePackage(player);
-                }, 1L);
-            }
-            return true;
-        }
-
-        return false;
     }
-
-    /**
-     * Teleportuje gracza na środek sektora, na którym się znajduje.
-     */
     private void teleportToSectorSpawn(Player player) {
         String thisSectorName = plugin.getConfig().getString("this-sector-name");
         Sector currentSector = sectorManager.getSectorByName(thisSectorName);
-        Location spawn = sectorManager.getSectorSpawnLocation(currentSector);
-        if (spawn != null) {
-            player.teleport(spawn);
+        if (currentSector != null) {
+            Location spawn = sectorManager.getSectorSpawnLocation(currentSector);
+            if (spawn != null) {
+                player.teleport(spawn);
+            }
         }
         sendWelcomePackage(player);
     }
-
-    /**
-     * Pomocnicza metoda do wysyłania bordera i wiadomości powitalnych.
-     */
     private void sendWelcomePackage(Player player) {
         if (!player.isOnline()) return;
-
         Sector sector = sectorManager.getSector(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
         if (sector != null) {
             borderManager.sendWorldBorder(player, sector);

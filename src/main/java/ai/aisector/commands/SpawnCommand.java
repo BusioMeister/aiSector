@@ -2,6 +2,8 @@ package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
+// WAŻNY IMPORT: Potrzebujemy dostępu do serializera
+import ai.aisector.player.PlayerDataSerializer;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
@@ -17,13 +19,11 @@ import redis.clients.jedis.Jedis;
 
 public class SpawnCommand implements CommandExecutor {
 
-    // 🔥 KROK 1: Dodane nowe pola
     private final SectorPlugin plugin;
     private final RedisManager redisManager;
     private final SectorManager sectorManager;
     private final WorldBorderManager borderManager;
 
-    // 🔥 KROK 2: Zaktualizowany konstruktor, aby przyjmował wszystkie potrzebne obiekty
     public SpawnCommand(SectorPlugin plugin, RedisManager redisManager, SectorManager sectorManager, WorldBorderManager borderManager) {
         this.plugin = plugin;
         this.redisManager = redisManager;
@@ -62,7 +62,6 @@ public class SpawnCommand implements CommandExecutor {
                         spawnData.getDouble("yaw").floatValue(),
                         spawnData.getDouble("pitch").floatValue());
 
-                // 🔥 KROK 3: Ulepszona logika teleportacji z aktualizacją bordera
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     player.teleport(spawnLocation);
                     player.sendMessage("§aZostałeś przeteleportowany na spawn!");
@@ -74,8 +73,14 @@ public class SpawnCommand implements CommandExecutor {
                 }, 1L);
 
             } else {
-                // PRZYPADEK 2: Gracz jest na innym sektorze -> Zleć transfer (bez zmian)
+                // PRZYPADEK 2: Gracz jest na innym sektorze -> Zapisz dane i zleć transfer
                 player.sendMessage("§7Trwa transfer na serwer spawnu...");
+
+                // 🔥 NOWA LOGIKA: Zapisujemy dane gracza PRZED transferem 🔥
+                String playerData = PlayerDataSerializer.serialize(player, player.getLocation());
+                jedis.setex("player:data:" + player.getUniqueId(), 60, playerData);
+                // ----------------------------------------------------------------
+
                 jedis.setex("player:spawn_teleport:" + player.getUniqueId(), 10, "true");
                 sectorManager.transferPlayer(player.getUniqueId(), targetSector);
             }

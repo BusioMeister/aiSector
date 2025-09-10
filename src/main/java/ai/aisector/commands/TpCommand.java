@@ -5,7 +5,7 @@ import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
-import org.bson.Document;
+import com.google.gson.JsonObject; // ZMIANA: Używamy JsonObject
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -45,31 +45,28 @@ public class TpCommand implements CommandExecutor {
         Player admin = (Player) sender;
         String targetName = args[0];
 
-        // 🔥 NOWA LOGIKA: Najpierw sprawdź, czy gracz jest na tym samym serwerze
         Player targetPlayer = Bukkit.getPlayer(targetName);
         if (targetPlayer != null) {
-            // PRZYPADEK 1: Gracz jest lokalnie -> natychmiastowy teleport
+            // PRZYPADEK 1: Gracz jest lokalnie
             admin.sendMessage("§7Teleportuję do gracza §e" + targetName + "§7...");
-
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 admin.teleport(targetPlayer.getLocation());
-
-                // Natychmiastowa aktualizacja bordera dla admina
                 Sector currentSector = sectorManager.getSector(targetPlayer.getLocation().getBlockX(), targetPlayer.getLocation().getBlockZ());
                 if (currentSector != null) {
                     borderManager.sendWorldBorder(admin, currentSector);
                 }
             }, 1L);
-
             return true;
         }
 
-        // PRZYPADEK 2: Gracza nie ma lokalnie -> wyślij prośbę do Velocity (stara logika)
-        Document request = new Document("adminName", admin.getName())
-                .append("targetName", targetName);
+        // PRZYPADEK 2: Gracza nie ma lokalnie -> wyślij prośbę do Velocity
+        // ZMIANA: Używamy spójnego formatu JsonObject
+        JsonObject request = new JsonObject();
+        request.addProperty("adminName", admin.getName());
+        request.addProperty("targetName", targetName);
 
         try (Jedis jedis = redisManager.getJedis()) {
-            jedis.publish("aisector:tp_request", request.toJson());
+            jedis.publish("aisector:tp_request", request.toString());
         }
         sender.sendMessage("§7Przetwarzanie prośby o teleportację...");
         return true;

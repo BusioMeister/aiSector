@@ -2,6 +2,7 @@ package ai.aisector;
 
 import ai.aisector.commands.*;
 import ai.aisector.database.RedisManager;
+import ai.aisector.listeners.PlayerDataSaveListener;
 import ai.aisector.player.*;
 import ai.aisector.sectors.BorderInitListener;
 import ai.aisector.sectors.SectorManager;
@@ -86,10 +87,12 @@ public class SectorPlugin extends JavaPlugin {
                         "aisector:tp_execute_local",
                         "aisector:send_message",
                         "aisector:alert",
-                        "aisector:tpa_initiate_warmup");
+                        "aisector:tpa_initiate_warmup",
+                        "aisector:tp_execute_local_tpa");
             }
         }, "Redis-Command-Listener-Thread").start();
-
+        PlayerDataSaveListener dataSaveListener = new PlayerDataSaveListener(this, redisManager);
+        new Thread(dataSaveListener, "RedisPlayerDataSaveThread").start();
         // Listener dla listy graczy
         new Thread(() -> {
             try (Jedis jedis = redisManager.getJedis()) {

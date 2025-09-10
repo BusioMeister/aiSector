@@ -1,64 +1,70 @@
-package ai.aisector.player;
+package ai.aisector.player; // Upewnij się, że pakiet jest poprawny
 
-import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.SectorManager;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.Location;
+import com.google.gson.JsonObject;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import redis.clients.jedis.Jedis;
 
 public class TeleportWarmupTask extends BukkitRunnable {
 
-    private final Player playerToTeleport;
-    private final String targetPlayerName; // Zmieniamy na String, bo cel może być na innym serwerze
-    private final Location startLocation;
+    private final Player player;
+    private final JsonObject targetLocation;
+    private final String targetServerName;
     private final RedisManager redisManager;
-    private final SectorManager sectorManager;
-    private int countdown = 5;
+    private int timeLeft = 5; // 5 sekund
+    private final BossBar bossBar;
 
-    public TeleportWarmupTask(Player playerToTeleport, String targetPlayerName, RedisManager redisManager, SectorManager sectorManager) {
-        this.playerToTeleport = playerToTeleport;
-        this.targetPlayerName = targetPlayerName;
+    public TeleportWarmupTask(Player player, JsonObject targetLocation, String targetServerName, RedisManager redisManager) {
+        this.player = player;
+        this.targetLocation = targetLocation;
+        this.targetServerName = targetServerName;
         this.redisManager = redisManager;
-        this.sectorManager = sectorManager;
-        this.startLocation = playerToTeleport.getLocation();
-
-        playerToTeleport.sendMessage("§aTeleportacja do §e" + targetPlayerName + "§a rozpocznie się za 5 sekund. Nie ruszaj się!");
+        this.bossBar = org.bukkit.Bukkit.createBossBar("§aTeleportacja za: §e" + timeLeft, BarColor.GREEN, BarStyle.SOLID);
+        this.bossBar.addPlayer(player);
     }
 
     @Override
     public void run() {
-        if (!playerToTeleport.isOnline()) {
+        if (!player.isOnline()) {
             this.cancel();
             return;
         }
 
-        if (startLocation.distance(playerToTeleport.getLocation()) > 0.5) {
-            playerToTeleport.sendMessage("§cTeleportacja anulowana. Ruszyłeś się!");
+        if (timeLeft <= 0) {
             this.cancel();
+            player.sendMessage("§aTeleportacja...");
+            transferPlayer();
             return;
         }
 
-        if (countdown > 0) {
-            playerToTeleport.sendActionBar(
-                    Component.text("Teleportacja za: ", NamedTextColor.GRAY)
-                            .append(Component.text(countdown, NamedTextColor.GREEN, TextDecoration.BOLD))
-            );
-            countdown--;
-        } else {
-            playerToTeleport.sendActionBar(Component.text("TELEPORTACJA...", NamedTextColor.GOLD, TextDecoration.BOLD));
+        bossBar.setTitle("§aTeleportacja za: §e" + timeLeft);
+        bossBar.setProgress((double) timeLeft / 5.0);
+        player.sendActionBar(net.kyori.adventure.text.Component.text("§cNie ruszaj się! §7Teleportacja za §e" + timeLeft + "s"));
+        timeLeft--;
+    }
 
-            // 🔥 POPRAWIONA LOGIKA: Zleć transfer przez Velocity
-            try (Jedis jedis = redisManager.getJedis()) {
-                // To jest "prośba do admina /tp", ale wykonana automatycznie
-                String requestJson = "{\"adminName\":\"" + playerToTeleport.getName() + "\",\"targetName\":\"" + targetPlayerName + "\"}";
-                jedis.publish("aisector:tp_request", requestJson);
-            }
-            this.cancel();
+    @Override
+    public synchronized void cancel() throws IllegalStateException {
+        super.cancel();
+        bossBar.removeAll();
+    }
+
+    private void transferPlayer() {
+        try (Jedis jedis = redisManager.getJedis()) {
+            // 1. Zapisz dane gracza (ekwipunek itp.) tuż przed transferem
+            String playerData = PlayerDataSerializer.serialize(player, player.getLocation());
+            jedis.setex("player:data:" + player.getUniqueId(), 60, playerData);
+
+            // 2. Zapisz dokładną lokalizację docelową
+            jedis.setex("player:teleport_location:" + player.getUniqueId(), 60, targetLocation.toString());
+
+            // 3. Wyślij prośbę o transfer do Velocity
+            jedis.publish("sector-transfer", player.getUniqueId() + ":" + targetServerName);
         }
     }
 }
