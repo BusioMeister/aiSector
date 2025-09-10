@@ -2,6 +2,8 @@ package ai.aisector.sectors;
 
 import ai.aisector.database.RedisManager;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.WorldBorder;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -171,5 +173,20 @@ public class SectorManager {
 
     public List<Sector> getSECTORS() {
         return SECTORS;
+    }
+    public Location getSectorSpawnLocation(Sector sector) {
+        if (sector == null) return null;
+
+        // Zakładamy, że świat jest zawsze ten sam na danym serwerze Spigot
+        World world = Bukkit.getWorlds().get(0);
+        if (world == null) return null;
+
+        double centerX = (sector.getMinX() + sector.getMaxX()) / 2.0;
+        double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
+
+        // Znajdź najwyższy bezpieczny blok na środku sektora
+        double y = world.getHighestBlockYAt((int) centerX, (int) centerZ) + 1.5;
+
+        return new Location(world, centerX, y, centerZ, 0, 0);
     }
 }

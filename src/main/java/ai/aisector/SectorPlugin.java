@@ -48,13 +48,16 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
         getCommand("tp").setExecutor(new TpCommand(this, redisManager, sectorManager, worldBorderManager));
         getCommand("s").setExecutor(new SummonCommand(this, redisManager, sectorManager, worldBorderManager));
+
         getCommand("tpa").setExecutor(new TpaCommand(redisManager));
         getCommand("tpaccept").setExecutor(new TpacceptCommand(redisManager));
+        getCommand("sektor").setExecutor(new SektorCommand(redisManager));
+        getCommand("send").setExecutor(new SendCommand(redisManager));
 
-        // Ustawienie TabCompleterów
         getCommand("tp").setTabCompleter(new TpTabCompleter());
         getCommand("s").setTabCompleter(new TpTabCompleter());
         getCommand("tpa").setTabCompleter(new TpTabCompleter());
+        getCommand("sektor").setTabCompleter(new TpTabCompleter());
 
         // Rejestracja listenerów eventów Bukkit
         getServer().getPluginManager().registerEvents(new GodCommand(), this);

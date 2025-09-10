@@ -4,7 +4,10 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
-  commands:
+  sektor:
+    description: Sprawdza, na którym sektorze jest gracz.
+  send:
+      description: Przenosi gracza na inny sektor.
   tpa:
     description: Wysyła prośbę o teleportację do gracza.
   tpaccept:
