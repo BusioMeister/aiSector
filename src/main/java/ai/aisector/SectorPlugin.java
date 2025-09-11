@@ -1,6 +1,7 @@
 package ai.aisector;
 
 import ai.aisector.commands.*;
+import ai.aisector.database.MongoDBManager;
 import ai.aisector.database.RedisManager;
 import ai.aisector.listeners.PlayerDataSaveListener;
 import ai.aisector.player.*;
@@ -25,12 +26,15 @@ public class SectorPlugin extends JavaPlugin {
     private VanishManager vanishManager;
     private BukkitTask publisherTask;
     private final Map<UUID, String> playerDeathSectors = new HashMap<>();
+    private MongoDBManager mongoDBManager;
+
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
 
         // Inicjalizacja managerów
+        mongoDBManager = new MongoDBManager("mongodb://localhost:27017", "users"); // Użyj poprawnej nazwy bazy danych, jeśli jest inna
         redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
         worldBorderManager = new WorldBorderManager();
@@ -44,6 +48,8 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("gamemode").setExecutor(new GameModeCommand());
         getCommand("weather").setExecutor(new WeatherCommand(redisManager));
         getCommand("time").setExecutor(new TimeCommand(redisManager));
+        getCommand("tppos").setExecutor(new TpposCommand(this, redisManager, sectorManager, worldBorderManager));
+        getCommand("backup").setExecutor(new BackupCommand(mongoDBManager));
 
 
 
@@ -59,6 +65,9 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
         getCommand("tp").setExecutor(new TpCommand(this, redisManager, sectorManager, worldBorderManager));
         getCommand("s").setExecutor(new SummonCommand(this, redisManager, sectorManager, worldBorderManager));
+        getCommand("invsee").setExecutor(new InvseeCommand());
+        getServer().getPluginManager().registerEvents(new InvseeGuiListener(), this);
+
 
         getCommand("tpa").setExecutor(new TpaCommand(redisManager));
         getCommand("tpaccept").setExecutor(new TpacceptCommand(redisManager));
@@ -80,8 +89,10 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(this, sectorManager, redisManager, worldBorderManager), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new VanishPlayerListener(vanishManager, redisManager), this);
-        getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, sectorManager), this);
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
+        getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, mongoDBManager, sectorManager), this);
+        getServer().getPluginManager().registerEvents(new BackupGuiListener(mongoDBManager, redisManager), this);
+
 
         new GlobalChatPlugin(this).register();
 
@@ -102,7 +113,8 @@ public class SectorPlugin extends JavaPlugin {
                         "aisector:tpa_initiate_warmup",
                         "aisector:tp_execute_local_tpa",
                         "aisector:global_weather_change",
-                        "aisector:global_time_change");
+                        "aisector:global_time_change"
+                );
             }
         }, "Redis-Command-Listener-Thread").start();
         PlayerDataSaveListener dataSaveListener = new PlayerDataSaveListener(this, redisManager);

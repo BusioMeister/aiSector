@@ -4,6 +4,7 @@ import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
+import ai.aisector.utils.InventorySerializer;
 import ai.aisector.utils.MessageUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -47,6 +48,30 @@ public class PlayerJoinListener implements Listener {
                 jedis.del(playerDataKey);
                 PlayerDataSerializer.deserialize(player, playerData);
                 dataLoaded = true;
+            }
+            String tpposKey = "player:tppos_target:" + player.getUniqueId();
+            String coordsJson = jedis.get(tpposKey);
+            if (coordsJson != null) {
+                jedis.del(tpposKey); // Usuwamy klucz po użyciu
+
+                JsonObject coords = gson.fromJson(coordsJson, JsonObject.class);
+                World world = Bukkit.getWorld(coords.get("world").getAsString());
+                if (world != null) {
+                    Location targetLocation = new Location(
+                            world,
+                            coords.get("x").getAsDouble(),
+                            coords.get("y").getAsDouble(),
+                            coords.get("z").getAsDouble()
+                    );
+
+                    // Teleportujemy gracza z małym opóźnieniem dla pewności
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        player.teleport(targetLocation);
+                        player.sendMessage("§aPomyślnie przeniesiono i przeteleportowano na nowe koordynaty!");
+                        sendWelcomePackage(player);
+                    }, 5L);
+                }
+                return; // Zakończ dalsze przetwarzanie
             }
 
             // KROK 2: Obsługa /send
@@ -94,6 +119,13 @@ public class PlayerJoinListener implements Listener {
                     }
                 }, 5L);
                 return;
+            }
+            String backupKey = "player:pending_backup:" + player.getUniqueId();
+            String backupData = jedis.get(backupKey);
+            if (backupData != null) {
+                jedis.del(backupKey);
+                InventorySerializer.deserializeAndUpdateInventory(player.getInventory(), backupData);
+                player.sendMessage("§aTwój ekwipunek ze śmierci został przywrócony przez administratora.");
             }
 
             // KROK 5: Obsługa respawn lub /spawn

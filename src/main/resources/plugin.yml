@@ -95,3 +95,13 @@ commands:
     description: Zmienia porę dnia na wszystkich serwerach.
     usage: "/<command> set <day|night>"
     permission: aisector.command.time
+  invsee:
+    description: Otwiera ekwipunek innego gracza.
+    aliases: [ eq ]
+    permission: aisector.command.invsee
+  tppos:
+    description: Teleportuje gracza na podane koordynaty, zmieniając sektor w razie potrzeby.
+    usage: "/tppos <x> <y> <z>"
+    permission: aisector.command.tppos
+  backup:
+    permission: aisector.command.backup
