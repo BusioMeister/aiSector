@@ -27,11 +27,11 @@ public class WyjebaneCommand implements CommandExecutor {
             if (jedis.exists(key)) {
                 // Wiadomości są wyłączone, więc je włączamy (usuwając klucz)
                 jedis.del(key);
-                player.sendMessage("§aOd teraz masz WYJEBANE!");
+                player.sendMessage("§cOd teraz §4NIE §cmasz WYJEBANE!");
             } else {
                 // Wiadomości są włączone, więc je wyłączamy (dodając klucz)
                 jedis.set(key, "true");
-                player.sendMessage("§cOd teraz §4NIE §cmasz WYJEBANE!");
+                player.sendMessage("§aOd teraz masz WYJEBANE!");
             }
         }
         return true;
