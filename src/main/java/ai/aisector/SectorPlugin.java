@@ -50,7 +50,8 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("time").setExecutor(new TimeCommand(redisManager));
         getCommand("tppos").setExecutor(new TpposCommand(this, redisManager, sectorManager, worldBorderManager));
         getCommand("backup").setExecutor(new BackupCommand(mongoDBManager));
-
+        getCommand("sethome").setExecutor(new SetHomeCommand(mongoDBManager));
+        getCommand("home").setExecutor(new HomeCommand(mongoDBManager));
 
 
         getCommand("alert").setExecutor(new AlertCommand(redisManager));
@@ -84,6 +85,7 @@ public class SectorPlugin extends JavaPlugin {
             new SectorStatsPublisher(this, redisManager, thisSectorName).runTaskTimerAsynchronously(this, 100L, 100L); // co 5 sekund
         }
         // Rejestracja listenerów eventów Bukkit
+
         getServer().getPluginManager().registerEvents(new GodCommand(), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(sectorManager, redisManager, worldBorderManager), this);
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(this, sectorManager, redisManager, worldBorderManager), this);
@@ -92,7 +94,8 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new BackupGuiListener(mongoDBManager, redisManager), this);
-
+        getServer().getPluginManager().registerEvents(new SetHomeGuiListener(mongoDBManager, sectorManager), this);
+        getServer().getPluginManager().registerEvents(new HomeGuiListener(mongoDBManager, sectorManager, this), this);
 
         new GlobalChatPlugin(this).register();
 

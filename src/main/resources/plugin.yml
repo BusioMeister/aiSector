@@ -105,3 +105,13 @@ commands:
     permission: aisector.command.tppos
   backup:
     permission: aisector.command.backup
+  sethome:
+    description: Ustawia lokalizację domu.
+    permission: aisector.command.sethome
+  home:
+    description: Teleportuje do zapisanego domu.
+    permission: aisector.command.home
+
+
+
+

@@ -17,6 +17,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import redis.clients.jedis.Jedis;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.UUID;
 
@@ -48,6 +50,8 @@ public class PlayerJoinListener implements Listener {
                 jedis.del(playerDataKey);
                 PlayerDataSerializer.deserialize(player, playerData);
                 dataLoaded = true;
+                player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, 5, false, false));
+
             }
             String tpposKey = "player:tppos_target:" + player.getUniqueId();
             String coordsJson = jedis.get(tpposKey);
@@ -72,6 +76,23 @@ public class PlayerJoinListener implements Listener {
                     }, 5L);
                 }
                 return; // Zakończ dalsze przetwarzanie
+            }
+            String homeKey = "player:home_teleport_target:" + player.getUniqueId();
+            String homeData = jedis.get(homeKey);
+            if (homeData != null) {
+                jedis.del(homeKey);
+                JsonObject locData = gson.fromJson(homeData, JsonObject.class);
+                Location target = new Location(
+                        Bukkit.getWorld(locData.get("world").getAsString()),
+                        locData.get("x").getAsDouble(), locData.get("y").getAsDouble(), locData.get("z").getAsDouble(),
+                        locData.get("yaw").getAsFloat(), locData.get("pitch").getAsFloat()
+                );
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    player.teleport(target);
+                    player.sendMessage("§aPomyślnie przeniesiono i przeteleportowano do domu!");
+                    sendWelcomePackage(player);
+                }, 5L);
+                return;
             }
 
             // KROK 2: Obsługa /send
@@ -178,12 +199,19 @@ public class PlayerJoinListener implements Listener {
         sendWelcomePackage(player);
     }
     private void sendWelcomePackage(Player player) {
-        if (!player.isOnline()) return;
-        Sector sector = sectorManager.getSector(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (sector != null) {
-            borderManager.sendWorldBorder(player, sector);
-            MessageUtil.sendTitle(player, "", "§7Zostałeś §9połączony §7z sektorem §9" + sector.getName(), 300, 1000, 300);
-            MessageUtil.sendActionBar(player, "§7Aktualny sektor: §9" + sector.getName());
-        }
+        // Używamy Bukkit Scheduler, aby opóźnić wykonanie kodu o 2 ticki (0.1 sekundy)
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+
+            Sector sector = sectorManager.getSector(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            if (sector != null) {
+                // Wysyłamy border
+                borderManager.sendWorldBorder(player, sector);
+
+                // Wysyłamy pozostałe informacje
+                MessageUtil.sendTitle(player, "", "§7Zostałeś §9połączony §7z sektorem §9" + sector.getName(), 300, 1000, 300);
+                MessageUtil.sendActionBar(player, "§7Aktualny sektor: §9" + sector.getName());
+            }
+        }, 2L);
     }
 }

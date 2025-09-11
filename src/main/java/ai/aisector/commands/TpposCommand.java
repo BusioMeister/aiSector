@@ -7,6 +7,7 @@ import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
 import com.google.gson.JsonObject;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -66,15 +67,19 @@ public class TpposCommand implements CommandExecutor {
         // PRZYPADEK 1: Gracz jest już na właściwym sektorze
         if (targetSectorName.equals(currentSectorName)) {
             player.teleport(targetLocation);
-            player.sendMessage("§aPrzeteleportowano na koordynaty: §e" + (int)x + ", " + (int)y + ", " + (int)z);
-            // Upewniamy się, że border jest poprawny
-            Sector currentSector = sectorManager.getSector(targetLocation.getBlockX(), targetLocation.getBlockZ());
-            if(currentSector != null) {
-                borderManager.sendWorldBorder(player, currentSector);
-            }
-        }
-        // PRZYPADEK 2: Gracz musi zostać przeniesiony na inny sektor
-        else {
+            player.sendMessage("§aPrzeteleportowano na koordynaty: §e" + (int) x + ", " + (int) y + ", " + (int) z);
+
+            // 🔥 POPRAWKA: Wysyłamy border z opóźnieniem 🔥
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline()) {
+                    Sector currentSector = sectorManager.getSector(targetLocation.getBlockX(), targetLocation.getBlockZ());
+                    if (currentSector != null) {
+                        borderManager.sendWorldBorder(player, currentSector);
+                    }
+                }
+            }, 2L);
+            // PRZYPADEK 2: Gracz musi zostać przeniesiony na inny sektor
+        }else {
             try (Jedis jedis = redisManager.getJedis()) {
                 player.sendMessage("§7Koordynaty znajdują się w innym sektorze. Rozpoczynam transfer...");
 
