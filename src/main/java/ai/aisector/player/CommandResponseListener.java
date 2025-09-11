@@ -66,6 +66,39 @@ public class CommandResponseListener extends JedisPubSub {
                         new LocalTeleportWarmupTask(playerToTeleport, targetLocation, "§aZostałeś przeteleportowany.", sectorManager, borderManager).runTaskTimer(plugin, 0L, 20L);
                     }
                 }
+            }else if (channel.equals("aisector:global_weather_change")) {
+                String weatherType = data.get("weatherType").getAsString();
+                String adminName = data.get("admin").getAsString();
+
+                for (World world : Bukkit.getWorlds()) {
+                    switch (weatherType) {
+                        case "clear":
+                            world.setStorm(false);
+                            world.setThundering(false);
+                            break;
+                        case "rain":
+                            world.setStorm(true);
+                            world.setThundering(false);
+                            break;
+                        case "thunder":
+                            world.setStorm(true);
+                            world.setThundering(true);
+                            break;
+                    }
+                }
+            }
+            else if (channel.equals("aisector:global_time_change")) {
+                String timeType = data.get("timeType").getAsString();
+                String adminName = data.get("admin").getAsString();
+                long timeToSet = 1000L; // Domyślnie dzień (poranek)
+
+                if (timeType.equals("night")) {
+                    timeToSet = 13000L; // Noc
+                }
+
+                for (World world : Bukkit.getWorlds()) {
+                    world.setTime(timeToSet);
+                }
             }
         });
     }

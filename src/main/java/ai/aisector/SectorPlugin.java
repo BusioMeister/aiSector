@@ -37,6 +37,16 @@ public class SectorPlugin extends JavaPlugin {
         vanishManager = new VanishManager(this);
 
         // Rejestracja komend
+        getCommand("enderchest").setExecutor(new EnderchestCommand());
+        getCommand("ci").setExecutor(new ClearInventoryCommand());
+        getCommand("repair").setExecutor(new RepairCommand());
+        getCommand("naprawkilof").setExecutor(new NaprawKilofCommand());
+        getCommand("gamemode").setExecutor(new GameModeCommand());
+        getCommand("weather").setExecutor(new WeatherCommand(redisManager));
+        getCommand("time").setExecutor(new TimeCommand(redisManager));
+
+
+
         getCommand("alert").setExecutor(new AlertCommand(redisManager));
         getCommand("fly").setExecutor(new FlyCommand());
         getCommand("speed").setExecutor(new SpeedCommand());
@@ -73,6 +83,8 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, sectorManager), this);
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
 
+        new GlobalChatPlugin(this).register();
+
         // Uruchomienie zadań cyklicznych
         new ActionBarTask().runTaskTimer(this, 0L, 20L);
         startRedisListeners(); // Uruchomienie wszystkich listenerów Redis w osobnych wątkach
@@ -88,7 +100,9 @@ public class SectorPlugin extends JavaPlugin {
                         "aisector:send_message",
                         "aisector:alert",
                         "aisector:tpa_initiate_warmup",
-                        "aisector:tp_execute_local_tpa");
+                        "aisector:tp_execute_local_tpa",
+                        "aisector:global_weather_change",
+                        "aisector:global_time_change");
             }
         }, "Redis-Command-Listener-Thread").start();
         PlayerDataSaveListener dataSaveListener = new PlayerDataSaveListener(this, redisManager);

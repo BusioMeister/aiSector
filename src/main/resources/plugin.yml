@@ -61,7 +61,7 @@ commands:
   spawn: # <-- NOWA KOMENDA
     description: Teleportuje na spawn serwera.
     usage: /spawn
-  permissions:
+    permissions:
     aisector.setspawn:
       description: Pozwala na ustawienie spawnu serwera.
       default: op
@@ -69,7 +69,29 @@ commands:
     description: Wyświetla informacje o bieżącym sektorze.
     usage: /sectorinfo
     permission: ai.sector.info
-permissions:
-  ai.sector.info:
-    description: Pozwala na użycie komendy /sectorinfo.
-    default: true
+  enderchest:
+    description: Otwiera Enderchest swój lub innego gracza.
+    aliases: [ ec ]
+  ci:
+    description: Czysci caly ekwipunek gracza.
+    aliases: [ clear ]
+    permission: aisector.command.ci
+  repair:
+    description: Naprawia przedmioty.
+    usage: "/<command> [all]"
+    permission: aisector.command.repair.one
+  naprawkilof:
+    description: Naprawia kilof za diamenty.
+    permission: aisector.command.naprawkilof
+  gamemode:
+    description: Zmienia tryb gry gracza.
+    aliases: [ gm ]
+    permission: aisector.command.gamemode
+  weather:
+    description: Zmienia pogodę na wszystkich serwerach.
+    usage: "/<command> <clear|rain|thunder>"
+    permission: aisector.command.weather
+  time:
+    description: Zmienia porę dnia na wszystkich serwerach.
+    usage: "/<command> set <day|night>"
+    permission: aisector.command.time
