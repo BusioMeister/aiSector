@@ -192,7 +192,7 @@ public class PlayerJoinListener implements Listener {
 
         return heldSlot;
     }
-
+    // JAK KURWA ZAPISAC TE JEBANE OKNO KTÓRE GRACZ TRZYMA W RĘKU NO JAK BIFU WIEM ZE TY WIESZ
     private void applyHeldSlotLater(Player player, int slot, long delay) {
         int safe = Math.max(0, Math.min(8, slot));
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
