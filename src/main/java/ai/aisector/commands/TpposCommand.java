@@ -2,11 +2,11 @@ package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
-import ai.aisector.player.PlayerDataSerializer;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
-import com.google.gson.JsonObject;
+import ai.aisector.user.UserManager;
+import com.google.gson.Gson;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
@@ -15,18 +15,24 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import redis.clients.jedis.Jedis;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class TpposCommand implements CommandExecutor {
 
     private final SectorPlugin plugin;
-    private final RedisManager redisManager;
     private final SectorManager sectorManager;
     private final WorldBorderManager borderManager;
+    private final UserManager userManager;
+    private final RedisManager redisManager;
+    private final Gson gson = new Gson();
 
-    public TpposCommand(SectorPlugin plugin, RedisManager redisManager, SectorManager sectorManager, WorldBorderManager borderManager) {
+    public TpposCommand(SectorPlugin plugin) {
         this.plugin = plugin;
-        this.redisManager = redisManager;
-        this.sectorManager = sectorManager;
-        this.borderManager = borderManager;
+        this.sectorManager = plugin.getSectorManager();
+        this.borderManager = plugin.getWorldBorderManager();
+        this.userManager = plugin.getUserManager();
+        this.redisManager = plugin.getRedisManager();
     }
 
     @Override
@@ -64,41 +70,32 @@ public class TpposCommand implements CommandExecutor {
             return true;
         }
 
-        // PRZYPADEK 1: Gracz jest już na właściwym sektorze
         if (targetSectorName.equals(currentSectorName)) {
             player.teleport(targetLocation);
             player.sendMessage("§aPrzeteleportowano na koordynaty: §e" + (int) x + ", " + (int) y + ", " + (int) z);
+        } else {
+            player.sendMessage("§7Koordynaty znajdują się w innym sektorze. Rozpoczynam transfer...");
 
-            // 🔥 POPRAWKA: Wysyłamy border z opóźnieniem 🔥
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (player.isOnline()) {
-                    Sector currentSector = sectorManager.getSector(targetLocation.getBlockX(), targetLocation.getBlockZ());
-                    if (currentSector != null) {
-                        borderManager.sendWorldBorder(player, currentSector);
-                    }
-                }
-            }, 2L);
-            // PRZYPADEK 2: Gracz musi zostać przeniesiony na inny sektor
-        }else {
+            userManager.savePlayerDataForTransfer(player, player.getLocation());
+
             try (Jedis jedis = redisManager.getJedis()) {
-                player.sendMessage("§7Koordynaty znajdują się w innym sektorze. Rozpoczynam transfer...");
-
-                // 1. Zapisujemy dane (ekwipunek, HP etc.) gracza
-                String playerData = PlayerDataSerializer.serialize(player, player.getLocation());
-                jedis.setex("player:data:" + player.getUniqueId(), 60, playerData);
-
-                // 2. Zapisujemy docelowe koordynaty w Redis
-                JsonObject coords = new JsonObject();
-                coords.addProperty("world", targetLocation.getWorld().getName());
-                coords.addProperty("x", x);
-                coords.addProperty("y", y);
-                coords.addProperty("z", z);
-                jedis.setex("player:tppos_target:" + player.getUniqueId(), 60, coords.toString());
-
-                // 3. Zlecamy transfer gracza
-                sectorManager.transferPlayer(player.getUniqueId(), targetSectorName);
+                // 🔥 POPRAWKA: Używamy 'targetLocation' zamiast nieistniejącej 'spawnLocation'
+                jedis.setex("player:final_teleport_target:" + player.getUniqueId(), 60, locationToJson(targetLocation));
             }
+
+            sectorManager.transferPlayer(player.getUniqueId(), targetSectorName);
         }
         return true;
+    }
+
+    private String locationToJson(Location loc) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("world", loc.getWorld().getName());
+        data.put("x", loc.getX());
+        data.put("y", loc.getY());
+        data.put("z", loc.getZ());
+        data.put("yaw", loc.getYaw());
+        data.put("pitch", loc.getPitch());
+        return gson.toJson(data);
     }
 }

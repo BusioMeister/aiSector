@@ -1,11 +1,8 @@
 package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.database.RedisManager;
-import ai.aisector.sectors.Sector;
-import ai.aisector.sectors.SectorManager;
-import ai.aisector.sectors.WorldBorderManager;
-import org.bson.Document;
+import ai.aisector.user.UserManager;
+import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
@@ -17,15 +14,11 @@ import redis.clients.jedis.Jedis;
 public class SummonCommand implements CommandExecutor {
 
     private final SectorPlugin plugin;
-    private final RedisManager redisManager;
-    private final SectorManager sectorManager;
-    private final WorldBorderManager borderManager;
+    private final UserManager userManager;
 
-    public SummonCommand(SectorPlugin plugin, RedisManager redisManager, SectorManager sectorManager, WorldBorderManager borderManager) {
+    public SummonCommand(SectorPlugin plugin) {
         this.plugin = plugin;
-        this.redisManager = redisManager;
-        this.sectorManager = sectorManager;
-        this.borderManager = borderManager;
+        this.userManager = plugin.getUserManager();
     }
 
     @Override
@@ -46,43 +39,35 @@ public class SummonCommand implements CommandExecutor {
         Player admin = (Player) sender;
         String targetName = args[0];
 
-        // 🔥 NOWA LOGIKA: Najpierw sprawdź, czy gracz jest na tym samym serwerze
+        // Przypadek 1: Gracz jest na tym samym serwerze (działa natychmiast)
         Player targetPlayer = Bukkit.getPlayer(targetName);
         if (targetPlayer != null) {
-            // PRZYPADEK 1: Gracz jest lokalnie -> natychmiastowy teleport
-            admin.sendMessage("§7Przywołuję gracza §e" + targetName + "§7...");
-
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                targetPlayer.teleport(admin.getLocation());
-                targetPlayer.sendMessage("§aZostałeś przywołany.");
-
-                // Natychmiastowa aktualizacja bordera dla przywołanego gracza
-                Sector currentSector = sectorManager.getSector(admin.getLocation().getBlockX(), admin.getLocation().getBlockZ());
-                if (currentSector != null) {
-                    borderManager.sendWorldBorder(targetPlayer, currentSector);
-                }
-            }, 1L);
-
+            targetPlayer.teleport(admin.getLocation());
+            targetPlayer.sendMessage("§aZostałeś przywołany.");
+            admin.sendMessage("§aPrzywołano gracza §e" + targetName + "§a.");
             return true;
         }
 
-        // PRZYPADEK 2: Gracza nie ma lokalnie -> wyślij prośbę do Velocity (stara logika)
-        Location adminLocation = admin.getLocation();
-        Document locationDoc = new Document("world", adminLocation.getWorld().getName())
-                .append("x", adminLocation.getX())
-                .append("y", adminLocation.getY())
-                .append("z", adminLocation.getZ())
-                .append("yaw", adminLocation.getYaw())
-                .append("pitch", adminLocation.getPitch());
+        // Przypadek 2: Gracz jest na innym serwerze. Wysyłamy prośbę do Velocity.
+        JsonObject request = new JsonObject();
+        request.addProperty("adminUUID", admin.getUniqueId().toString());
+        request.addProperty("targetName", targetName);
 
-        Document request = new Document("adminName", admin.getName())
-                .append("targetName", targetName)
-                .append("adminLocation", locationDoc);
+        // Dodajemy pełną lokalizację admina do prośby
+        Location adminLoc = admin.getLocation();
+        JsonObject locationJson = new JsonObject();
+        locationJson.addProperty("world", adminLoc.getWorld().getName());
+        locationJson.addProperty("x", adminLoc.getX());
+        locationJson.addProperty("y", adminLoc.getY());
+        locationJson.addProperty("z", adminLoc.getZ());
+        locationJson.addProperty("yaw", adminLoc.getYaw());
+        locationJson.addProperty("pitch", adminLoc.getPitch());
+        request.add("adminLocation", locationJson);
 
-        try (Jedis jedis = redisManager.getJedis()) {
-            jedis.publish("aisector:summon_request", request.toJson());
+        try (Jedis jedis = plugin.getRedisManager().getJedis()) {
+            jedis.publish("aisector:summon_request", request.toString());
         }
-        admin.sendMessage("§7Przetwarzanie prośby o przywołanie gracza §e" + targetName + "§7...");
+        admin.sendMessage("§7Przetwarzanie prośby o przywołanie gracza...");
         return true;
     }
 }

@@ -1,52 +1,31 @@
 package ai.aisector.commands;
-
+import ai.aisector.SectorPlugin;
+import ai.aisector.user.User;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerQuitEvent;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
-
-public class GodCommand implements CommandExecutor, Listener {
-
-    public static final Set<UUID> gods = new HashSet<>();
+public class GodCommand implements CommandExecutor {
+    private final SectorPlugin plugin;
+    public GodCommand(SectorPlugin plugin) { this.plugin = plugin; }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage("Tej komendy może użyć tylko gracz.");
-            return true;
-        }
-
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+        if (!(sender instanceof Player)) return true;
         Player player = (Player) sender;
         if (!player.hasPermission("aisector.command.god")) {
             player.sendMessage("§cNie masz uprawnień.");
             return true;
         }
-
-        UUID uuid = player.getUniqueId();
-        if (gods.contains(uuid)) {
-            // Wyłącz tryb boga
-            gods.remove(uuid);
-            player.setInvulnerable(false);
-            player.sendMessage("§cTryb boga został wyłączony.");
-        } else {
-            // Włącz tryb boga
-            gods.add(uuid);
-            player.setInvulnerable(true);
-            player.sendMessage("§aTryb boga został włączony.");
+        User user = plugin.getUserManager().getUser(player);
+        if (user == null) {
+            player.sendMessage("§cWystąpił błąd wczytywania Twoich danych.");
+            return true;
         }
+        user.setGodMode(!user.isGodMode());
+        player.setInvulnerable(user.isGodMode());
+        player.sendMessage(user.isGodMode() ? "§aTryb GOD został włączony." : "§cTryb GOD został wyłączony.");
         return true;
-    }
-
-    // Zabezpieczenie na wypadek wyjścia gracza
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        gods.remove(event.getPlayer().getUniqueId());
     }
 }

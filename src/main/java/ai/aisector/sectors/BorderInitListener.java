@@ -1,7 +1,5 @@
 package ai.aisector.sectors;
 
-import ai.aisector.sectors.Sector;
-import ai.aisector.sectors.SectorManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -13,15 +11,18 @@ public class BorderInitListener extends JedisPubSub {
 
     private final SectorManager sectorManager;
     private final JavaPlugin plugin;
+    // 🔥 ZMIANA: Dodajemy pole dla WorldBorderManager 🔥
+    private final WorldBorderManager borderManager;
 
-    public BorderInitListener(SectorManager sectorManager, JavaPlugin plugin) {
+    // 🔥 ZMIANA: Aktualizujemy konstruktor, aby przyjmował nowy manager 🔥
+    public BorderInitListener(SectorManager sectorManager, JavaPlugin plugin, WorldBorderManager borderManager) {
         this.sectorManager = sectorManager;
         this.plugin = plugin;
+        this.borderManager = borderManager;
     }
 
     @Override
     public void onMessage(String channel, String message) {
-        // Oczekiwany format: channel = sector-border-init:SectorName, message = UUID gracza
         if (!channel.startsWith("sector-border-init:")) return;
 
         String sectorName = channel.substring("sector-border-init:".length());
@@ -34,22 +35,22 @@ public class BorderInitListener extends JedisPubSub {
             return;
         }
 
-        // Wykonaj na głównym wątku
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             Player player = Bukkit.getPlayer(uuid);
             if (player == null || !player.isOnline()) {
-                plugin.getLogger().warning("Nie znaleziono gracza o UUID: " + uuid);
+                // To nie jest błąd, gracz mógł się wylogować w międzyczasie
                 return;
             }
 
             Sector sector = sectorManager.getSectorByName(sectorName);
             if (sector == null) {
-                plugin.getLogger().warning("Nie znaleziono sektora: " + sectorName);
+                plugin.getLogger().warning("Nie znaleziono sektora do inicjalizacji bordera: " + sectorName);
                 return;
             }
 
-            sectorManager.applyBorder(player, sector);
-            plugin.getLogger().info("✅ Ustawiono border dla gracza " + player.getName() + " w sektorze: " + sectorName);
-        },5L);
+            // 🔥 POPRAWKA: Używamy teraz poprawnej metody z WorldBorderManager 🔥
+            borderManager.sendWorldBorder(player, sector);
+            plugin.getLogger().info("✅ Zainicjowano border dla gracza " + player.getName() + " w sektorze: " + sectorName);
+        }, 5L);
     }
 }

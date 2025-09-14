@@ -3,8 +3,12 @@ package ai.aisector.player;
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.SectorManager;
+import ai.aisector.user.User;
+import ai.aisector.user.UserManager;
 import com.google.gson.JsonObject;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
@@ -12,16 +16,22 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import redis.clients.jedis.Jedis;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class HomeTeleportWarmupTask extends BukkitRunnable {
 
     private final Player player;
+    private final RedisManager redisManager;
+
     private final Location startLocation;
     private final String targetSector;
     private final JsonObject targetLocationJson;
     private final int homeSlot;
+    private final SectorPlugin plugin;
     private final SectorManager sectorManager;
-    private final RedisManager redisManager;
-    private int timeLeft = 5; // 5 sekund
+    private final UserManager userManager;
+    private int timeLeft = 5;
     private final BossBar bossBar;
 
     public HomeTeleportWarmupTask(Player player, String targetSector, JsonObject targetLocationJson, int homeSlot, SectorPlugin plugin) {
@@ -30,14 +40,17 @@ public class HomeTeleportWarmupTask extends BukkitRunnable {
         this.targetSector = targetSector;
         this.targetLocationJson = targetLocationJson;
         this.homeSlot = homeSlot;
-        this.sectorManager = plugin.getSectorManager();
         this.redisManager = plugin.getRedisManager();
-        this.bossBar = org.bukkit.Bukkit.createBossBar("§aTeleportacja do domu za: §e" + timeLeft, BarColor.GREEN, BarStyle.SOLID);
+
+        this.plugin = plugin;
+        this.sectorManager = plugin.getSectorManager();
+        this.userManager = plugin.getUserManager();
+        this.bossBar = Bukkit.createBossBar("§aTeleportacja do domu za: §e" + timeLeft, BarColor.GREEN, BarStyle.SOLID);
     }
 
     public void start() {
         this.bossBar.addPlayer(player);
-        this.runTaskTimer(SectorPlugin.getPlugin(SectorPlugin.class), 0L, 20L);
+        this.runTaskTimer(plugin, 0L, 20L);
     }
 
     @Override
@@ -47,7 +60,6 @@ public class HomeTeleportWarmupTask extends BukkitRunnable {
             return;
         }
 
-        // Sprawdzamy, czy gracz się nie poruszył
         if (player.getLocation().distanceSquared(startLocation) > 1.0) {
             player.sendMessage("§cTeleportacja anulowana! Ruszyłeś się.");
             this.cancel();
@@ -77,28 +89,41 @@ public class HomeTeleportWarmupTask extends BukkitRunnable {
     private void teleportPlayer() {
         String currentSector = sectorManager.getSectorForLocation(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
 
+        World world = Bukkit.getWorld(targetLocationJson.get("world").getAsString());
+        if (world == null) {
+            player.sendMessage("§cWystąpił błąd: świat docelowy nie istnieje.");
+            return;
+        }
+
+        Location targetLocation = new Location(
+                world,
+                targetLocationJson.get("x").getAsDouble(),
+                targetLocationJson.get("y").getAsDouble(),
+                targetLocationJson.get("z").getAsDouble(),
+                targetLocationJson.get("yaw").getAsFloat(),
+                targetLocationJson.get("pitch").getAsFloat());
+
         if (targetSector.equals(currentSector)) {
             // Teleport lokalny
-            Location target = new Location(
-                    player.getWorld(),
-                    targetLocationJson.get("x").getAsDouble(),
-                    targetLocationJson.get("y").getAsDouble(),
-                    targetLocationJson.get("z").getAsDouble(),
-                    targetLocationJson.get("yaw").getAsFloat(),
-                    targetLocationJson.get("pitch").getAsFloat());
-            player.teleport(target);
+            player.teleport(targetLocation);
             player.sendMessage("§aPrzeteleportowano do domu #" + homeSlot + "!");
         } else {
-            // Transfer międzysektorowy
             player.sendMessage("§7Ukończono odliczanie, rozpoczynam transfer...");
+
+            // 🔥 OSTATECZNA POPRAWKA: Używamy Redis do przekazania celu 🔥
+            userManager.savePlayerDataForTransfer(player, player.getLocation());
             try (Jedis jedis = redisManager.getJedis()) {
-                // Zapisujemy ekwipunek i cel
-                String invData = PlayerDataSerializer.serialize(player, player.getLocation());
-                jedis.setex("player:data:" + player.getUniqueId(), 60, invData);
-                jedis.setex("player:home_teleport_target:" + player.getUniqueId(), 60, targetLocationJson.toString());
-                // Zlecamy transfer
-                sectorManager.transferPlayer(player.getUniqueId(), targetSector);
+                jedis.setex("player:final_teleport_target:" + player.getUniqueId(), 60, locationToJson(targetLocation));
             }
+            sectorManager.transferPlayer(player.getUniqueId(), targetSector);
         }
+    }
+
+    private String locationToJson(Location loc) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("world", loc.getWorld().getName());
+        data.put("x", loc.getX()); data.put("y", loc.getY()); data.put("z", loc.getZ());
+        data.put("yaw", loc.getYaw()); data.put("pitch", loc.getPitch());
+        return new com.google.gson.Gson().toJson(data);
     }
 }

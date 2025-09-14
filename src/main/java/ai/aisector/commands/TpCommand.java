@@ -1,11 +1,8 @@
 package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.database.RedisManager;
-import ai.aisector.sectors.Sector;
-import ai.aisector.sectors.SectorManager;
-import ai.aisector.sectors.WorldBorderManager;
-import com.google.gson.JsonObject; // ZMIANA: Używamy JsonObject
+import ai.aisector.user.UserManager;
+import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -16,15 +13,11 @@ import redis.clients.jedis.Jedis;
 public class TpCommand implements CommandExecutor {
 
     private final SectorPlugin plugin;
-    private final RedisManager redisManager;
-    private final SectorManager sectorManager;
-    private final WorldBorderManager borderManager;
+    private final UserManager userManager;
 
-    public TpCommand(SectorPlugin plugin, RedisManager redisManager, SectorManager sectorManager, WorldBorderManager borderManager) {
+    public TpCommand(SectorPlugin plugin) {
         this.plugin = plugin;
-        this.redisManager = redisManager;
-        this.sectorManager = sectorManager;
-        this.borderManager = borderManager;
+        this.userManager = plugin.getUserManager();
     }
 
     @Override
@@ -45,30 +38,28 @@ public class TpCommand implements CommandExecutor {
         Player admin = (Player) sender;
         String targetName = args[0];
 
+        // Przypadek 1: Gracz jest na tym samym serwerze (działa jak dotychczas)
         Player targetPlayer = Bukkit.getPlayer(targetName);
         if (targetPlayer != null) {
-            // PRZYPADEK 1: Gracz jest lokalnie
-            admin.sendMessage("§7Teleportuję do gracza §e" + targetName + "§7...");
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                admin.teleport(targetPlayer.getLocation());
-                Sector currentSector = sectorManager.getSector(targetPlayer.getLocation().getBlockX(), targetPlayer.getLocation().getBlockZ());
-                if (currentSector != null) {
-                    borderManager.sendWorldBorder(admin, currentSector);
-                }
-            }, 1L);
+            admin.teleport(targetPlayer.getLocation());
+            admin.sendMessage("§aPrzeteleportowano do gracza " + targetName + ".");
             return true;
         }
 
-        // PRZYPADEK 2: Gracza nie ma lokalnie -> wyślij prośbę do Velocity
-        // ZMIANA: Używamy spójnego formatu JsonObject
+        // Przypadek 2: Gracz jest na innym serwerze.
+        // Krok A: Zapisujemy dane admina, aby były gotowe do transferu.
+        userManager.savePlayerDataForTransfer(admin, admin.getLocation());
+
+        // Krok B: Wysyłamy prośbę do Velocity o zorganizowanie teleportacji.
         JsonObject request = new JsonObject();
-        request.addProperty("adminName", admin.getName());
+        request.addProperty("adminUUID", admin.getUniqueId().toString());
         request.addProperty("targetName", targetName);
 
-        try (Jedis jedis = redisManager.getJedis()) {
-            jedis.publish("aisector:tp_request", request.toString());
+        try (Jedis jedis = plugin.getRedisManager().getJedis()) {
+            jedis.publish("aisector:admin_tp_request", request.toString());
         }
-        sender.sendMessage("§7Przetwarzanie prośby o teleportację...");
+        sender.sendMessage("§7Przetwarzanie prośby o teleportację do gracza na innym sektorze...");
+
         return true;
     }
 }

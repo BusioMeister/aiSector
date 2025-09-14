@@ -2,12 +2,12 @@ package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
-// WAŻNY IMPORT: Potrzebujemy dostępu do serializera
-import ai.aisector.player.PlayerDataSerializer;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
-import org.bson.Document;
+import ai.aisector.user.UserManager;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -16,19 +16,24 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import redis.clients.jedis.Jedis;
+import java.util.HashMap;
+import java.util.Map;
 
 public class SpawnCommand implements CommandExecutor {
 
     private final SectorPlugin plugin;
-    private final RedisManager redisManager;
     private final SectorManager sectorManager;
     private final WorldBorderManager borderManager;
+    private final UserManager userManager;
+    private final RedisManager redisManager;
+    private final Gson gson = new Gson();
 
-    public SpawnCommand(SectorPlugin plugin, RedisManager redisManager, SectorManager sectorManager, WorldBorderManager borderManager) {
+    public SpawnCommand(SectorPlugin plugin) {
         this.plugin = plugin;
-        this.redisManager = redisManager;
-        this.sectorManager = sectorManager;
-        this.borderManager = borderManager;
+        this.sectorManager = plugin.getSectorManager();
+        this.borderManager = plugin.getWorldBorderManager();
+        this.userManager = plugin.getUserManager();
+        this.redisManager = plugin.getRedisManager();
     }
 
     @Override
@@ -39,56 +44,54 @@ public class SpawnCommand implements CommandExecutor {
         }
 
         Player player = (Player) sender;
-
+        String spawnDataJson;
         try (Jedis jedis = redisManager.getJedis()) {
-            String spawnDataJson = jedis.get("aisector:global_spawn");
-
-            if (spawnDataJson == null || spawnDataJson.isEmpty()) {
-                player.sendMessage("§cSpawn serwera nie został jeszcze ustawiony!");
-                return true;
-            }
-
-            Document spawnData = Document.parse(spawnDataJson);
-            String targetSector = spawnData.getString("sector");
-            String currentSectorName = sectorManager.getSectorForLocation(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-
-            if (targetSector.equals(currentSectorName)) {
-                // PRZYPADEK 1: Gracz jest na sektorze spawnu -> TELEPORT LOKALNY
-                World world = Bukkit.getWorlds().get(0);
-                Location spawnLocation = new Location(world,
-                        spawnData.getDouble("x"),
-                        spawnData.getDouble("y"),
-                        spawnData.getDouble("z"),
-                        spawnData.getDouble("yaw").floatValue(),
-                        spawnData.getDouble("pitch").floatValue());
-
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    player.teleport(spawnLocation);
-                    player.sendMessage("§aZostałeś przeteleportowany na spawn!");
-
-                    Sector sector = sectorManager.getSector(spawnLocation.getBlockX(), spawnLocation.getBlockZ());
-                    if (sector != null) {
-                        borderManager.sendWorldBorder(player, sector);
-                    }
-                }, 1L);
-
-            } else {
-                // PRZYPADEK 2: Gracz jest na innym sektorze -> Zapisz dane i zleć transfer
-                player.sendMessage("§7Trwa transfer na serwer spawnu...");
-
-                // 🔥 NOWA LOGIKA: Zapisujemy dane gracza PRZED transferem 🔥
-                String playerData = PlayerDataSerializer.serialize(player, player.getLocation());
-                jedis.setex("player:data:" + player.getUniqueId(), 60, playerData);
-                // ----------------------------------------------------------------
-
-                jedis.setex("player:spawn_teleport:" + player.getUniqueId(), 10, "true");
-                sectorManager.transferPlayer(player.getUniqueId(), targetSector);
-            }
-        } catch (Exception e) {
-            player.sendMessage("§cWystąpił błąd podczas próby teleportacji.");
-            e.printStackTrace();
+            spawnDataJson = jedis.get("aisector:global_spawn");
         }
 
+        if (spawnDataJson == null || spawnDataJson.isEmpty()) {
+            player.sendMessage("§cSpawn serwera nie został jeszcze ustawiony!");
+            return true;
+        }
+
+        JsonObject spawnData = gson.fromJson(spawnDataJson, JsonObject.class);
+        String targetSector = spawnData.get("sector").getAsString();
+        String currentSectorName = sectorManager.getSectorForLocation(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+
+        World world = Bukkit.getWorlds().get(0);
+        Location spawnLocation = new Location(world,
+                spawnData.get("x").getAsDouble(), spawnData.get("y").getAsDouble(), spawnData.get("z").getAsDouble(),
+                spawnData.get("yaw").getAsFloat(), spawnData.get("pitch").getAsFloat());
+
+        if (targetSector.equals(currentSectorName)) {
+            player.teleport(spawnLocation);
+            player.sendMessage("§aZostałeś przeteleportowany na spawn!");
+        } else {
+            player.sendMessage("§7Trwa transfer na serwer spawnu...");
+
+            // 1. Zapisujemy dane (EQ, HP) do Redis za pomocą UserManager
+            userManager.savePlayerDataForTransfer(player, player.getLocation());
+
+            // 2. Zapisujemy OSTATECZNY cel teleportacji w Redis
+            try (Jedis jedis = redisManager.getJedis()) {
+                jedis.setex("player:final_teleport_target:" + player.getUniqueId(), 60, locationToJson(spawnLocation));
+            }
+
+            // 3. Zlecamy transfer gracza
+            sectorManager.transferPlayer(player.getUniqueId(), targetSector);
+        }
         return true;
+    }
+
+    // Metoda pomocnicza do konwersji Location na JSON
+    private String locationToJson(Location loc) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("world", loc.getWorld().getName());
+        data.put("x", loc.getX());
+        data.put("y", loc.getY());
+        data.put("z", loc.getZ());
+        data.put("yaw", loc.getYaw());
+        data.put("pitch", loc.getPitch());
+        return gson.toJson(data);
     }
 }

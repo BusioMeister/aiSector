@@ -4,10 +4,8 @@ import ai.aisector.database.RedisManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.WorldBorder;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
 import redis.clients.jedis.Jedis;
 
 import java.io.File;
@@ -16,13 +14,12 @@ import java.util.*;
 public class SectorManager {
 
     private final RedisManager redisManager;
-    private final List<Sector> SECTORS = new ArrayList<>();
+    private final Map<String, Sector> sectors = new HashMap<>();
 
     public SectorManager(RedisManager redisManager) {
         this.redisManager = redisManager;
-        loadSectorsFromFile(); // załaduj sektory z pliku
+        loadSectorsFromFile();
     }
-
     public void loadSectorsFromFile() {
         File file = new File("plugins/AISector/sectors.yml");
         if (!file.exists()) {
@@ -61,6 +58,7 @@ public class SectorManager {
         ConfigurationSection sectorSection = config.getConfigurationSection("sectors");
         if (sectorSection == null) return;
 
+        sectors.clear();
         for (String key : sectorSection.getKeys(false)) {
             ConfigurationSection s = sectorSection.getConfigurationSection(key);
             if (s == null) continue;
@@ -69,124 +67,80 @@ public class SectorManager {
             int maxX = s.getInt("maxX");
             int minZ = s.getInt("minZ");
             int maxZ = s.getInt("maxZ");
-            SECTORS.add(new Sector(key, minX, maxX, minZ, maxZ));
-        }
 
-        Bukkit.getLogger().info("[AISector] Załadowano sektory: " + SECTORS.size());
+            // Dodajemy sektor do Mapy, używając małych liter jako klucza dla spójności
+            sectors.put(key.toLowerCase(), new Sector(key, minX, maxX, minZ, maxZ));
+        }
+        Bukkit.getLogger().info("[AISector] Załadowano sektory: " + sectors.size());
     }
 
 
-    public SectorData calculateSectorData(String sectorName) {
-        for (Sector sector : SECTORS) {
-            if (sector.getName().equalsIgnoreCase(sectorName)) {
-                double centerX = (sector.getMinX() + sector.getMaxX()) / 2.0;
-                double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
-                double sizeX = (sector.getMaxX() - sector.getMinX() + 1);
-                double sizeZ = (sector.getMaxZ() - sector.getMinZ() + 1);
-                double size = Math.max(sizeX, sizeZ);
-                return new SectorData(centerX, centerZ, size);
-            }
-        }
-        return null; // zamiast rzucania wyjątku
-    }
-
+    // Używamy nowej, bezpieczniejszej konstrukcji try-with-resources
     public void transferPlayer(UUID uuid, String sectorId) {
-        Jedis jedis = redisManager.getJedis();
-        try {
+        try (Jedis jedis = redisManager.getJedis()) {
             jedis.publish("sector-transfer", uuid + ":" + sectorId);
         } catch (Exception e) {
             e.printStackTrace();
-        } finally {
-            redisManager.releaseJedis(jedis);
         }
     }
 
+    // Wyszukiwanie jest teraz bardziej wydajne dzięki pętli po wartościach mapy
     public String getSectorForLocation(int x, int z) {
-        for (Sector s : SECTORS) {
+        for (Sector s : sectors.values()) {
             if (s.isInside(x, z)) return s.getName();
         }
         return "";
     }
 
     public Sector getSector(int x, int z) {
-        for (Sector s : SECTORS) {
+        for (Sector s : sectors.values()) {
             if (s.isInside(x, z)) return s;
         }
         return null;
     }
-    public Sector getNextSector(Sector current, String direction) {
-        for (Sector s : SECTORS) {
-            switch (direction.toUpperCase()) {
-                case "NORTH":
-                    if (current.getMinZ() - 1 == s.getMaxZ() &&
-                            current.getMinX() <= s.getMaxX() && current.getMaxX() >= s.getMinX()) {
-                        return s;
-                    }
-                    break;
-                case "SOUTH":
-                    if (current.getMaxZ() + 1 == s.getMinZ() &&
-                            current.getMinX() <= s.getMaxX() && current.getMaxX() >= s.getMinX()) {
-                        return s;
-                    }
-                    break;
-                case "EAST":
-                    if (current.getMaxX() + 1 == s.getMinX() &&
-                            current.getMinZ() <= s.getMaxZ() && current.getMaxZ() >= s.getMinZ()) {
-                        return s;
-                    }
-                    break;
-                case "WEST":
-                    if (current.getMinX() - 1 == s.getMaxX() &&
-                            current.getMinZ() <= s.getMaxZ() && current.getMaxZ() >= s.getMinZ()) {
-                        return s;
-                    }
-                    break;
-            }
-        }
-        return null;
-    }
 
-
-
-
-
-    public void applyBorder(Player player, Sector sector) {
-        WorldBorder border = player.getWorld().getWorldBorder();
-
-        double centerX = (sector.getMinX() + sector.getMaxX()) / 2.0; // +0.5 by centrować na blok
-        double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
-        double sizeX = sector.getMaxX() - sector.getMinX() + 1;
-        double sizeZ = sector.getMaxZ() - sector.getMinZ() + 1;
-        double size = Math.max(sizeX, sizeZ)+ 3 ;
-
-        border.setCenter(centerX, centerZ);
-        border.setSize(size);
-        border.setWarningDistance(0); // możesz dostosować
-        border.setWarningTime(0);
-    }
+    // Ta metoda jest teraz natychmiastowa dzięki użyciu Mapy
     public Sector getSectorByName(String name) {
-        return SECTORS.stream()
-                .filter(sector -> sector.getName().equalsIgnoreCase(name))
-                .findFirst()
-                .orElse(null);
+        return sectors.get(name.toLowerCase());
     }
 
-    public List<Sector> getSECTORS() {
-        return SECTORS;
+    // 🔥 TUTAJ JEST BRAKUJĄCA METODA 🔥
+    /**
+     * Oblicza odległość gracza do najbliższej krawędzi sektora, w którym się znajduje.
+     * @param location Aktualna lokalizacja gracza.
+     * @return Odległość w blokach do najbliższej granicy.
+     */
+    public double distanceToClosestBorder(Location location) {
+        Sector sector = getSector(location.getBlockX(), location.getBlockZ());
+        if (sector == null) {
+            // Jeśli gracz jest poza sektorem, zwracamy dużą wartość, aby bossbar się nie pokazywał
+            return Double.MAX_VALUE;
+        }
+
+        int x = location.getBlockX();
+        int z = location.getBlockZ();
+
+        // Obliczamy odległości do 4 krawędzi sektora
+        double distToNorth = z - sector.getMinZ();
+        double distToSouth = sector.getMaxZ() - z;
+        double distToWest = x - sector.getMinX();
+        double distToEast = sector.getMaxX() - x;
+
+        // Zwracamy najmniejszą z tych odległości
+        return Math.min(Math.min(distToNorth, distToSouth), Math.min(distToWest, distToEast));
     }
+
+    public Collection<Sector> getSECTORS() {
+        return sectors.values();
+    }
+
     public Location getSectorSpawnLocation(Sector sector) {
         if (sector == null) return null;
-
-        // Zakładamy, że świat jest zawsze ten sam na danym serwerze Spigot
         World world = Bukkit.getWorlds().get(0);
         if (world == null) return null;
-
         double centerX = (sector.getMinX() + sector.getMaxX()) / 2.0;
         double centerZ = (sector.getMinZ() + sector.getMaxZ()) / 2.0;
-
-        // Znajdź najwyższy bezpieczny blok na środku sektora
         double y = world.getHighestBlockYAt((int) centerX, (int) centerZ) + 1.5;
-
         return new Location(world, centerX, y, centerZ, 0, 0);
     }
 }

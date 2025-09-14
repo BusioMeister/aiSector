@@ -1,58 +1,42 @@
 package ai.aisector.commands;
-
-import ai.aisector.database.RedisManager;
-import com.google.gson.JsonObject;
+import ai.aisector.SectorPlugin;
+import ai.aisector.user.User;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import redis.clients.jedis.Jedis;
 
 public class VanishCommand implements CommandExecutor {
-
-    private final RedisManager redisManager;
-
-    public VanishCommand(RedisManager redisManager) {
-        this.redisManager = redisManager;
-    }
+    private final SectorPlugin plugin;
+    public VanishCommand(SectorPlugin plugin) { this.plugin = plugin; }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage("Tej komendy może użyć tylko gracz.");
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+        if (!(sender instanceof Player)) return true;
+        Player player = (Player) sender;
+        if (!player.hasPermission("aisector.command.vanish")) {
+            player.sendMessage("§cNie masz uprawnień.");
             return true;
         }
-        Player admin = (Player) sender;
-        if (!admin.hasPermission("aisector.command.vanish")) {
-            admin.sendMessage("§cNie masz uprawnień.");
+        User user = plugin.getUserManager().getUser(player);
+        if (user == null) {
+            player.sendMessage("§cWystąpił błąd wczytywania Twoich danych.");
             return true;
         }
-
-        try (Jedis jedis = redisManager.getJedis()) {
-            String redisKey = "aisector:vanished_players";
-            boolean isVanished = jedis.sismember(redisKey, admin.getUniqueId().toString());
-
-            JsonObject updateData = new JsonObject();
-            updateData.addProperty("uuid", admin.getUniqueId().toString());
-
-            JsonObject chatData = new JsonObject();
-            chatData.addProperty("adminName", admin.getName());
-
-            if (isVanished) {
-                // Wyłącz Vanish
-                jedis.srem(redisKey, admin.getUniqueId().toString());
-                updateData.addProperty("action", "UNVANISH");
-                chatData.addProperty("message", "§c[Admin] " + admin.getName() + " wyłączył tryb Vanish.");
-            } else {
-                // Włącz Vanish
-                jedis.sadd(redisKey, admin.getUniqueId().toString());
-                updateData.addProperty("action", "VANISH");
-                chatData.addProperty("message", "§a[Admin] " + admin.getName() + " włączył tryb Vanish.");
+        user.setVanished(!user.isVanished());
+        if (user.isVanished()) {
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                if (!onlinePlayer.hasPermission("aisector.command.vanish.see")) {
+                    onlinePlayer.hidePlayer(plugin, player);
+                }
             }
-
-            // Opublikuj informację dla innych serwerów
-            jedis.publish("aisector:vanish_update", updateData.toString());
-            jedis.publish("aisector:admin_chat", chatData.toString());
+            player.sendMessage("§aVanish został włączony.");
+        } else {
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                onlinePlayer.showPlayer(plugin, player);
+            }
+            player.sendMessage("§cVanish został wyłączony.");
         }
         return true;
     }
