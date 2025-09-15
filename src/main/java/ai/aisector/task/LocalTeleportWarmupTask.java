@@ -1,4 +1,4 @@
-package ai.aisector.player; // Upewnij się, że pakiet jest poprawny
+package ai.aisector.task; // Upewnij się, że pakiet jest poprawny
 
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;

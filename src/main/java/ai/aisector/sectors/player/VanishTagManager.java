@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.sectors.player;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;

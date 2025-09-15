@@ -1,6 +1,6 @@
 package ai.aisector.commands;
 
-import ai.aisector.player.GlobalPlayerManager;
+import ai.aisector.sectors.player.GlobalPlayerManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;

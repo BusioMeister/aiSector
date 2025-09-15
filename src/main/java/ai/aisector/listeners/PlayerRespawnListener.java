@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;

@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.listeners;
 
 import net.kyori.adventure.text.Component;
 import org.bukkit.event.EventHandler;

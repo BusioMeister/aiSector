@@ -1,5 +1,6 @@
-package ai.aisector.player;
+package ai.aisector.listeners;
 
+import ai.aisector.sectors.player.GlobalPlayerManager;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import redis.clients.jedis.JedisPubSub;

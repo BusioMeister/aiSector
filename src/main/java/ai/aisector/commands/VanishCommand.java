@@ -1,7 +1,7 @@
 package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.player.VanishManager;
+import ai.aisector.sectors.player.VanishManager;
 import ai.aisector.user.User;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;

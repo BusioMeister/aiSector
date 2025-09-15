@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.listeners;
 
 import ai.aisector.database.RedisManager;
 import org.bukkit.event.EventHandler;

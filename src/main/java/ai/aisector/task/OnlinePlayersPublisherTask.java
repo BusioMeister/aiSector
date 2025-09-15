@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.task;
 
 import ai.aisector.database.RedisManager;
 import com.google.gson.Gson;

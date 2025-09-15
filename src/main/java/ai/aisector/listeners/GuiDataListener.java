@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.listeners;
 
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;

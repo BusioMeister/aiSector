@@ -1,7 +1,7 @@
-package ai.aisector.player;
+package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.database.RedisManager;
+import ai.aisector.sectors.player.VanishManager;
 import ai.aisector.user.User;
 import ai.aisector.user.UserManager;
 import org.bukkit.entity.Player;

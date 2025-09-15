@@ -1,5 +1,6 @@
-package ai.aisector.player;
+package ai.aisector.task;
 
+import ai.aisector.sectors.player.VanishManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;

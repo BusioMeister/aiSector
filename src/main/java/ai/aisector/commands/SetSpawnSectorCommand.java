@@ -28,7 +28,7 @@ public class SetSpawnSectorCommand implements CommandExecutor {
         }
 
         Player player = (Player) sender;
-        if (!player.hasPermission("aisector.setspawn")) {
+        if (!player.hasPermission("aisector.command.setspawn")) {
             player.sendMessage("§cNie masz uprawnień, aby użyć tej komendy.");
             return true;
         }

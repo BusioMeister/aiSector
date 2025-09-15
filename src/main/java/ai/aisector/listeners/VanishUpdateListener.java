@@ -1,13 +1,12 @@
-package ai.aisector.player;
+package ai.aisector.listeners;
 
+import ai.aisector.sectors.player.VanishManager;
+import ai.aisector.sectors.player.VanishTagManager;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import redis.clients.jedis.JedisPubSub;
-
-import java.util.UUID;
 
 public class VanishUpdateListener extends JedisPubSub {
 

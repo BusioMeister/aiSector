@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.utils;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.ranks.Rank;

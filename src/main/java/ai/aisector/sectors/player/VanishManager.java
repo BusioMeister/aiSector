@@ -1,4 +1,4 @@
-package ai.aisector.player;
+package ai.aisector.sectors.player;
 
 import ai.aisector.SectorPlugin;
 import com.google.gson.JsonObject;

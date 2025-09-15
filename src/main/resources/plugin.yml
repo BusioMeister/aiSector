@@ -63,7 +63,7 @@ commands:
   setspawnsector:
     description: Ustawia globalny spawn dla serwera.
     usage: /setspawnsector
-    permission: aisector.setspawn
+    permission: aisector.command.setspawn
   spawn: # <-- NOWA KOMENDA
     description: Teleportuje na spawn serwera.
     usage: /spawn
