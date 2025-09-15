@@ -1,9 +1,18 @@
 package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
+import ai.aisector.database.RedisManager;
+import ai.aisector.sectors.Sector;
+import ai.aisector.sectors.SectorManager;
+import ai.aisector.sectors.WorldBorderManager;
 import ai.aisector.user.User;
+import ai.aisector.user.UserManager;
+import ai.aisector.utils.HotbarSlotSync;
+import ai.aisector.utils.MessageUtil;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -27,78 +36,222 @@ import java.util.*;
 
 public class PlayerDataListener implements Listener {
     private final SectorPlugin plugin;
+    private final UserManager userManager;
+    private final SectorManager sectorManager;
+    private final WorldBorderManager borderManager;
+    private final RedisManager redisManager;
     private final Gson gson = new Gson();
+
 
     public PlayerDataListener(SectorPlugin plugin) {
         this.plugin = plugin;
+        this.userManager = plugin.getUserManager();
+        this.sectorManager = plugin.getSectorManager();
+        this.borderManager = plugin.getWorldBorderManager();
+        this.redisManager = plugin.getRedisManager();
     }
 
-    @EventHandler(priority = EventPriority.NORMAL)
-    public void onPlayerJoin(PlayerJoinEvent event) {
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerConfigure(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        try (Jedis jedis = plugin.getRedisManager().getJedis()) {
-            String playerDataKey = "player:data:" + player.getUniqueId();
-            String playerData = jedis.get(playerDataKey);
 
-            if (playerData != null) {
-                jedis.del(playerDataKey);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
 
-                Type type = new TypeToken<Map<String, Object>>() {
-                }.getType();
-                Map<String, Object> data = gson.fromJson(playerData, type);
+            User user = userManager.getUser(player);
+            if (user == null) {
+                player.kickPlayer("§cWystąpił krytyczny błąd podczas ładowania Twojego profilu.");
+                return;
+            }
 
-                // Kompletna logika wczytywania danych
-                Location loc = new Location(
-                        Bukkit.getWorld((String) data.get("world")),
-                        ((Number) data.get("x")).doubleValue(),
-                        ((Number) data.get("y")).doubleValue(),
-                        ((Number) data.get("z")).doubleValue(),
-                        ((Number) data.get("yaw")).floatValue(),
-                        ((Number) data.get("pitch")).floatValue()
-                );
+            applyPersistentData(player, user);
 
-                player.setHealth(((Number) data.get("health")).doubleValue());
-                player.setFoodLevel(((Number) data.get("hunger")).intValue());
-                player.setSaturation(((Number) data.get("saturation")).floatValue());
-                player.setTotalExperience(((Number) data.get("experience")).intValue());
-                player.setLevel(((Number) data.get("level")).intValue());
-                player.setExp(((Number) data.get("exp")).floatValue());
-                player.setGameMode(GameMode.valueOf((String) data.get("gameMode")));
+            try (Jedis jedis = redisManager.getJedis()) {
+                // --- POCZĄTEK ZMIANY ---
+                // Sprawdzamy, czy gracz dołącza w wyniku respawnu
+                String respawnKey = "player:is_respawning:" + player.getUniqueId();
+                boolean isRespawning = jedis.exists(respawnKey);
+                if (isRespawning) {
+                    jedis.del(respawnKey); // Usuwamy sygnał
+                }
+                // --- KONIEC ZMIANY ---
 
-                try {
-                    player.getInventory().setContents(itemStackArrayFromBase64((String) data.get("inventory")));
-                    player.getInventory().setArmorContents(itemStackArrayFromBase64((String) data.get("armor")));
-                    player.getInventory().setItemInOffHand(itemStackFromBase64((String) data.get("offhand")));
-                } catch (IOException e) {
-                    plugin.getLogger().severe("Nie udało się wczytać ekwipunku dla gracza " + player.getName());
-                    e.printStackTrace();
+                String playerDataKey = "player:data:" + player.getUniqueId();
+                String playerData = jedis.get(playerDataKey);
+                Integer heldSlotBox = null;
+                if (playerData != null) {
+                    jedis.del(playerDataKey);
+                    heldSlotBox = loadTransferData(player, playerData);
                 }
 
-                for (PotionEffect effect : player.getActivePotionEffects()) {
-                    player.removePotionEffect(effect.getType());
-                }
-                player.addPotionEffects(deserializePotionEffects((List<Map<String, Object>>) data.get("effects")));
+                String finalTargetKey = "player:final_teleport_target:" + player.getUniqueId();
+                String finalTargetData = jedis.get(finalTargetKey);
+                if (finalTargetData != null) {
+                    jedis.del(finalTargetKey);
+                    Location finalTargetLocation = locationFromJson(finalTargetData);
+                    Integer finalHeld = heldSlotBox;
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (player.isOnline()) {
+                            player.teleport(finalTargetLocation);
+                            if (finalHeld != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
 
-                player.teleport(loc);
-
-                // 🔥 NOWA, POPRAWIONA LOGIKA ZGODNIE Z SUGESTIĄ BIFU 🔥
-                player.setInvulnerable(true); // Ustawiamy gracza jako nietykalnego
-
-                // Planujemy zadanie, które wyłączy nietykalność po 5 sekundach (100 ticków)
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    // Sprawdzamy, czy gracz nadal jest online
-                    if (player.isOnline()) {
-                        User user = plugin.getUserManager().getUser(player);
-                        // Wyłączamy nietykalność tylko wtedy, gdy gracz nie ma permanentnie włączonego trybu /god
-                        if (user != null && !user.isGodMode()) {
-                            player.setInvulnerable(false);
+                            // Jeśli gracz się respawnuje, pokaż tytuł śmierci, w przeciwnym wypadku normalne powitanie
+                            if (isRespawning) {
+                                showDeathTitle(player);
+                            } else {
+                                sendWelcomePackage(player);
+                            }
                         }
-                    }
-                }, 100L);
+                    }, 2L);
+                    return;
+                }
 
-                plugin.getLogger().info("Pomyślnie wczytano dane transferowe dla " + player.getName());
+                String forceSpawnKey = "player:force_sector_spawn:" + player.getUniqueId();
+                String targetSectorName = jedis.get(forceSpawnKey);
+                if (targetSectorName != null) {
+                    jedis.del(forceSpawnKey);
+                    Integer finalHeld = heldSlotBox;
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (player.isOnline()) {
+                            Sector targetSector = sectorManager.getSectorByName(targetSectorName);
+                            if (targetSector != null) {
+                                Location sectorSpawn = sectorManager.getSectorSpawnLocation(targetSector);
+                                if (sectorSpawn != null) {
+                                    player.teleport(sectorSpawn);
+                                    if (finalHeld != null)
+                                        new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
+                                    sendWelcomePackage(player);
+                                    player.sendMessage("§aZostałeś przeniesiony na sektor §e" + targetSector.getName() + "§a.");
+                                }
+                            }
+                        }
+                    }, 5L);
+                    return;
+                }
+
+                if (heldSlotBox != null) {
+                    new HotbarSlotSync(plugin).ensureSelectedSlot(player, heldSlotBox);
+                }
+                if (isRespawning) {
+                    showDeathTitle(player);
+                } else {
+                    sendWelcomePackage(player);
+                }
+            }
+        }, 1L);
+    }
+    private void applyPersistentData(Player player, User user) {
+        player.setInvulnerable(user.isGodMode());
+        player.setAllowFlight(user.isFlying());
+        if (user.isFlying()) {
+            player.setFlying(true);
+        }
+        player.setWalkSpeed(user.getWalkSpeed());
+        player.setFlySpeed(user.getFlySpeed());
+
+        if (user.isVanished()) {
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                if (!onlinePlayer.hasPermission("aisector.command.vanish.see")) {
+                    onlinePlayer.hidePlayer(plugin, player);
+                }
             }
         }
+    }
+
+    private Integer loadTransferData(Player player, String playerData) {
+        Type type = new TypeToken<Map<String, Object>>() {}.getType();
+        Map<String, Object> data = gson.fromJson(playerData, type);
+        Location loc = locationFromJson(playerData);
+        double health = ((Number) data.get("health")).doubleValue();
+        int hunger = ((Number) data.get("hunger")).intValue();
+        GameMode gameMode = GameMode.valueOf((String) data.get("gameMode"));
+        int heldSlot = data.containsKey("heldSlot") ? ((Number) data.get("heldSlot")).intValue() : 0;
+
+        ItemStack[] inventoryContents = null;
+        ItemStack[] armorContents = null;
+        ItemStack offhandItem = null;
+        try {
+            inventoryContents = itemStackArrayFromBase64((String) data.get("inventory"));
+            armorContents = itemStackArrayFromBase64((String) data.get("armor"));
+            offhandItem = itemStackFromBase64((String) data.get("offhand"));
+        } catch (IOException e) {
+            plugin.getLogger().severe("Nie udało się wczytać ekwipunku dla gracza " + player.getName());
+        }
+        Collection<PotionEffect> effects = deserializePotionEffects((List<Map<String, Object>>) data.get("effects"));
+
+        player.teleport(loc);
+
+        final ItemStack[] finalInventoryContents = inventoryContents;
+        final ItemStack[] finalArmorContents = armorContents;
+        final ItemStack finalOffhandItem = offhandItem;
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) return;
+            player.setHealth(Math.max(0.1, Math.min(health, player.getMaxHealth())));
+            player.setFoodLevel(hunger);
+            player.setGameMode(gameMode);
+            if (finalInventoryContents != null) player.getInventory().setContents(finalInventoryContents);
+            if (finalArmorContents != null) player.getInventory().setArmorContents(finalArmorContents);
+            if (finalOffhandItem != null) player.getInventory().setItemInOffHand(finalOffhandItem);
+            for (PotionEffect currentEffect : player.getActivePotionEffects()) { player.removePotionEffect(currentEffect.getType()); }
+            if (effects != null && !effects.isEmpty()) player.addPotionEffects(effects);
+        });
+
+        player.setInvulnerable(true);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                User user = plugin.getUserManager().getUser(player);
+                if (user == null || !user.isGodMode()) player.setInvulnerable(false);
+            }
+        }, 100L);
+
+        return heldSlot;
+    }
+
+
+
+    private void sendWelcomePackage(Player player) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+            Sector sector = sectorManager.getSector(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+            if (sector != null) {
+                borderManager.sendWorldBorder(player, sector);
+                MessageUtil.sendTitle(player, "", "§7Połączono z sektorem §9" + sector.getName(), 300, 1000, 300);
+            }
+        }, 2L);
+    }
+    private void showDeathTitle(Player player) {
+        // Używamy Title.Times, aby tytuł był widoczny dłużej
+        net.kyori.adventure.title.Title.Times times = net.kyori.adventure.title.Title.Times.times(
+                java.time.Duration.ofMillis(500),  // fadeIn
+                java.time.Duration.ofMillis(1500), // stay
+                java.time.Duration.ofMillis(500)  // fadeOut
+        );
+        net.kyori.adventure.title.Title title = net.kyori.adventure.title.Title.title(
+                Component.text("UMARŁEŚ!", NamedTextColor.RED), // Czerwony, główny tytuł
+                Component.text(""), // Pusty podtytuł
+                times
+        );
+        player.showTitle(title);
+
+        // Upewniamy się, że border jest poprawny
+        Sector sector = sectorManager.getSector(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        if (sector != null) {
+            borderManager.sendWorldBorder(player, sector);
+        }
+    }
+
+    private Location locationFromJson(String json) {
+        Type type = new TypeToken<Map<String, Object>>() {}.getType();
+        Map<String, Object> data = gson.fromJson(json, type);
+        return new Location(
+                Bukkit.getWorld((String) data.get("world")),
+                ((Number) data.get("x")).doubleValue(),
+                ((Number) data.get("y")).doubleValue(),
+                ((Number) data.get("z")).doubleValue(),
+                ((Number) data.get("yaw")).floatValue(),
+                ((Number) data.get("pitch")).floatValue()
+        );
     }
 
     private Set<PotionEffect> deserializePotionEffects(List<Map<String, Object>> serializedEffects) {

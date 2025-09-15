@@ -2,6 +2,7 @@ package ai.aisector.player;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
+import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.utils.InventorySerializer;
 import org.bson.Document;
@@ -10,6 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import redis.clients.jedis.Jedis;
 
 import java.util.Date;
 
@@ -19,11 +21,15 @@ public class PlayerDeathListener implements Listener {
     private final SectorPlugin plugin;
     private final MongoDBManager mongoDBManager;
     private final SectorManager sectorManager;
+    private final RedisManager redisManager; // <-- DODAJEMY POLE
+
 
     public PlayerDeathListener(SectorPlugin plugin, MongoDBManager mongoDBManager, SectorManager sectorManager) {
         this.plugin = plugin;
         this.mongoDBManager = mongoDBManager;
         this.sectorManager = sectorManager;
+        this.redisManager = plugin.getRedisManager(); // <-- INICJALIZUJEMY POLE
+
     }
 
     @EventHandler
@@ -34,6 +40,9 @@ public class PlayerDeathListener implements Listener {
 
         // 🔥 TWOJA ORYGINALNA LOGIKA: Zapisujemy sektor śmierci do celów respawnu 🔥
         plugin.getPlayerDeathSectors().put(victim.getUniqueId(), sectorName);
+        try (Jedis jedis = redisManager.getJedis()) {
+            jedis.del("player:data:" + victim.getUniqueId());
+        }
 
         // 🔥 NOWA LOGIKA: Zapisujemy pełny backup do bazy danych MongoDB 🔥
         // 1. Serializujemy ekwipunek

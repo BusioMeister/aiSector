@@ -14,6 +14,10 @@ public class ActionBarTask extends BukkitRunnable {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (VanishManager.isVanished(player)) {
                 player.sendActionBar(Component.text("VANISH", NamedTextColor.GREEN, TextDecoration.BOLD));
+            } else {
+                // Wysyłamy pustą wiadomość, aby wyczyścić ActionBar.
+                // Jest to bezpieczne i w pełni kompatybilne ze Spigotem i Paper.
+                player.sendActionBar(Component.text(""));
             }
         }
     }

@@ -12,12 +12,13 @@ import java.util.UUID;
 public class VanishUpdateListener extends JedisPubSub {
 
     private final JavaPlugin plugin;
-    private final VanishManager vanishManager;
+    private final VanishTagManager tagManager; // <-- NOWE POLE
     private final Gson gson = new Gson();
 
     public VanishUpdateListener(JavaPlugin plugin, VanishManager vanishManager) {
         this.plugin = plugin;
-        this.vanishManager = vanishManager;
+        this.tagManager = new VanishTagManager();
+
     }
 
     @Override
@@ -26,15 +27,15 @@ public class VanishUpdateListener extends JedisPubSub {
             JsonObject data = gson.fromJson(message, JsonObject.class);
 
             if (channel.equals("aisector:vanish_update")) {
-                UUID uuid = UUID.fromString(data.get("uuid").getAsString());
+                String name = data.get("name").getAsString();
                 String action = data.get("action").getAsString();
-                Player player = Bukkit.getPlayer(uuid);
 
-                if (player != null) { // Aplikuj tylko jeśli gracz jest na tym serwerze
+                // Jeśli gracz nie jest na tym serwerze, i tak zaktualizuj jego tag dla lokalnych adminów
+                if (Bukkit.getPlayer(name) == null) {
                     if (action.equals("VANISH")) {
-                        vanishManager.vanish(player);
+                        tagManager.setVanishedTag(name);
                     } else {
-                        vanishManager.unvanish(player);
+                        tagManager.removeVanishedTag(name);
                     }
                 }
             } else if (channel.equals("aisector:admin_chat")) {

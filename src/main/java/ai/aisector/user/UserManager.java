@@ -69,6 +69,8 @@ public class UserManager {
             data.put("heldSlot", held);
             plugin.getLogger().info("[DEBUG] Zapisuję dla " + player.getName() + " HELD_SLOT=" + held);
 // JAK KURWA ZAPISAC TE JEBANE OKNO KTÓRE GRACZ TRZYMA W RĘKU NO JAK BIFU WIEM ZE TY WIESZ
+
+
             String playerData = gson.toJson(data);
             jedis.setex("player:data:" + player.getUniqueId(), 60, playerData);
         }

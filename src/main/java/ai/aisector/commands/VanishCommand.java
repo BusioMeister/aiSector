@@ -1,7 +1,8 @@
 package ai.aisector.commands;
+
 import ai.aisector.SectorPlugin;
+import ai.aisector.player.VanishManager;
 import ai.aisector.user.User;
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -9,7 +10,12 @@ import org.bukkit.entity.Player;
 
 public class VanishCommand implements CommandExecutor {
     private final SectorPlugin plugin;
-    public VanishCommand(SectorPlugin plugin) { this.plugin = plugin; }
+    private final VanishManager vanishManager;
+
+    public VanishCommand(SectorPlugin plugin, VanishManager vanishManager) {
+        this.plugin = plugin;
+        this.vanishManager = vanishManager;
+    }
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
@@ -24,18 +30,16 @@ public class VanishCommand implements CommandExecutor {
             player.sendMessage("§cWystąpił błąd wczytywania Twoich danych.");
             return true;
         }
+
+        // Zmień stan w obiekcie User (aby zapisał się w bazie)
         user.setVanished(!user.isVanished());
+
+        // Poproś VanishManager o wykonanie akcji
         if (user.isVanished()) {
-            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                if (!onlinePlayer.hasPermission("aisector.command.vanish.see")) {
-                    onlinePlayer.hidePlayer(plugin, player);
-                }
-            }
+            vanishManager.vanish(player);
             player.sendMessage("§aVanish został włączony.");
         } else {
-            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-                onlinePlayer.showPlayer(plugin, player);
-            }
+            vanishManager.unvanish(player);
             player.sendMessage("§cVanish został wyłączony.");
         }
         return true;

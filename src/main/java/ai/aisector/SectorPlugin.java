@@ -37,6 +37,8 @@ public class SectorPlugin extends JavaPlugin {
         saveDefaultConfig();
 
         // Inicjalizacja managerów
+        vanishManager = new VanishManager(this);
+
         mongoDBManager = new MongoDBManager("mongodb://localhost:27017", "users"); // Użyj poprawnej nazwy bazy danych, jeśli jest inna
         redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
@@ -64,7 +66,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("heal").setExecutor(new HealCommand());
         getCommand("god").setExecutor(new GodCommand(this));
         getCommand("wyjebane").setExecutor(new WyjebaneCommand(redisManager));
-        getCommand("v").setExecutor(new VanishCommand(this));
+        getCommand("v").setExecutor(new VanishCommand(this,vanishManager));
         getCommand("spawn").setExecutor(new SpawnCommand(this));
 
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(redisManager));
@@ -92,11 +94,10 @@ public class SectorPlugin extends JavaPlugin {
         // Rejestracja listenerów eventów Bukkit
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
 
-        getServer().getPluginManager().registerEvents(new PlayerJoinListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
-        getServer().getPluginManager().registerEvents(new VanishPlayerListener(vanishManager, redisManager), this);
+        getServer().getPluginManager().registerEvents(new VanishPlayerListener(this,vanishManager), this);
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new BackupGuiListener(mongoDBManager, redisManager), this);
