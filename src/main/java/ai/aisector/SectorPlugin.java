@@ -2,14 +2,20 @@ package ai.aisector;
 
 import ai.aisector.commands.*;
 import ai.aisector.database.MongoDBManager;
+import ai.aisector.database.MySQLManager;
 import ai.aisector.database.RedisManager;
 import ai.aisector.listeners.PlayerDataListener;
+import ai.aisector.listeners.RankListener;
 import ai.aisector.listeners.UserDataListener;
 import ai.aisector.player.*;
+import ai.aisector.ranks.PermissionManager;
+import ai.aisector.ranks.RankManager;
+import ai.aisector.ranks.gui.PermissionGuiListener;
 import ai.aisector.sectors.BorderInitListener;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
 import ai.aisector.user.UserManager;
+
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import redis.clients.jedis.Jedis;
@@ -31,20 +37,31 @@ public class SectorPlugin extends JavaPlugin {
     private MongoDBManager mongoDBManager;
     private UserManager userManager;
 
+    private MySQLManager mySQLManager; // <-- DODAJ POLE
+    private RankManager rankManager; // <-- DODAJ POLE
+    private PermissionManager permissionManager; // <-- DODAJ POLE
+
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        saveResource("permissions.yml", false); // <-- DODAJ TĘ LINIĘ
 
         // Inicjalizacja managerów
-        vanishManager = new VanishManager(this);
+        mySQLManager = new MySQLManager("localhost", 3306, "minecraft", "root", "root");
+        mySQLManager.createTables(); // Tworzy tabele, jeśli nie istnieją
 
         mongoDBManager = new MongoDBManager("mongodb://localhost:27017", "users"); // Użyj poprawnej nazwy bazy danych, jeśli jest inna
+        rankManager = new RankManager(mySQLManager, getLogger());
+        rankManager.loadRanks();
+        permissionManager = new PermissionManager(this, rankManager);
+
         redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
         worldBorderManager = new WorldBorderManager();
         userManager = new UserManager(this);
         vanishManager = new VanishManager(this);
+
 
         // Rejestracja komend
         getCommand("enderchest").setExecutor(new EnderchestCommand());
@@ -76,6 +93,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("invsee").setExecutor(new InvseeCommand());
         getServer().getPluginManager().registerEvents(new InvseeGuiListener(), this);
 
+        getCommand("rang").setExecutor(new RankCommand(this));
 
         getCommand("tpa").setExecutor(new TpaCommand(redisManager));
         getCommand("tpaccept").setExecutor(new TpacceptCommand(redisManager));
@@ -93,12 +111,14 @@ public class SectorPlugin extends JavaPlugin {
         }
         // Rejestracja listenerów eventów Bukkit
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
-
+        getServer().getPluginManager().registerEvents(new PermissionGuiListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
+        getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
+        getServer().getPluginManager().registerEvents(new RankListener(this), this); // <-- DODAJ REJESTRACJĘ NOWEGO LISTNERA
+
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new VanishPlayerListener(this,vanishManager), this);
-        getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new BackupGuiListener(mongoDBManager, redisManager), this);
         getServer().getPluginManager().registerEvents(new SetHomeGuiListener(mongoDBManager, sectorManager), this);
@@ -127,7 +147,9 @@ public class SectorPlugin extends JavaPlugin {
                         "aisector:get_location_for_tp",
                         "aisector:get_location_for_admin_tp",
                         "aisector:save_player_data",
-                        "player:force_sector_spawn:"
+                        "player:force_sector_spawn:",
+                        "aisector:rank_update",
+                        "aisector:rank_permissions_update"
                 );
             }
         }, "Redis-Command-Listener-Thread").start();
@@ -181,13 +203,25 @@ public class SectorPlugin extends JavaPlugin {
             redisManager.unsubscribe(); // To powinno zamknąć wszystkie subskrypcje
             redisManager.closePool();
         }
+        if (mySQLManager != null) {
+            mySQLManager.close(); // Zamykamy połączenie z bazą danych
+        }
     }
 
     // Gettery
     public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
     public RedisManager getRedisManager() { return redisManager; }
     public SectorManager getSectorManager() { return sectorManager; }
+    public RankManager getRankManager() {
+        return rankManager;
+    }
+    public MySQLManager getMySQLManager() {
+        return mySQLManager;
+    }
 
+    public PermissionManager getPermissionManager() {
+        return permissionManager;
+    }
     public MongoDBManager getMongoDBManager() {
         return mongoDBManager;
     }

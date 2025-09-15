@@ -2,6 +2,7 @@ package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
+import ai.aisector.ranks.Rank;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
@@ -157,6 +158,7 @@ public class PlayerDataListener implements Listener {
             }
         }
     }
+
 
     private Integer loadTransferData(Player player, String playerData) {
         Type type = new TypeToken<Map<String, Object>>() {}.getType();

@@ -16,6 +16,11 @@ public class TpaCommand implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!(sender instanceof Player)) return true;
 
+        if (!sender.hasPermission("aisector.command.tpa")) {
+            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            return true;
+        }
+
         if (args.length != 1) {
             sender.sendMessage("§cUżycie: /tpa <gracz>");
             return true;

@@ -1,6 +1,7 @@
 package ai.aisector.player;
 
 import ai.aisector.SectorPlugin;
+import ai.aisector.ranks.Rank;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
 import com.google.gson.Gson;
@@ -37,6 +38,33 @@ public class CommandResponseListener extends JedisPubSub {
             }
 
             JsonObject data = gson.fromJson(message, JsonObject.class);
+
+
+            if (channel.equals("aisector:rank_permissions_update")) {
+                String sourceServer = data.has("sourceServer") ? data.get("sourceServer").getAsString() : "unknown";
+                String thisServer = plugin.getConfig().getString("this-sector-name");
+
+                if (!sourceServer.equals(thisServer)) {
+                    String rankName = data.get("rankName").getAsString();
+                    Rank rank = plugin.getRankManager().getRank(rankName);
+                    if (rank != null) {
+                        plugin.getRankManager().reloadPermissionsForRank(rank);
+                        for (Player p : Bukkit.getOnlinePlayers()) {
+                            Rank playerRank = plugin.getRankManager().getPlayerRank(p.getUniqueId());
+                            if (playerRank != null && playerRank.getId() == rank.getId()) {
+                                plugin.getPermissionManager().applyPlayerPermissions(p);
+                            }
+                        }
+                    }
+                }
+            } else if (channel.equals("aisector:rank_update")) {
+                UUID playerUUID = UUID.fromString(data.get("uuid").getAsString());
+                Player playerToUpdate = Bukkit.getPlayer(playerUUID);
+                if (playerToUpdate != null && playerToUpdate.isOnline()) {
+                    plugin.getPermissionManager().applyPlayerPermissions(playerToUpdate);
+                }
+            }
+
             if (channel.equals("aisector:save_player_data")) {
                 String uuidString = data.get("uuid").getAsString();
                 Player playerToSave = Bukkit.getPlayer(UUID.fromString(uuidString));
