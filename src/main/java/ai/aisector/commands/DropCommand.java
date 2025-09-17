@@ -1,8 +1,7 @@
 package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.listeners.DropGui; // Będziemy potrzebować tego importu
-import ai.aisector.listeners.DropMainGui;
+import ai.aisector.drop.DropMainGui;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;

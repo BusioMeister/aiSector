@@ -1,4 +1,4 @@
-package ai.aisector.listeners;
+package ai.aisector.drop;
 
 import ai.aisector.SectorPlugin;
 import org.bukkit.Bukkit;

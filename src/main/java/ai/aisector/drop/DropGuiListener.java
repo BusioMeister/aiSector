@@ -1,4 +1,4 @@
-package ai.aisector.listeners;
+package ai.aisector.drop;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.cobblex.CobbleXGui;
@@ -25,7 +25,18 @@ public class DropGuiListener implements Listener {
             Material.IRON_INGOT,
             Material.LAPIS_LAZULI,
             Material.REDSTONE,
-            Material.COBBLESTONE // osobny przycisk: włącz/wyłącz cobble
+            Material.COBBLESTONE,
+
+            Material.COAL,
+            Material.BOOK,
+            Material.GUNPOWDER,
+            Material.SAND,
+            Material.APPLE,
+            Material.OBSIDIAN,
+            Material.ENDER_PEARL
+
+
+            // osobny przycisk: włącz/wyłącz cobble
     );
 
     private final SectorPlugin plugin;

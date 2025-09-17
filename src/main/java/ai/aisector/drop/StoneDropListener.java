@@ -1,4 +1,4 @@
-package ai.aisector.listeners;
+package ai.aisector.drop;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.drop.DropConfig;
@@ -36,6 +36,13 @@ public class StoneDropListener implements Listener {
         baseDropChances.put(Material.IRON_INGOT, 2.0);
         baseDropChances.put(Material.LAPIS_LAZULI, 1.8);
         baseDropChances.put(Material.REDSTONE, 2.6);
+        baseDropChances.put(Material.COAL ,2.0 );
+        baseDropChances.put( Material.BOOK,1.2 );
+        baseDropChances.put(Material.GUNPOWDER ,1.3 );
+        baseDropChances.put(Material.SAND ,1.1 );
+        baseDropChances.put(Material.APPLE ,1.2 );
+        baseDropChances.put( Material.OBSIDIAN,1.6 );
+        baseDropChances.put(Material.ENDER_PEARL, 0.1);
     }
     public StoneDropListener(SectorPlugin plugin,MiningLevelManager levelManager) {
         this.plugin = plugin;

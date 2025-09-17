@@ -24,6 +24,12 @@ public final class DropConfig {
 
     private static final EnumMap<Material, DropSpec> SPEC = new EnumMap<>(Material.class);
 
+
+
+
+
+
+
     static {
         // Jedna, wspólna konfiguracja dla całej wtyczki:
         SPEC.put(Material.DIAMOND,      new DropSpec(1.2, 50, 12));
@@ -31,6 +37,15 @@ public final class DropConfig {
         SPEC.put(Material.IRON_INGOT,   new DropSpec(2.0, 80, 4));
         SPEC.put(Material.LAPIS_LAZULI, new DropSpec(1.8, 80, 3));
         SPEC.put(Material.REDSTONE,     new DropSpec(2.6, 80, 4));
+
+        SPEC.put(Material.COAL,new DropSpec(2.0,80,4));
+        SPEC.put(Material.BOOK,new DropSpec(1.2,50,6));
+        SPEC.put(Material.GUNPOWDER,new DropSpec(1.3,50,3));
+        SPEC.put(Material.SAND, new DropSpec(1.1,80,3));
+        SPEC.put(Material.APPLE,new DropSpec(1.2,50,4));
+        SPEC.put(Material.OBSIDIAN,new DropSpec(1.6,50,4));
+        SPEC.put(Material.ENDER_PEARL, new DropSpec(0.1,50,12));
+
     }
 
     public static Map<Material, DropSpec> getAll() {

@@ -1,4 +1,4 @@
-package ai.aisector.listeners;
+package ai.aisector.drop;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.drop.DropConfig;
@@ -45,27 +45,26 @@ public class DropGui {
             return;
         }
 
-        // 27 slotów: ramka + 5 pozycji + cobble toggle
-        Inventory gui = Bukkit.createInventory(null, 27, GUI_TITLE);
+        // Ile pozycji + 1 przycisk Cobblestone
+        int count = ai.aisector.drop.DropConfig.getAll().size();
+        int extras = 1;
+        int size = ((count + extras + 8) / 9) * 9; // 9,18,27,36,45,54
+        if (size < 9) size = 9;
+        if (size > 54) size = 54; // bezpieczeństwo
 
-        // Ramka
-        ItemStack frame = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
-        ItemMeta fmeta = frame.getItemMeta();
-        fmeta.setDisplayName(" ");
-        frame.setItemMeta(fmeta);
-        for (int i = 0; i < gui.getSize(); i++) gui.setItem(i, frame);
+        org.bukkit.inventory.Inventory gui =
+                org.bukkit.Bukkit.createInventory(null, size, GUI_TITLE);
 
-        // Pozycje z DropConfig: ułóż po kolei od 11
-        int slot = 11;
-        for (Map.Entry<Material, DropConfig.DropSpec> e : DropConfig.getAll().entrySet()) {
-            if (slot == 11 || slot == 12 || slot == 13 || slot == 14 || slot == 15) {
-                gui.setItem(slot, createDropItem(e.getKey(), e.getValue()));
-                slot++;
-            }
+        int slot = 0;
+        for (java.util.Map.Entry<org.bukkit.Material, ai.aisector.drop.DropConfig.DropSpec> e
+                : ai.aisector.drop.DropConfig.getAll().entrySet()) {
+            if (slot >= size) break; // gdyby count > size (po limicie 54)
+            gui.setItem(slot++, createDropItem(e.getKey(), e.getValue()));
         }
 
-        // Przycisk do włączenia/wyłączenia Cobblestone
-        gui.setItem(17, createCobbleToggleItem());
+        // Przycisk Cobblestone: wstaw w następny wolny slot lub w ostatni
+        int cobbleSlot = slot < size ? slot : size - 1;
+        gui.setItem(cobbleSlot, createCobbleToggleItem());
 
         player.openInventory(gui);
     }
