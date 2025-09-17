@@ -2,6 +2,7 @@ package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.listeners.DropGui; // Będziemy potrzebować tego importu
+import ai.aisector.listeners.DropMainGui;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -30,7 +31,8 @@ public class DropCommand implements CommandExecutor {
         }
 
         // Tworzymy i otwieramy nowe GUI dla gracza
-        new DropGui(plugin, player).open();
+        DropMainGui.open(plugin, player);
+
         return true;
     }
 }

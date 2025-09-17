@@ -1,5 +1,7 @@
 package ai.aisector;
 
+import ai.aisector.cobblex.CobbleXListener;
+import ai.aisector.cobblex.CobbleXManager;
 import ai.aisector.commands.*;
 import ai.aisector.database.MongoDBManager;
 import ai.aisector.database.MySQLManager;
@@ -25,6 +27,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import redis.clients.jedis.Jedis;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,18 +45,25 @@ public class SectorPlugin extends JavaPlugin {
     private MongoDBManager mongoDBManager;
     private UserManager userManager;
 
+
     private MySQLManager mySQLManager; // <-- DODAJ POLE
     private RankManager rankManager; // <-- DODAJ POLE
     private PermissionManager permissionManager; // <-- DODAJ POLE
     private MiningLevelManager miningLevelManager;
     private ai.aisector.generators.GeneratorManager generatorManager;
+    private CobbleXManager cobbleXManager;
+
 
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         saveResource("permissions.yml", false); // <-- DODAJ TĘ LINIĘ
-
+        getDataFolder().mkdirs();
+        File cxFile = new File(getDataFolder(), "cobblex.yml");
+        if (!cxFile.exists()) {
+            saveResource("cobblex.yml", false);
+        }
         // Inicjalizacja managerów
         mySQLManager = new MySQLManager("localhost", 3306, "minecraft", "root", "root");
         mySQLManager.createTables(); // Tworzy tabele, jeśli nie istnieją
@@ -62,6 +72,7 @@ public class SectorPlugin extends JavaPlugin {
         rankManager = new RankManager(mySQLManager, getLogger());
         permissionManager = new PermissionManager(this, rankManager);
         this.generatorManager = new GeneratorManager(this);
+        this.cobbleXManager = new CobbleXManager(this);
 
         redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
@@ -96,6 +107,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("v").setExecutor(new VanishCommand(this,vanishManager));
         getCommand("spawn").setExecutor(new SpawnCommand(this));
         getCommand("drop").setExecutor(new DropCommand(this));
+        getCommand("cx").setExecutor(new ai.aisector.cobblex.CobbleXCommand(this));
 
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(redisManager));
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
@@ -122,6 +134,7 @@ public class SectorPlugin extends JavaPlugin {
             new SectorStatsPublisher(this, redisManager, thisSectorName).runTaskTimerAsynchronously(this, 100L, 100L); // co 5 sekund
         }
         // Rejestracja listenerów eventów Bukkit
+        getServer().getPluginManager().registerEvents(new CobbleXListener(this, cobbleXManager), this);
 
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PermissionGuiListener(this), this);
@@ -137,7 +150,6 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new BackupGuiListener(mongoDBManager, redisManager), this);
         getServer().getPluginManager().registerEvents(new SetHomeGuiListener(mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new HomeGuiListener(mongoDBManager, sectorManager, this), this);
-
 
         getServer().getPluginManager().registerEvents(
                 new ai.aisector.listeners.GeneratorListener(this, this.generatorManager), this);
@@ -251,4 +263,6 @@ public class SectorPlugin extends JavaPlugin {
     public UserManager getUserManager() {
         return this.userManager;
     }
+    public ai.aisector.cobblex.CobbleXManager getCobbleXManager() { return cobbleXManager; }
+
 }

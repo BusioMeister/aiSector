@@ -1,0 +1,71 @@
+cobblex:
+  pearl:
+    material: ENDER_PEARL
+    chance: 6.0
+    min: 1
+    max: 2
+  obsidian:
+    material: OBSIDIAN
+    chance: 8.0
+    min: 2
+    max: 6
+  water:
+    material: WATER_BUCKET
+    chance: 5.0
+    min: 1
+    max: 1
+  lava:
+    material: LAVA_BUCKET
+    chance: 3.0
+    min: 1
+    max: 1
+  diamond:
+    material: DIAMOND
+    chance: 4.0
+    min: 1
+    max: 3
+  gold:
+    material: GOLD_INGOT
+    chance: 6.0
+    min: 2
+    max: 6
+  iron:
+    material: IRON_INGOT
+    chance: 8.0
+    min: 3
+    max: 8
+  anvil:
+    material: ANVIL
+    chance: 2.0
+    min: 1
+    max: 1
+  tnt:
+    material: TNT
+    chance: 4.0
+    min: 1
+    max: 3
+  slime:
+    material: SLIME_BALL
+    chance: 5.0
+    min: 2
+    max: 6
+  string:
+    material: STRING
+    chance: 5.0
+    min: 4
+    max: 12
+  bone:
+    material: BONE
+    chance: 5.0
+    min: 4
+    max: 12
+  apple:
+    material: APPLE
+    chance: 3.0
+    min: 1
+    max: 3
+  planks:
+    material: OAK_PLANKS
+    chance: 10.0
+    min: 8
+    max: 32
