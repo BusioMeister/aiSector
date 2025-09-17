@@ -4,6 +4,12 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
+  lvl:
+    aliases:
+      - pkt
+    description: /lvl
+  drop:
+    description: /drop
   rang:
     permissions:
     aisector.command.rank:

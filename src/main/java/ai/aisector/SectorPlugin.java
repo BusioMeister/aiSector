@@ -4,6 +4,8 @@ import ai.aisector.commands.*;
 import ai.aisector.database.MongoDBManager;
 import ai.aisector.database.MySQLManager;
 import ai.aisector.database.RedisManager;
+import ai.aisector.generators.GeneratorItems;
+import ai.aisector.generators.GeneratorManager;
 import ai.aisector.listeners.*;
 import ai.aisector.sectors.player.*;
 import ai.aisector.ranks.PermissionManager;
@@ -13,6 +15,7 @@ import ai.aisector.sectors.BorderInitListener;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.SectorStatsPublisher;
 import ai.aisector.sectors.WorldBorderManager;
+import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.task.ActionBarTask;
 import ai.aisector.task.OnlinePlayersPublisherTask;
 import ai.aisector.user.UserManager;
@@ -42,6 +45,8 @@ public class SectorPlugin extends JavaPlugin {
     private MySQLManager mySQLManager; // <-- DODAJ POLE
     private RankManager rankManager; // <-- DODAJ POLE
     private PermissionManager permissionManager; // <-- DODAJ POLE
+    private MiningLevelManager miningLevelManager;
+    private ai.aisector.generators.GeneratorManager generatorManager;
 
 
     @Override
@@ -55,14 +60,16 @@ public class SectorPlugin extends JavaPlugin {
 
         mongoDBManager = new MongoDBManager("mongodb://localhost:27017", "users"); // Użyj poprawnej nazwy bazy danych, jeśli jest inna
         rankManager = new RankManager(mySQLManager, getLogger());
-        rankManager.loadRanks();
         permissionManager = new PermissionManager(this, rankManager);
+        this.generatorManager = new GeneratorManager(this);
 
         redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
         worldBorderManager = new WorldBorderManager();
         userManager = new UserManager(this);
         vanishManager = new VanishManager(this);
+        miningLevelManager = new MiningLevelManager(this); // Przeniesiono tutaj!
+        rankManager.loadRanks();
 
 
         // Rejestracja komend
@@ -77,6 +84,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("backup").setExecutor(new BackupCommand(mongoDBManager));
         getCommand("sethome").setExecutor(new SetHomeCommand(mongoDBManager));
         getCommand("home").setExecutor(new HomeCommand(mongoDBManager));
+        getCommand("lvl").setExecutor(new LevelCommand(this,miningLevelManager));
 
 
         getCommand("alert").setExecutor(new AlertCommand(redisManager));
@@ -87,6 +95,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("wyjebane").setExecutor(new WyjebaneCommand(redisManager));
         getCommand("v").setExecutor(new VanishCommand(this,vanishManager));
         getCommand("spawn").setExecutor(new SpawnCommand(this));
+        getCommand("drop").setExecutor(new DropCommand(this));
 
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(redisManager));
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
@@ -101,6 +110,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("tpaccept").setExecutor(new TpacceptCommand(redisManager));
         getCommand("sektor").setExecutor(new SektorCommand(redisManager));
         getCommand("send").setExecutor(new SendCommand(this));
+        getCommand("lvl").setExecutor(new LevelCommand(this, miningLevelManager)); // Ta linia jest teraz bezpieczna
 
         getCommand("tp").setTabCompleter(new TpTabCompleter());
         getCommand("s").setTabCompleter(new TpTabCompleter());
@@ -112,13 +122,15 @@ public class SectorPlugin extends JavaPlugin {
             new SectorStatsPublisher(this, redisManager, thisSectorName).runTaskTimerAsynchronously(this, 100L, 100L); // co 5 sekund
         }
         // Rejestracja listenerów eventów Bukkit
+
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PermissionGuiListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
         getServer().getPluginManager().registerEvents(new RankListener(this), this); // <-- DODAJ REJESTRACJĘ NOWEGO LISTNERA
-
+        getServer().getPluginManager().registerEvents(new StoneDropListener(this, miningLevelManager), this);
+        getServer().getPluginManager().registerEvents(new DropGuiListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new VanishPlayerListener(this,vanishManager), this);
         getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, mongoDBManager, sectorManager), this);
@@ -126,9 +138,12 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SetHomeGuiListener(mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new HomeGuiListener(mongoDBManager, sectorManager, this), this);
 
-        new GlobalChatPlugin(this).register();
 
-        // Uruchomienie zadań cyklicznych
+        getServer().getPluginManager().registerEvents(
+                new ai.aisector.listeners.GeneratorListener(this, this.generatorManager), this);
+        ai.aisector.generators.GeneratorItems.registerRecipes(this);
+        getServer().getScheduler().runTask(this, () -> this.generatorManager.loadAll());
+        new GlobalChatPlugin(this).register();
         new ActionBarTask().runTaskTimer(this, 0L, 20L);
         startRedisListeners(); // Uruchomienie wszystkich listenerów Redis w osobnych wątkach
         startPlayerPublisher(); // Uruchomienie wysyłania listy graczy
@@ -208,6 +223,9 @@ public class SectorPlugin extends JavaPlugin {
         if (mySQLManager != null) {
             mySQLManager.close(); // Zamykamy połączenie z bazą danych
         }
+        if (this.generatorManager != null) {
+            this.generatorManager.saveAll();
+        }
     }
 
     // Gettery
@@ -220,18 +238,16 @@ public class SectorPlugin extends JavaPlugin {
     public MySQLManager getMySQLManager() {
         return mySQLManager;
     }
-
+    public MiningLevelManager getSkillsManager() {return miningLevelManager;}
     public PermissionManager getPermissionManager() {
         return permissionManager;
     }
     public MongoDBManager getMongoDBManager() {
         return mongoDBManager;
     }
-
     public WorldBorderManager getWorldBorderManager() {
         return this.worldBorderManager;
     }
-
     public UserManager getUserManager() {
         return this.userManager;
     }

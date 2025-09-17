@@ -28,3 +28,4 @@ permissions:
   - aisector.command.weather
   - aisector.command.vanish.see
   - aisector.command.invsee
+  - aisector.command.drop
