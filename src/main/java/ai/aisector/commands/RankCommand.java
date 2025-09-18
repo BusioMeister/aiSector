@@ -87,11 +87,16 @@ public class RankCommand implements CommandExecutor {
             rankManager.setPlayerRank(targetUUID, rank, targetName);
 
             // Wysyłamy sygnał do wszystkich serwerów przez Redis, aby odświeżyły rangę gracza
-            try (Jedis jedis = plugin.getRedisManager().getJedis()) {
-                JsonObject updateData = new JsonObject();
-                updateData.addProperty("uuid", targetUUID.toString());
-                jedis.publish("aisector:rank_update", updateData.toString());
+            // po rankManager.setPlayerRank(targetUUID, rank, targetName);
+            try (redis.clients.jedis.Jedis jedis = plugin.getRedisManager().getJedis()) {
+                boolean canBypass = plugin.getRankManager()
+                        .getEffectivePermissions(rank)
+                        .contains("aisector.wyjebane.bypass");
+                String key = "bypass_pm:" + targetUUID;
+                if (canBypass) jedis.set(key, "1");
+                else jedis.del(key);
             }
+
 
             sender.sendMessage("§aPomyślnie ustawiono rangę §e" + rank.getName() + " §adla gracza §e" + targetName + "§a.");
         });

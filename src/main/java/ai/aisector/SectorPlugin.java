@@ -97,6 +97,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("sethome").setExecutor(new SetHomeCommand(mongoDBManager));
         getCommand("home").setExecutor(new HomeCommand(mongoDBManager));
         getCommand("lvl").setExecutor(new LevelCommand(this,miningLevelManager));
+        getCommand("ct").setExecutor(new CraftingCommand());
 
 
         getCommand("alert").setExecutor(new AlertCommand(redisManager));

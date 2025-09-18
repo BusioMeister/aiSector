@@ -4,6 +4,11 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
+  ct:
+    description: Otwiera okno craftingu
+    usage: /ct
+    aliases: [ crafting ]
+    permission: aisector.command.crafting
   cx:
     description: Wymień 9x64 cobble na 1–3 CobbleX
     usage: /cx

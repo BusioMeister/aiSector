@@ -110,6 +110,21 @@ public class PermissionGuiListener implements Listener {
         } else {
             rankManager.addPermissionToRank(rank, permission);
         }
+        // PermissionGuiListener.java — po modyfikacji permission w danej randze
+        boolean affectsBypass = "aisector.wyjebane.bypass".equalsIgnoreCase(permission);
+        if (affectsBypass) {
+            try (redis.clients.jedis.Jedis jedis = plugin.getRedisManager().getJedis()) {
+                boolean nowBypass = rankManager.getEffectivePermissions(rank)
+                        .contains("aisector.wyjebane.bypass");
+                for (org.bukkit.entity.Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                    ai.aisector.ranks.Rank pr = rankManager.getPlayerRank(p.getUniqueId());
+                    if (pr != null && pr.getId() == rank.getId()) {
+                        String key = "bypass_pm:" + p.getUniqueId();
+                        if (nowBypass) jedis.set(key, "1"); else jedis.del(key);
+                    }
+                }
+            }
+        }
 
         // Odśwież w następnym ticku — użyj effectively final
         final int pageToOpen = currentPage;
