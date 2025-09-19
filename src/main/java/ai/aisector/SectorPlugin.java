@@ -98,6 +98,12 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("home").setExecutor(new HomeCommand(mongoDBManager));
         getCommand("lvl").setExecutor(new LevelCommand(this,miningLevelManager));
         getCommand("ct").setExecutor(new CraftingCommand());
+        getCommand("ban").setExecutor(new BanCommand(this));
+        getCommand("banip").setExecutor(new BanIpCommand(this));
+        getCommand("unban").setExecutor(new UnbanCommand(this));
+        getCommand("banlist").setExecutor(new BanListCommand(this));
+        getCommand("kick").setExecutor(new KickCommand(this));
+
 
 
         getCommand("alert").setExecutor(new AlertCommand(redisManager));
@@ -131,6 +137,10 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("tpa").setTabCompleter(new TpTabCompleter());
         getCommand("sektor").setTabCompleter(new TpTabCompleter());
 
+        getCommand("ban").setTabCompleter(new TpTabCompleter());
+        getCommand("banip").setTabCompleter(new TpTabCompleter());
+        getCommand("unban").setTabCompleter(new TpTabCompleter());
+        getCommand("kick").setTabCompleter(new TpTabCompleter());
         String thisSectorName = getConfig().getString("this-sector-name");
         if(thisSectorName != null && !thisSectorName.isEmpty()){
             new SectorStatsPublisher(this, redisManager, thisSectorName).runTaskTimerAsynchronously(this, 100L, 100L); // co 5 sekund

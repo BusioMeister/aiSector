@@ -4,6 +4,25 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
+  kick:
+    description: Wyrzuca gracza z sieci
+    usage: /kick <nick> <powód>
+    permission: aisector.kick
+  ban:
+    description: Banuje gracza globalnie
+    usage: /ban <nick> <minuty|-1> <powód>
+    permission: aisector.ban.use
+  banip:
+    description: Banuje IP globalnie
+    usage: /banip <nick|ip> <minuty|-1> <powód>
+    permission: aisector.ban.ip
+  unban:
+    description: Zdejmuje bana
+    usage: /unban <nick|ip>
+    permission: aisector.unban
+  banlist:
+    description: Lista aktywnych banów
+    usage: /banlist
   ct:
     description: Otwiera okno craftingu
     usage: /ct

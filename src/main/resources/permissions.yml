@@ -32,3 +32,11 @@ permissions:
   - aisector.wyjebane.bypass
   - aisector.cx
   - aisector.command.crafting
+  - aisector.ban.use
+  - aisector.ban.ip
+  - aisector.unban
+  - aisector.ban.long
+  - aisector.ban.perm
+  - aisector.kick
+  - aisector.ban.list
+  - aisector.server.maintenance
