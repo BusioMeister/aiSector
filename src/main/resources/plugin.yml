@@ -4,6 +4,8 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
+  vserver:
+    description: przrwa techniczna
   kick:
     description: Wyrzuca gracza z sieci
     usage: /kick <nick> <powód>

@@ -11,9 +11,6 @@ import ai.aisector.drop.StoneDropListener;
 import ai.aisector.generators.GeneratorManager;
 import ai.aisector.listeners.*;
 import ai.aisector.sectors.player.*;
-import ai.aisector.ranks.PermissionManager;
-import ai.aisector.ranks.RankManager;
-import ai.aisector.ranks.gui.PermissionGuiListener;
 import ai.aisector.sectors.BorderInitListener;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.SectorStatsPublisher;
@@ -48,8 +45,6 @@ public class SectorPlugin extends JavaPlugin {
 
 
     private MySQLManager mySQLManager; // <-- DODAJ POLE
-    private RankManager rankManager; // <-- DODAJ POLE
-    private PermissionManager permissionManager; // <-- DODAJ POLE
     private MiningLevelManager miningLevelManager;
     private ai.aisector.generators.GeneratorManager generatorManager;
     private CobbleXManager cobbleXManager;
@@ -70,8 +65,6 @@ public class SectorPlugin extends JavaPlugin {
         mySQLManager.createTables(); // Tworzy tabele, jeśli nie istnieją
 
         mongoDBManager = new MongoDBManager("mongodb://localhost:27017", "users"); // Użyj poprawnej nazwy bazy danych, jeśli jest inna
-        rankManager = new RankManager(mySQLManager, getLogger());
-        permissionManager = new PermissionManager(this, rankManager);
         this.generatorManager = new GeneratorManager(this);
         this.cobbleXManager = new CobbleXManager(this);
 
@@ -81,7 +74,6 @@ public class SectorPlugin extends JavaPlugin {
         userManager = new UserManager(this);
         vanishManager = new VanishManager(this);
         miningLevelManager = new MiningLevelManager(this); // Przeniesiono tutaj!
-        rankManager.loadRanks();
 
 
         // Rejestracja komend
@@ -124,13 +116,13 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("invsee").setExecutor(new InvseeCommand());
         getServer().getPluginManager().registerEvents(new InvseeGuiListener(), this);
 
-        getCommand("rang").setExecutor(new RankCommand(this));
 
         getCommand("tpa").setExecutor(new TpaCommand(redisManager));
         getCommand("tpaccept").setExecutor(new TpacceptCommand(redisManager));
         getCommand("sektor").setExecutor(new SektorCommand(redisManager));
         getCommand("send").setExecutor(new SendCommand(this));
         getCommand("lvl").setExecutor(new LevelCommand(this, miningLevelManager)); // Ta linia jest teraz bezpieczna
+        getCommand("vserver").setExecutor(new ServerCommand(this));
 
         getCommand("tp").setTabCompleter(new TpTabCompleter());
         getCommand("s").setTabCompleter(new TpTabCompleter());
@@ -149,11 +141,9 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new CobbleXListener(this, cobbleXManager), this);
 
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
-        getServer().getPluginManager().registerEvents(new PermissionGuiListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
-        getServer().getPluginManager().registerEvents(new RankListener(this), this); // <-- DODAJ REJESTRACJĘ NOWEGO LISTNERA
         getServer().getPluginManager().registerEvents(new StoneDropListener(this, miningLevelManager), this);
         getServer().getPluginManager().registerEvents(new DropGuiListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
@@ -256,16 +246,10 @@ public class SectorPlugin extends JavaPlugin {
     public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
     public RedisManager getRedisManager() { return redisManager; }
     public SectorManager getSectorManager() { return sectorManager; }
-    public RankManager getRankManager() {
-        return rankManager;
-    }
     public MySQLManager getMySQLManager() {
         return mySQLManager;
     }
     public MiningLevelManager getSkillsManager() {return miningLevelManager;}
-    public PermissionManager getPermissionManager() {
-        return permissionManager;
-    }
     public MongoDBManager getMongoDBManager() {
         return mongoDBManager;
     }
@@ -276,5 +260,6 @@ public class SectorPlugin extends JavaPlugin {
         return this.userManager;
     }
     public ai.aisector.cobblex.CobbleXManager getCobbleXManager() { return cobbleXManager; }
+
 
 }

@@ -17,11 +17,11 @@ public class ServerCommand implements CommandExecutor {
             sender.sendMessage("§cBrak uprawnień."); return true;
         }
         if (args.length < 2 || !"przerwa".equalsIgnoreCase(args[0])) {
-            sender.sendMessage("§eUżycie: /server przerwa <on|off>"); return true;
+            sender.sendMessage("§eUżycie: /vserver przerwa <on|off>"); return true;
         }
         String sub = args[1].toLowerCase();
         if (!sub.equals("on") && !sub.equals("off")) {
-            sender.sendMessage("§eUżycie: /server przerwa <on|off>"); return true;
+            sender.sendMessage("§eUżycie: /vserver przerwa <on|off>"); return true;
         }
         String by = (sender instanceof Player) ? ((Player) sender).getName() : "Konsola";
         try (Jedis j = plugin.getRedisManager().getJedis()) {

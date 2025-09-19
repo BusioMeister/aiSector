@@ -40,3 +40,4 @@ permissions:
   - aisector.kick
   - aisector.ban.list
   - aisector.server.maintenance
+  - aisector.whitelist.manage
