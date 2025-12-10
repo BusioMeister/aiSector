@@ -9,6 +9,7 @@ import ai.aisector.database.RedisManager;
 import ai.aisector.drop.DropGuiListener;
 import ai.aisector.drop.StoneDropListener;
 import ai.aisector.generators.GeneratorManager;
+import ai.aisector.guilds.GuildManager;
 import ai.aisector.listeners.*;
 import ai.aisector.sectors.player.*;
 import ai.aisector.sectors.BorderInitListener;
@@ -19,6 +20,7 @@ import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.task.ActionBarTask;
 import ai.aisector.task.OnlinePlayersPublisherTask;
 import ai.aisector.user.UserManager;
+import ai.aisector.scoreboard.ScoreboardManager;
 
 import ai.aisector.utils.GlobalChatPlugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -42,6 +44,8 @@ public class SectorPlugin extends JavaPlugin {
     private final Map<UUID, String> playerDeathSectors = new HashMap<>();
     private MongoDBManager mongoDBManager;
     private UserManager userManager;
+    private ScoreboardManager scoreboardManager;
+    private GuildManager guildManager;
 
 
     private MySQLManager mySQLManager; // <-- DODAJ POLE
@@ -71,9 +75,12 @@ public class SectorPlugin extends JavaPlugin {
         redisManager = new RedisManager("localhost", 6379);
         sectorManager = new SectorManager(redisManager);
         worldBorderManager = new WorldBorderManager();
+
         userManager = new UserManager(this);
+        scoreboardManager = new ScoreboardManager(this);
         vanishManager = new VanishManager(this);
         miningLevelManager = new MiningLevelManager(this); // Przeniesiono tutaj!
+        guildManager = new GuildManager(this);
 
 
         // Rejestracja komend
@@ -108,6 +115,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("spawn").setExecutor(new SpawnCommand(this));
         getCommand("drop").setExecutor(new DropCommand(this));
         getCommand("cx").setExecutor(new ai.aisector.cobblex.CobbleXCommand(this));
+        getCommand("gildia").setExecutor(new ai.aisector.guilds.GuildCommand(this));
 
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(redisManager));
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
@@ -178,9 +186,7 @@ public class SectorPlugin extends JavaPlugin {
                         "aisector:get_location_for_tp",
                         "aisector:get_location_for_admin_tp",
                         "aisector:save_player_data",
-                        "player:force_sector_spawn:",
-                        "aisector:rank_update",
-                        "aisector:rank_permissions_update"
+                        "player:force_sector_spawn:"
                 );
             }
         }, "Redis-Command-Listener-Thread").start();
@@ -260,6 +266,9 @@ public class SectorPlugin extends JavaPlugin {
         return this.userManager;
     }
     public ai.aisector.cobblex.CobbleXManager getCobbleXManager() { return cobbleXManager; }
-
+    public ScoreboardManager getScoreboardManager() {return scoreboardManager;}
+    public GuildManager getGuildManager() {
+        return guildManager;
+    }
 
 }

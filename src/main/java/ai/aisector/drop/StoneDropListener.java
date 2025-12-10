@@ -1,8 +1,6 @@
 package ai.aisector.drop;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.drop.DropConfig;
-import ai.aisector.ranks.Rank;
 import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.user.User;
 import net.kyori.adventure.text.Component;
@@ -25,7 +23,7 @@ import java.util.Random;
 public class StoneDropListener implements Listener {
 
     private final SectorPlugin plugin;
-    private final MiningLevelManager levelManager; // <-- DODAJEMY POLE
+    private final MiningLevelManager levelManager;
     public static final Map<Material, Double> baseDropChances = new HashMap<>();
     private static final int STONE_VANILLA_XP = 1;
     private final Random random = new Random();
@@ -36,21 +34,19 @@ public class StoneDropListener implements Listener {
         baseDropChances.put(Material.IRON_INGOT, 2.0);
         baseDropChances.put(Material.LAPIS_LAZULI, 1.8);
         baseDropChances.put(Material.REDSTONE, 2.6);
-        baseDropChances.put(Material.COAL ,2.0 );
-        baseDropChances.put( Material.BOOK,1.2 );
-        baseDropChances.put(Material.GUNPOWDER ,1.3 );
-        baseDropChances.put(Material.SAND ,1.1 );
-        baseDropChances.put(Material.APPLE ,1.2 );
-        baseDropChances.put( Material.OBSIDIAN,1.6 );
+        baseDropChances.put(Material.COAL, 2.0);
+        baseDropChances.put(Material.BOOK, 1.2);
+        baseDropChances.put(Material.GUNPOWDER, 1.3);
+        baseDropChances.put(Material.SAND, 1.1);
+        baseDropChances.put(Material.APPLE, 1.2);
+        baseDropChances.put(Material.OBSIDIAN, 1.6);
         baseDropChances.put(Material.ENDER_PEARL, 0.1);
     }
-    public StoneDropListener(SectorPlugin plugin,MiningLevelManager levelManager) {
+
+    public StoneDropListener(SectorPlugin plugin, MiningLevelManager levelManager) {
         this.plugin = plugin;
-        this.levelManager = levelManager; // <-- INICJALIZUJEMY
-
+        this.levelManager = levelManager;
     }
-
-    // W pliku StoneDropListener.java
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     void onBlockBreak(BlockBreakEvent event) {
@@ -58,69 +54,71 @@ public class StoneDropListener implements Listener {
         Material blockType = event.getBlock().getType();
         String blockName = blockType.name();
 
+        // 1) Rudy: naliczanie XP po materialu przetworzonym (zgodnym z tabelą XP w MiningLevelManager)
         if (blockName.endsWith("_ORE")) {
             User user = plugin.getUserManager().getUser(player);
             if (user == null) return;
-            // Zliczamy wykopany blok
+
             user.incrementMinedBlockCount(blockType, 1);
-            // Nadajemy XP za rudę
+
             Material dropType = getDropFromOre(blockType);
             int xpGained = levelManager.getExperienceFor(dropType);
             if (xpGained > 0) {
-                levelManager.addExperience(player, dropType, 1); // Na razie za 1 sztukę
+                levelManager.addExperience(player, dropType, 1);
                 sendDropActionBar(player, dropType, 1, xpGained, true);
             }
-            return; // Zakończ, aby nie procesować dalej jako kopanie stone'a
+            return;
         }
-        // 2. Obsługa kopania STONE'a
+
+        // 2) Kopanie STONE
         if (blockType.equals(Material.STONE)) {
             User user = plugin.getUserManager().getUser(player);
             if (user == null) return;
+
             event.setDropItems(false);
             user.incrementMinedBlockCount(Material.STONE, 1);
+
             ItemStack handItem = player.getInventory().getItemInMainHand();
             if (handItem.getType() == Material.AIR || !handItem.getType().name().endsWith("_PICKAXE")) return;
-            // 1) Najpierw enchanty
+
             boolean hasSilkTouch = handItem.getEnchantmentLevel(Enchantment.SILK_TOUCH) > 0;
             int fortuneLevel = hasSilkTouch ? 0 : handItem.getEnchantmentLevel(Enchantment.FORTUNE);
-            Rank playerRank = plugin.getRankManager().getPlayerRank(player.getUniqueId());
-            // 3) Jedna pętla losująca rzadkie dropy
+
+            // Jedna pętla losująca rzadkie dropy (z bonusem LP + poziomu kopania)
             for (Map.Entry<Material, DropConfig.DropSpec> e : DropConfig.getAll().entrySet()) {
                 Material material = e.getKey();
+                DropConfig.DropSpec spec = e.getValue();
+
+                // Limit wysokości z konfiguracji
+                if (event.getBlock().getY() > spec.maxYLevel()) continue;
+
                 double basePct = e.getValue().baseChancePct();
-                double rankBonusPct = levelManager.getRankBonusPercent(playerRank, material);
+                double rankBonusPct = levelManager.getRankBonusPercent(player, material); // LP meta / fallback
                 double levelBonusPct = levelManager.getDropChanceBonus(user.getMiningLevel());
+
                 double totalPct = Math.max(0.0, Math.min(100.0, basePct + rankBonusPct + levelBonusPct));
                 double roll = random.nextDouble() * 100.0;
-                // opcjonalnie: limit wysokości zgodny z GUI
-                ai.aisector.drop.DropConfig.DropSpec spec = e.getValue();
-                if (event.getBlock().getY() > spec.maxYLevel()) {
-                    continue;
-                }
-
 
                 if (roll <= totalPct) {
                     int amount = 1 + (fortuneLevel > 0 ? random.nextInt(fortuneLevel + 1) : 0);
 
-                    // zawsze zużyj kilof i nadaj XP za trafienie
+                    // Zużyj kilof + XP
                     damagePickaxe(handItem, player);
                     levelManager.addExperience(player, material, amount);
 
                     int xp = levelManager.getExperienceFor(material) * amount;
 
                     if (user.isDropEnabled(material)) {
-                        // drop włączony -> dodaj item
                         player.getInventory().addItem(new ItemStack(material, amount));
                         sendDropActionBar(player, material, amount, xp, true);
                     } else {
-                        // drop wyłączony -> bez itemu, ale XP i komunikat
                         sendDropActionBar(player, material, amount, xp, false);
                     }
                     return; // kończ po pierwszym trafieniu
                 }
-
             }
-            // 4) Domyślny drop: Stone przy Silk Touch, inaczej Cobblestone (jeśli włączony)
+
+            // 3) Domyślny drop: Stone przy Silk Touch, inaczej Cobblestone (jeśli włączony)
             if (hasSilkTouch) {
                 player.getInventory().addItem(new ItemStack(Material.STONE));
                 damagePickaxe(handItem, player);
@@ -129,12 +127,12 @@ public class StoneDropListener implements Listener {
                 player.getInventory().addItem(new ItemStack(Material.COBBLESTONE));
                 damagePickaxe(handItem, player);
                 player.giveExp(STONE_VANILLA_XP);
-            }else{
+            } else {
                 player.giveExp(STONE_VANILLA_XP);
             }
-            return;
         }
     }
+
     private void sendDropActionBar(Player player, Material material, int amount, int xpGained, boolean dropEnabled) {
         String materialName = material.name().replace("_", " ").toLowerCase();
 
@@ -150,18 +148,22 @@ public class StoneDropListener implements Listener {
         player.sendActionBar(message);
     }
 
-
+    // Ujednolicone z tabelą XP: używamy GOLD_INGOT / IRON_INGOT zamiast RAW_*
     private Material getDropFromOre(Material oreType) {
         switch (oreType.name()) {
-            case "DIAMOND_ORE": case "DEEPSLATE_DIAMOND_ORE": return Material.DIAMOND;
-            case "GOLD_ORE": case "DEEPSLATE_GOLD_ORE": return Material.RAW_GOLD;
-            case "IRON_ORE": case "DEEPSLATE_IRON_ORE": return Material.RAW_IRON;
-            case "LAPIS_ORE": case "DEEPSLATE_LAPIS_ORE": return Material.LAPIS_LAZULI;
-            case "REDSTONE_ORE": case "DEEPSLATE_REDSTONE_ORE": return Material.REDSTONE;
+            case "DIAMOND_ORE":
+            case "DEEPSLATE_DIAMOND_ORE": return Material.DIAMOND;
+            case "GOLD_ORE":
+            case "DEEPSLATE_GOLD_ORE": return Material.GOLD_INGOT;
+            case "IRON_ORE":
+            case "DEEPSLATE_IRON_ORE": return Material.IRON_INGOT;
+            case "LAPIS_ORE":
+            case "DEEPSLATE_LAPIS_ORE": return Material.LAPIS_LAZULI;
+            case "REDSTONE_ORE":
+            case "DEEPSLATE_REDSTONE_ORE": return Material.REDSTONE;
             default: return Material.AIR;
         }
     }
-
 
     private void damagePickaxe(ItemStack pickaxe, Player player) {
         ItemMeta meta = pickaxe.getItemMeta();

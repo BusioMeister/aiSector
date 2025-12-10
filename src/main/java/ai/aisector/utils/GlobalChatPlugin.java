@@ -1,8 +1,6 @@
 package ai.aisector.utils;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.ranks.Rank;
-import ai.aisector.ranks.RankManager;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
@@ -18,12 +16,10 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 public class GlobalChatPlugin implements Listener, PluginMessageListener {
 
     private final SectorPlugin plugin;
-    private final RankManager rankManager; // <-- DODAJEMY POLE
     private static final String CHANNEL = "global:chat";
 
     public GlobalChatPlugin(SectorPlugin plugin) {
         this.plugin = plugin;
-        this.rankManager = plugin.getRankManager(); // <-- POBIERAMY RANK MANAGER
     }
 
     public void register() {
@@ -41,19 +37,12 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
         event.setCancelled(true);
 
         Player player = event.getPlayer();
-        Rank playerRank = rankManager.getPlayerRank(player.getUniqueId());
 
-        // --- POCZĄTEK NOWEJ LOGIKI ---
-        String prefix = "";
-        if (playerRank != null && playerRank.getPrefix() != null) {
-            // Tłumaczymy kody kolorów (np. &c) na kolory w grze
-            prefix = ChatColor.translateAlternateColorCodes('&', playerRank.getPrefix());
-        }
 
         String sectorName = plugin.getConfig().getString("this-sector-name", "Sektor");
 
         // Tworzymy finalny format wiadomości z użyciem prefixu rangi
-        String formattedMessage = "§7[§b" + sectorName  + "§7] " + prefix + player.getName() + "§f: " + event.getMessage();
+        String formattedMessage = "§7[§b" + sectorName  + "§7] " + player.getName() + "§f: " + event.getMessage();
         // --- KONIEC NOWEJ LOGIKI ---
 
         sendToProxy(formattedMessage);

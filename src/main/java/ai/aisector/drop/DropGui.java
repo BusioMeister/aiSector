@@ -1,9 +1,6 @@
 package ai.aisector.drop;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.drop.DropConfig;
-import ai.aisector.ranks.Rank;
-import ai.aisector.ranks.RankManager;
 import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.user.User;
 import org.bukkit.Bukkit;
@@ -27,15 +24,13 @@ public class DropGui {
 
     private final Player player;
     private final User user;
-    private final RankManager rankManager;
     private final MiningLevelManager levelManager;
 
     public DropGui(SectorPlugin plugin, Player player) {
         this.plugin = plugin;
         this.player = player;
         this.user = plugin.getUserManager().getUser(player);
-        this.rankManager = plugin.getRankManager();
-        // jeżeli w mainie masz inny getter, podmień na właściwy (np. getMiningLevelManager)
+        // jeżeli w mainie jest inny getter, podmień na właściwy (np. getMiningLevelManager)
         this.levelManager = plugin.getSkillsManager();
     }
 
@@ -46,18 +41,16 @@ public class DropGui {
         }
 
         // Ile pozycji + 1 przycisk Cobblestone
-        int count = ai.aisector.drop.DropConfig.getAll().size();
+        int count = DropConfig.getAll().size();
         int extras = 1;
         int size = ((count + extras + 8) / 9) * 9; // 9,18,27,36,45,54
         if (size < 9) size = 9;
         if (size > 54) size = 54; // bezpieczeństwo
 
-        org.bukkit.inventory.Inventory gui =
-                org.bukkit.Bukkit.createInventory(null, size, GUI_TITLE);
+        Inventory gui = Bukkit.createInventory(null, size, GUI_TITLE);
 
         int slot = 0;
-        for (java.util.Map.Entry<org.bukkit.Material, ai.aisector.drop.DropConfig.DropSpec> e
-                : ai.aisector.drop.DropConfig.getAll().entrySet()) {
+        for (Map.Entry<Material, DropConfig.DropSpec> e : DropConfig.getAll().entrySet()) {
             if (slot >= size) break; // gdyby count > size (po limicie 54)
             gui.setItem(slot++, createDropItem(e.getKey(), e.getValue()));
         }
@@ -82,9 +75,8 @@ public class DropGui {
         DecimalFormat bonus = new DecimalFormat("+#.####");
 
         double levelBonus = levelManager.getDropChanceBonus(user.getMiningLevel()); // w %
-        Rank playerRank = rankManager.getPlayerRank(player.getUniqueId());
-        double rankBonus = levelManager.getRankBonusPercent(playerRank, material);  // w %
-        double totalChance = spec.baseChancePct() + levelBonus + rankBonus;        // w %
+        double rankBonus = levelManager.getRankBonusPercent(player, material);      // w % (LuckPerms meta / fallback)
+        double totalChance = spec.baseChancePct() + levelBonus + rankBonus;         // w %
 
         List<String> lore = new ArrayList<>();
         lore.add("§8§m-------------------------");
@@ -95,8 +87,6 @@ public class DropGui {
         lore.add("§f» §7Drop: " + (isEnabled ? "§aWłączony" : "§cWyłączony"));
         lore.add("§f» §7Punkty: §e" + spec.xpValue() + " pkt.");
         lore.add("§f» §7Wykopałeś: §6" + user.getMinedBlockCount(material));
-        lore.add(" ");
-        lore.add("§fPosiadasz rangę: §6" + (playerRank != null ? playerRank.getName() : "Gracz"));
         lore.add("§8§m-------------------------");
 
         meta.setLore(lore);

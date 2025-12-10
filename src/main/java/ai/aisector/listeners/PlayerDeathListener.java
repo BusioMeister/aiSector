@@ -4,7 +4,9 @@ import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
 import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.SectorManager;
+import ai.aisector.user.UserManager;
 import ai.aisector.utils.InventorySerializer;
+import ai.aisector.user.User;
 import org.bson.Document;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -22,14 +24,14 @@ public class PlayerDeathListener implements Listener {
     private final MongoDBManager mongoDBManager;
     private final SectorManager sectorManager;
     private final RedisManager redisManager; // <-- DODAJEMY POLE
-
+    private final UserManager userManager; // NOWE
 
     public PlayerDeathListener(SectorPlugin plugin, MongoDBManager mongoDBManager, SectorManager sectorManager) {
         this.plugin = plugin;
         this.mongoDBManager = mongoDBManager;
         this.sectorManager = sectorManager;
         this.redisManager = plugin.getRedisManager(); // <-- INICJALIZUJEMY POLE
-
+        this.userManager = plugin.getUserManager(); // NOWE
     }
 
     @EventHandler
@@ -83,5 +85,20 @@ public class PlayerDeathListener implements Listener {
 
         // 3. Zapisujemy dokument w kolekcji 'death_backups'
         mongoDBManager.insertOne("death_backups", deathRecord);
+        // === STATYSTYKI PVP ===
+        // Ofiara
+        User victimUser = userManager.getUser(victim);
+        if (victimUser != null) {
+            victimUser.addDeath();
+        }
+
+        // Zabójca (może być null, jeśli środowisko)
+        Player killer = victim.getKiller();
+        if (killer != null) {
+            User killerUser = userManager.getUser(killer);
+            if (killerUser != null) {
+                killerUser.addKill();
+            }
+        }
     }
 }

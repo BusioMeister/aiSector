@@ -61,35 +61,66 @@ public class UserManager {
             jedis.setex("player:data:" + player.getUniqueId(), 60, playerData);
         }
     }
+    public User loadOrGetUser(Player player) {
+        User existing = onlineUsers.get(player.getUniqueId());
+        if (existing != null) return existing;
+
+        // jeśli z jakiegoś powodu nie został załadowany przez listener – ładujemy tu
+        loadUser(player);
+        return onlineUsers.get(player.getUniqueId());
+    }
+
 
     public void loadUser(Player player) {
         User user = new User(player.getUniqueId());
-        Document userDoc = mongoDBManager.getCollection("users").find(Filters.eq("uuid", player.getUniqueId().toString())).first();
+
+        Document userDoc = mongoDBManager.getCollection("users")
+                .find(Filters.eq("uuid", player.getUniqueId().toString()))
+                .first();
 
         if (userDoc != null) {
             user.setGodMode(userDoc.getBoolean("godMode", false));
             user.setFlying(userDoc.getBoolean("flying", false));
             user.setVanished(userDoc.getBoolean("vanished", false));
-            user.setWalkSpeed(userDoc.getDouble("walkSpeed") != null ? userDoc.getDouble("walkSpeed").floatValue() : 0.2f);
-            user.setFlySpeed(userDoc.getDouble("flySpeed") != null ? userDoc.getDouble("flySpeed").floatValue() : 0.1f);
+// ====== GILDIA ======
+            user.setGuildTag(userDoc.getString("guildTag"));
+            user.setGuildRole(userDoc.getString("guildRole"));
+
+            if (userDoc.getDouble("walkSpeed") != null) {
+                user.setWalkSpeed(userDoc.getDouble("walkSpeed").floatValue());
+            } else {
+                user.setWalkSpeed(0.2f);
+            }
+
+            if (userDoc.getDouble("flySpeed") != null) {
+                user.setFlySpeed(userDoc.getDouble("flySpeed").floatValue());
+            } else {
+                user.setFlySpeed(0.1f);
+            }
+
             user.setMiningLevel(userDoc.getInteger("miningLevel", 1));
-            Document minedBlocksDoc = userDoc.get("minedBlocks", Document.class);
+
+            // ====== MINING EXPERIENCE ======
             Object expObject = userDoc.get("miningExperience");
             if (expObject instanceof Number) {
                 user.setMiningExperience(((Number) expObject).longValue());
             } else {
-                user.setMiningExperience(0L); // Wartość domyślna, jeśli pole nie istnieje lub ma zły typ
+                user.setMiningExperience(0L);
             }
+
+            // ====== MINED BLOCKS ======
+            Document minedBlocksDoc = userDoc.get("minedBlocks", Document.class);
             if (minedBlocksDoc != null) {
                 for (String key : minedBlocksDoc.keySet()) {
                     try {
                         Material material = Material.valueOf(key);
                         int count = minedBlocksDoc.getInteger(key, 0);
-                        user.getMinedBlocks().put(material, count); // Poprawiona logika
+                        user.getMinedBlocks().put(material, count);
                     } catch (IllegalArgumentException ignored) {}
                 }
             }
-            // --- DODANO: Wczytywanie ustawień dropu ---
+
+            // ====== DROP SETTINGS ======
             Document dropSettingsDoc = userDoc.get("dropSettings", Document.class);
             if (dropSettingsDoc != null) {
                 for (String key : dropSettingsDoc.keySet()) {
@@ -99,18 +130,42 @@ public class UserManager {
                     } catch (IllegalArgumentException ignored) {}
                 }
             }
-            FindIterable<Document> homeDocs = mongoDBManager.getCollection("player_homes").find(Filters.eq("player_uuid", player.getUniqueId().toString()));
-            for (Document doc : homeDocs) {
-                Document locDoc = doc.get("location", Document.class);
-                World world = Bukkit.getWorld(locDoc.getString("world"));
-                if (world != null) {
-                    Location loc = new Location(world, locDoc.getDouble("x"), locDoc.getDouble("y"), locDoc.getDouble("z"), locDoc.getDouble("yaw").floatValue(), locDoc.getDouble("pitch").floatValue());
-                    user.addHome(new Home(doc.getInteger("home_slot"), doc.getString("sector"), loc));
-                }
-            }
+
             user.setCobblestoneDropEnabled(userDoc.getBoolean("cobblestoneDropEnabled", true));
-            // --- KONIEC ---
+
+            // ====== NOWE POLA PVP / CZAS GRY ======
+            user.setKills(userDoc.getInteger("kills", 0));
+            user.setDeaths(userDoc.getInteger("deaths", 0));
+
+            Object playTimeObj = userDoc.get("playTimeSeconds");
+            if (playTimeObj instanceof Number) {
+                user.setPlayTimeSeconds(((Number) playTimeObj).longValue());
+            } else {
+                user.setPlayTimeSeconds(0L);
+            }
+            // ======================================
         }
+
+        // DOMYŚLNE HOMES – bez zmian, zostawiasz swój kod:
+        FindIterable<Document> homeDocs = mongoDBManager.getCollection("player_homes")
+                .find(Filters.eq("player_uuid", player.getUniqueId().toString()));
+
+        for (Document doc : homeDocs) {
+            Document locDoc = doc.get("location", Document.class);
+            World world = Bukkit.getWorld(locDoc.getString("world"));
+            if (world != null) {
+                Location loc = new Location(
+                        world,
+                        locDoc.getDouble("x"),
+                        locDoc.getDouble("y"),
+                        locDoc.getDouble("z"),
+                        locDoc.getDouble("yaw").floatValue(),
+                        locDoc.getDouble("pitch").floatValue()
+                );
+                user.addHome(new Home(doc.getInteger("home_slot"), doc.getString("sector"), loc));
+            }
+        }
+
         onlineUsers.put(player.getUniqueId(), user);
     }
 
@@ -118,17 +173,19 @@ public class UserManager {
         User user = onlineUsers.get(player.getUniqueId());
         if (user == null) return;
 
-        // --- DODANO: Zapisywanie ustawień dropu ---
+        // --- DROP SETTINGS ---
         Document dropSettingsDoc = new Document();
         for (Map.Entry<Material, Boolean> entry : user.getDropSettings().entrySet()) {
             dropSettingsDoc.append(entry.getKey().name(), entry.getValue());
         }
+
+        // --- MINED BLOCKS ---
         Document minedBlocksDoc = new Document();
         for (Map.Entry<Material, Integer> entry : user.getMinedBlocks().entrySet()) {
             minedBlocksDoc.append(entry.getKey().name(), entry.getValue());
         }
-        // --- KONIEC ---
 
+        // --- ZAPIS DO MONGO ---
         mongoDBManager.getCollection("users").updateOne(
                 Filters.eq("uuid", player.getUniqueId().toString()),
                 Updates.combine(
@@ -140,14 +197,23 @@ public class UserManager {
                         Updates.set("flySpeed", user.getFlySpeed()),
                         Updates.set("dropSettings", dropSettingsDoc),
                         Updates.set("cobblestoneDropEnabled", user.isCobblestoneDropEnabled()),
-                        Updates.set("miningLevel", user.getMiningLevel()), // Zapisz poziom
+                        Updates.set("miningLevel", user.getMiningLevel()),
                         Updates.set("minedBlocks", minedBlocksDoc),
-                        Updates.set("miningExperience", user.getMiningExperience()) // Zapisz doświadczenie
+                        Updates.set("miningExperience", user.getMiningExperience()),
+                        // ====== NOWE POLA PVP / CZAS GRY ======
+                        Updates.set("kills", user.getKills()),
+                        Updates.set("deaths", user.getDeaths()),
+                        Updates.set("playTimeSeconds", user.getPlayTimeSeconds()),
+                        Updates.set("guildTag", user.getGuildTag()),
+                        Updates.set("guildRole", user.getGuildRole())
+                        // ======================================
                 ),
                 new com.mongodb.client.model.UpdateOptions().upsert(true)
         );
+
         onlineUsers.remove(player.getUniqueId());
     }
+
 
     public User getUser(Player player) { return onlineUsers.get(player.getUniqueId()); }
 

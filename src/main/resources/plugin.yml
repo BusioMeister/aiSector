@@ -4,6 +4,9 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
+  gildia:
+    description: Zarządzanie gildią
+    usage: /gildia
   vserver:
     description: przrwa techniczna
   kick:
@@ -40,10 +43,6 @@ commands:
     description: /lvl
   drop:
     description: /drop
-  rang:
-    permissions:
-    aisector.command.rank:
-      default: op
   sektor:
     description: Sprawdza, na którym sektorze jest gracz.
   send:

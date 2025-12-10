@@ -24,6 +24,10 @@ public class UserDataListener implements Listener {
     public void onPlayerLoad(PlayerJoinEvent event) {
         // Ta metoda wczytuje dane z MongoDB do pamięci RAM.
         userManager.loadUser(event.getPlayer());
+        User user = userManager.getUser(event.getPlayer());
+        if (user != null) {
+            user.setSessionStartMillis(System.currentTimeMillis());
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -51,7 +55,16 @@ public class UserDataListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerQuit(PlayerQuitEvent event) {
+        // Najpierw dolicz czas z bieżącej sesji
+        Player player = event.getPlayer();
+        User user = userManager.getUser(player);
+        if (user != null) {
+            long now = System.currentTimeMillis();
+            long sessionSeconds = (now - user.getSessionStartMillis()) / 1000L;
+            user.addPlayTime(sessionSeconds);
+        }
+
         // Ta metoda zapisuje dane z pamięci RAM do MongoDB.
-        userManager.unloadUser(event.getPlayer());
+        userManager.unloadUser(player);
     }
 }

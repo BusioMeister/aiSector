@@ -5,13 +5,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.border.WorldBorder;
 import org.bukkit.Bukkit;
-import org.bukkit.craftbukkit.CraftWorld;
-import org.bukkit.craftbukkit.entity.CraftPlayer;
+import org.bukkit.craftbukkit.v1_21_R3.CraftWorld;
+import org.bukkit.craftbukkit.v1_21_R3.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.Location;
 
 public class WorldBorderManager {
-
     // Definiuje rozmiar "bańki", w której gracz się porusza.
     private static final double BORDER_VIEW_SIZE = 200.0;
 

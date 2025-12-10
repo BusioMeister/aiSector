@@ -9,6 +9,8 @@ import ai.aisector.utils.Direction;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+
+import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.boss.BarColor;
@@ -45,7 +47,14 @@ public class PlayerListener implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         updateBorderAndBossBar(event.getPlayer());
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (event.getPlayer().isOnline()) {
+                plugin.getScoreboardManager().createBoard(event.getPlayer());
+            }
+        }, 10L);
     }
+
+
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
@@ -79,6 +88,7 @@ public class PlayerListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        plugin.getScoreboardManager().removeBoard(event.getPlayer());
         removeBossBar(event.getPlayer());
     }
 
