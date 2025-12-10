@@ -116,6 +116,7 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("drop").setExecutor(new DropCommand(this));
         getCommand("cx").setExecutor(new ai.aisector.cobblex.CobbleXCommand(this));
         getCommand("gildia").setExecutor(new ai.aisector.guilds.GuildCommand(this));
+        getCommand("ga").setExecutor(new ai.aisector.guilds.GuildAdminCommand(this));
 
         getCommand("sectorinfo").setExecutor(new SectorInfoCommand(redisManager));
         getCommand("setspawnsector").setExecutor(new SetSpawnSectorCommand(sectorManager, redisManager));
