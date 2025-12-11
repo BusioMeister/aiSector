@@ -153,7 +153,7 @@ public class GuildCommand implements CommandExecutor {
         p.sendMessage(ChatColor.GRAY + "/g alertchat <treść/off> " + ChatColor.DARK_GRAY + "- ustawia powitanie dla gildii");
 
 
-
+/// fsdfsdf
 
 
     }
