@@ -17,15 +17,27 @@ public class Guild {
     private final String tag;
     private String name;
     private UUID owner;
+    private UUID deputy;
 
     private final Set<UUID> members = new HashSet<>();
     private final Set<UUID> mods = new HashSet<>();
     private final Set<UUID> invitations = new HashSet<>();
-
     private final Set<String> alliedGuilds = new HashSet<>();
     private final Set<String> allyInvitations = new HashSet<>();
+
+
+
+    private boolean friendlyFireGuild = false;
+    private boolean friendlyFireAllies = false;
+
+
+
+    private String welcomeMessage;
+    private String alertMessage;
     private String homeSector;   // nazwa sektora, np. "Sector1"
-    private String homeWorld;    // nazwa świata
+    private String homeWorld;// nazwa świata
+
+
     private double homeX;
     private double homeY;
     private double homeZ;

@@ -161,6 +161,12 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new BackupGuiListener(mongoDBManager, redisManager), this);
         getServer().getPluginManager().registerEvents(new SetHomeGuiListener(mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new HomeGuiListener(mongoDBManager, sectorManager, this), this);
+        getServer().getPluginManager().registerEvents(
+                new ai.aisector.guilds.GuildPvpListener(this), this);
+
+
+
+
 
         getServer().getPluginManager().registerEvents(
                 new ai.aisector.listeners.GeneratorListener(this, this.generatorManager), this);

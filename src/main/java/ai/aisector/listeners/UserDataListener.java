@@ -28,6 +28,11 @@ public class UserDataListener implements Listener {
         if (user != null) {
             user.setSessionStartMillis(System.currentTimeMillis());
         }
+        Player p = event.getPlayer();
+        User GUILDUSER = plugin.getUserManager().loadOrGetUser(p);
+        if (GUILDUSER != null && GUILDUSER.hasGuild()) {
+            plugin.getGuildManager().reloadGuild(GUILDUSER.getGuildTag());
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH)

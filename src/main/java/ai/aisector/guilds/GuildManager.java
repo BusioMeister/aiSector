@@ -80,6 +80,7 @@ public class GuildManager {
 
         guildsByTag.put(tag.toLowerCase(), guild);
         saveGuild(guild);
+        reloadGuild(guild.getTag());
         return guild;
     }
 
@@ -138,7 +139,14 @@ public class GuildManager {
         Double pitch = doc.getDouble("homePitch");
         guild.setHomeYaw(yaw != null ? yaw.floatValue() : 0.0f);
         guild.setHomePitch(pitch != null ? pitch.floatValue() : 0.0f);
+        String deputyStr = doc.getString("deputy");
+        guild.setDeputy(deputyStr != null ? java.util.UUID.fromString(deputyStr) : null);
 
+        guild.setFriendlyFireGuild(doc.getBoolean("friendlyFireGuild", false));
+        guild.setFriendlyFireAllies(doc.getBoolean("friendlyFireAllies", false));
+
+        guild.setAlertMessage(doc.getString("alertMessage"));
+        guild.setWelcomeMessage(doc.getString("welcomeMessage"));
 
         return guild;
     }
@@ -154,6 +162,11 @@ public class GuildManager {
                 .append("alliedGuilds", new ArrayList<>(guild.getAlliedGuilds()))
                 .append("allyInvitations", new ArrayList<>(guild.getAllyInvitations()))
                 // DOM GILDII:
+                .append("deputy", guild.getDeputy() != null ? guild.getDeputy().toString() : null)
+                .append("friendlyFireGuild", guild.isFriendlyFireGuild())
+                .append("friendlyFireAllies", guild.isFriendlyFireAllies())
+                .append("alertMessage", guild.getAlertMessage())
+                .append("welcomeMessage", guild.getWelcomeMessage())
                 .append("homeSector", guild.getHomeSector())
                 .append("homeWorld", guild.getHomeWorld())
                 .append("homeX", guild.getHomeX())

@@ -13,10 +13,7 @@ import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scoreboard.DisplaySlot;
-import org.bukkit.scoreboard.Objective;
-import org.bukkit.scoreboard.Scoreboard;
-import org.bukkit.scoreboard.Team;
+import org.bukkit.scoreboard.*;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -67,9 +64,13 @@ public class ScoreboardManager {
         Objective obj = board.registerNewObjective("aisector", "dummy");
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
         obj.setDisplayName(LOGO_CHAR);
+        User user = plugin.getUserManager().loadOrGetUser(player);
+        String guildTag = (user != null && user.hasGuild()) ? user.getGuildTag() : "-";
 
+        Score guildScore = obj.getScore(ChatColor.YELLOW + "Gildia: " + ChatColor.WHITE + guildTag);
+        guildScore.setScore( /* jakaś wolna liczba, np. 6 */ 6 );
         // odstęp od logo
-        obj.getScore(" ").setScore(14);
+        obj.getScore(" ").setScore(7);
 
         // tło
         obj.getScore(ChatColor.of("#202020") + "               ").setScore(13);

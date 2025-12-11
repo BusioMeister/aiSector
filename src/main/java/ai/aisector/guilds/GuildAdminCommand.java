@@ -54,14 +54,19 @@ public class GuildAdminCommand implements CommandExecutor {
             default:
                 sendHelp(sender);
                 break;
+            case "fixuser":
+                handleFixGuild(sender, args[1]);
+                break;
         }
         return true;
     }
+
 
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "Gildie - komendy administracyjne:");
         sender.sendMessage(ChatColor.GRAY + "/ga list " + ChatColor.DARK_GRAY + "- lista wszystkich gildii");
         sender.sendMessage(ChatColor.GRAY + "/ga usun <tag> " + ChatColor.DARK_GRAY + "- usuń gildię po tagu");
+        sender.sendMessage(ChatColor.GRAY + "/ga fixuser <gracz>" + ChatColor.DARK_GRAY + "- usuń gildię po tagu");
     }
 
     // /ga list
@@ -79,6 +84,24 @@ public class GuildAdminCommand implements CommandExecutor {
 
         sender.sendMessage(ChatColor.GOLD + "Gildie na serwerze (" + guilds.size() + "):");
         sender.sendMessage(ChatColor.YELLOW + tags);
+    }
+    private void handleFixGuild(CommandSender sender, String playerName) {
+        Player target = Bukkit.getPlayerExact(playerName);
+        if (target == null) {
+            sender.sendMessage("Ten gracz nie jest online.");
+            return;
+        }
+        User user = plugin.getUserManager().loadOrGetUser(target);
+        if (user == null) {
+            sender.sendMessage("Nie udało się załadować danych gracza.");
+            return;
+        }
+
+        user.setGuildTag(null);
+        user.setGuildRole(null);
+
+        sender.sendMessage("Wyczyszczono dane gildii dla " + target.getName() + ".");
+        target.sendMessage(ChatColor.RED + "Twoje przypisanie do gildii zostało zresetowane przez administrację.");
     }
 
     // /ga usun <tag>

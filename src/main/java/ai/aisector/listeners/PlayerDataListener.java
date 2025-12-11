@@ -2,6 +2,7 @@ package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
+import ai.aisector.guilds.Guild;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
@@ -54,7 +55,10 @@ public class PlayerDataListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerConfigure(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-
+        Guild guild = plugin.getGuildManager().getGuildByMember(player.getUniqueId());
+        if (guild != null) {
+            plugin.getGuildManager().reloadGuild(guild.getTag());
+        }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
 
@@ -101,6 +105,7 @@ public class PlayerDataListener implements Listener {
                             } else {
                                 sendWelcomePackage(player);
                             }
+
                         }
                     }, 2L);
                     return;
