@@ -11,6 +11,11 @@ import ai.aisector.drop.StoneDropListener;
 import ai.aisector.generators.GeneratorManager;
 import ai.aisector.guilds.GuildManager;
 import ai.aisector.listeners.*;
+import ai.aisector.redis.packet.JsonPacketCodec;
+import ai.aisector.redis.packet.PacketBus;
+import ai.aisector.redis.packet.PacketRegistry;
+import ai.aisector.redis.packet.RedisPacketPublisher;
+import ai.aisector.redis.packet.impl.TpaInitiateWarmupPacket;
 import ai.aisector.sectors.player.*;
 import ai.aisector.sectors.BorderInitListener;
 import ai.aisector.sectors.SectorManager;
@@ -23,6 +28,9 @@ import ai.aisector.user.UserManager;
 import ai.aisector.scoreboard.ScoreboardManager;
 
 import ai.aisector.utils.GlobalChatPlugin;
+import com.google.gson.JsonObject;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import redis.clients.jedis.Jedis;
@@ -46,6 +54,7 @@ public class SectorPlugin extends JavaPlugin {
     private UserManager userManager;
     private ScoreboardManager scoreboardManager;
     private GuildManager guildManager;
+    private RedisPacketPublisher packetPublisher;
 
 
     private MySQLManager mySQLManager; // <-- DODAJ POLE
@@ -161,8 +170,9 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new BackupGuiListener(mongoDBManager, redisManager), this);
         getServer().getPluginManager().registerEvents(new SetHomeGuiListener(mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new HomeGuiListener(mongoDBManager, sectorManager, this), this);
-        getServer().getPluginManager().registerEvents(
-                new ai.aisector.guilds.GuildPvpListener(this), this);
+        getServer().getPluginManager().registerEvents(new ai.aisector.guilds.GuildPvpListener(this), this);
+        this.packetPublisher = new RedisPacketPublisher(redisManager);
+        registerPackets();
 
 
 
@@ -236,6 +246,24 @@ public class SectorPlugin extends JavaPlugin {
             this.publisherTask = new OnlinePlayersPublisherTask(redisManager, thisSectorName).runTaskTimer(this, 0L, 100L);
             getLogger().info("Uruchomiono raportowanie graczy dla sektora: " + thisSectorName);
         }
+    }
+    private void registerPackets() {
+        PacketRegistry.register(1, new JsonPacketCodec<>(TpaInitiateWarmupPacket.class));
+
+        PacketBus.register(1, (TpaInitiateWarmupPacket p) -> {
+            Player requester = Bukkit.getPlayer(p.requesterName);
+            if (requester == null) return;
+
+            JsonObject targetLocation = new JsonObject();
+            targetLocation.addProperty("world", p.world);
+            targetLocation.addProperty("x", p.x);
+            targetLocation.addProperty("y", p.y);
+            targetLocation.addProperty("z", p.z);
+            targetLocation.addProperty("yaw", p.yaw);
+            targetLocation.addProperty("pitch", p.pitch);
+
+            new ai.aisector.task.TeleportWarmupTask(requester, targetLocation, p.targetServerName, this).start();
+        });
     }
 
     @Override

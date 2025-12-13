@@ -1,6 +1,7 @@
 package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
+import ai.aisector.redis.packet.*;
 import ai.aisector.task.LocalTeleportWarmupTask;
 import ai.aisector.task.TeleportWarmupTask;
 import ai.aisector.sectors.SectorManager;
@@ -29,10 +30,24 @@ public class CommandResponseListener extends JedisPubSub {
         this.sectorManager = sectorManager;
         this.borderManager = borderManager;
     }
+    private void handlePacketMessage(String message) {
+        PacketEnvelope env = gson.fromJson(message, PacketEnvelope.class);
+        PacketCodec codec = PacketRegistry.get(env.id);
+        if (codec == null) {
+            plugin.getLogger().warning("Nieznany packetId=" + env.id);
+            return;
+        }
+        Packet packet = (Packet) codec.decode(env.payload);
+        PacketBus.dispatch(packet);
+    }
 
     @Override
     public void onMessage(String channel, String message) {
         Bukkit.getScheduler().runTask(plugin, () -> {
+            if (channel.equals("aisector:packet")) {
+                handlePacketMessage(message);
+                return;
+            }
             if (channel.equals("aisector:alert")) {
                 Bukkit.broadcast(Component.text(message));
                 return;
@@ -127,6 +142,7 @@ public class CommandResponseListener extends JedisPubSub {
                     world.setTime(timeToSet);
                 }
             }
+
         });
     }
 }
