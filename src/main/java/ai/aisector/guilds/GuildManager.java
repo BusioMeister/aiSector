@@ -58,6 +58,24 @@ public class GuildManager {
         }
         return null;
     }
+    public Guild getGuildCached(String tag) {
+        return getGuild(tag); // alias - czytelność
+    }
+
+    public java.util.concurrent.CompletableFuture<Guild> reloadGuildAsync(String tag) {
+        if (tag == null) return java.util.concurrent.CompletableFuture.completedFuture(null);
+
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            Document doc = col().find(Filters.eq("tag", tag)).first();
+            if (doc == null) {
+                guildsByTag.remove(tag.toLowerCase());
+                return null;
+            }
+            Guild guild = fromDocument(doc);
+            guildsByTag.put(tag.toLowerCase(), guild);
+            return guild;
+        });
+    }
 
     public boolean exists(String tag) {
         return getGuild(tag) != null;

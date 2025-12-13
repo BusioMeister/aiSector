@@ -145,7 +145,7 @@ public class ScoreboardManager {
             return;
         }
 
-        User user = userManager.loadOrGetUser(player);
+        User user = userManager.getUser(player.getUniqueId());
         if (user == null) {
             Team t = board.getTeam("loading");
             if (t == null) {

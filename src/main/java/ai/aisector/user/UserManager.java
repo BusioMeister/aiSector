@@ -69,6 +69,12 @@ public class UserManager {
         loadUser(player);
         return onlineUsers.get(player.getUniqueId());
     }
+    // cache-only: nie dotyka Mongo
+    public User getUser(UUID uuid) {
+        if (uuid == null) return null;
+        return (User) onlineUsers.get(uuid);
+    }
+
 
 
     public void loadUser(Player player) {

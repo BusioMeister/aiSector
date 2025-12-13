@@ -99,7 +99,7 @@ public class CommandResponseListener extends JedisPubSub {
                     JsonObject targetLocation = data.getAsJsonObject("targetLocation");
                     String targetServerName = data.get("targetServerName").getAsString();
 
-                    new TeleportWarmupTask(requester, targetLocation, targetServerName, plugin).runTaskTimer(plugin, 0L, 20L);
+                    new TeleportWarmupTask(requester, targetLocation, targetServerName, plugin).start();
                 }
             } else if (channel.equals("aisector:tp_execute_local_tpa")) {
                 Player playerToTeleport = Bukkit.getPlayer(data.get("playerToTeleportName").getAsString());
