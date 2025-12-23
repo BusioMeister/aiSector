@@ -15,6 +15,9 @@ import ai.aisector.redis.packet.JsonPacketCodec;
 import ai.aisector.redis.packet.PacketBus;
 import ai.aisector.redis.packet.PacketRegistry;
 import ai.aisector.redis.packet.RedisPacketPublisher;
+import ai.aisector.redis.packet.impl.AlertPacket;
+import ai.aisector.redis.packet.impl.LocalTpaTeleportPacket;
+import ai.aisector.redis.packet.impl.SendMessagePacket;
 import ai.aisector.redis.packet.impl.TpaInitiateWarmupPacket;
 import ai.aisector.sectors.player.*;
 import ai.aisector.sectors.BorderInitListener;
@@ -23,13 +26,17 @@ import ai.aisector.sectors.SectorStatsPublisher;
 import ai.aisector.sectors.WorldBorderManager;
 import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.task.ActionBarTask;
+import ai.aisector.task.LocalTeleportWarmupTask;
 import ai.aisector.task.OnlinePlayersPublisherTask;
 import ai.aisector.user.UserManager;
 import ai.aisector.scoreboard.ScoreboardManager;
 
 import ai.aisector.utils.GlobalChatPlugin;
 import com.google.gson.JsonObject;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -193,18 +200,15 @@ public class SectorPlugin extends JavaPlugin {
         new Thread(() -> {
             try (Jedis jedis = redisManager.getJedis()) {
                 jedis.subscribe(new CommandResponseListener(this, sectorManager, worldBorderManager),
+                        "aisector:packet",
                         "aisector:tp_execute_local",
-                        "aisector:send_message",
-                        "aisector:alert",
-                        "aisector:tpa_initiate_warmup",
-                        "aisector:tp_execute_local_tpa",
                         "aisector:global_weather_change",
                         "aisector:global_time_change",
                         "aisector:get_location_for_tp",
                         "aisector:get_location_for_admin_tp",
                         "aisector:save_player_data",
                         "player:force_sector_spawn:"
-                );
+                        );
             }
         }, "Redis-Command-Listener-Thread").start();
         // Listener dla listy graczy
@@ -264,6 +268,39 @@ public class SectorPlugin extends JavaPlugin {
 
             new ai.aisector.task.TeleportWarmupTask(requester, targetLocation, p.targetServerName, this).start();
         });
+        PacketRegistry.register(2, new JsonPacketCodec<>(SendMessagePacket.class));
+        PacketBus.register(2, (SendMessagePacket p) -> {
+            Player player = Bukkit.getPlayer(p.playerName);
+            if (player != null)
+                player.sendMessage(LegacyComponentSerializer.legacySection().deserialize(p.message));
+
+
+        });
+
+        PacketRegistry.register(3, new JsonPacketCodec<>(AlertPacket.class));
+        PacketBus.register(3, (AlertPacket p) -> {
+            Bukkit.broadcast(net.kyori.adventure.text.Component.text(p.message));
+        });
+        PacketRegistry.register(4, new JsonPacketCodec<>(LocalTpaTeleportPacket.class));
+        PacketBus.register(4, (LocalTpaTeleportPacket p) -> {
+
+            Player playerToTeleport = Bukkit.getPlayer(p.playerToTeleportName);
+            if (playerToTeleport == null) return;
+
+            World world = Bukkit.getWorld(p.world);
+            if (world == null) return;
+
+            Location targetLocation = new Location(world, p.x, p.y, p.z, p.yaw, p.pitch);
+
+            new LocalTeleportWarmupTask(
+                    playerToTeleport,
+                    targetLocation,
+                    (p.message != null && !p.message.isEmpty()) ? p.message : "§aZostałeś przeteleportowany.",
+                    this.sectorManager,
+                    this.worldBorderManager
+            ).runTaskTimer(this, 0L, 20L);
+        });
+
     }
 
     @Override

@@ -48,10 +48,6 @@ public class CommandResponseListener extends JedisPubSub {
                 handlePacketMessage(message);
                 return;
             }
-            if (channel.equals("aisector:alert")) {
-                Bukkit.broadcast(Component.text(message));
-                return;
-            }
 
             JsonObject data = gson.fromJson(message, JsonObject.class);
 
@@ -67,10 +63,11 @@ public class CommandResponseListener extends JedisPubSub {
                 }
                 return; // Ważne, aby zakończyć działanie po obsłużeniu tego kanału
             }
-            if (channel.equals("aisector:send_message")) {
-                Player player = Bukkit.getPlayer(data.get("playerName").getAsString());
-                if (player != null) player.sendMessage(data.get("message").getAsString());
-            } else if (channel.equals("aisector:tp_execute_local")) {
+//            if (channel.equals("aisector:send_message")) {
+//                Player player = Bukkit.getPlayer(data.get("playerName").getAsString());
+//                if (player != null) player.sendMessage(data.get("message").getAsString());
+//            }
+            if (channel.equals("aisector:tp_execute_local")) {
                 Player admin = Bukkit.getPlayer(data.get("playerName").getAsString());
                 Player target = Bukkit.getPlayer(data.get("targetName").getAsString());
                 if (admin != null && target != null) {
@@ -108,24 +105,8 @@ public class CommandResponseListener extends JedisPubSub {
                 }
                 // --- KONIEC NOWEGO KODU DLA /TP ---
 
-            } else if (channel.equals("aisector:tpa_initiate_warmup")) {
-                Player requester = Bukkit.getPlayer(data.get("requesterName").getAsString());
-                if (requester != null) {
-                    JsonObject targetLocation = data.getAsJsonObject("targetLocation");
-                    String targetServerName = data.get("targetServerName").getAsString();
 
-                    new TeleportWarmupTask(requester, targetLocation, targetServerName, plugin).start();
-                }
-            } else if (channel.equals("aisector:tp_execute_local_tpa")) {
-                Player playerToTeleport = Bukkit.getPlayer(data.get("playerToTeleportName").getAsString());
-                if (playerToTeleport != null) {
-                    JsonObject locData = data.getAsJsonObject("targetLocation");
-                    World world = Bukkit.getWorld(locData.get("world").getAsString());
-                    if (world != null) {
-                        Location targetLocation = new Location(world, locData.get("x").getAsDouble(), locData.get("y").getAsDouble(), locData.get("z").getAsDouble(), locData.get("yaw").getAsFloat(), locData.get("pitch").getAsFloat());
-                        new LocalTeleportWarmupTask(playerToTeleport, targetLocation, "§aZostałeś przeteleportowany.", sectorManager, borderManager).runTaskTimer(plugin, 0L, 20L);
-                    }
-                }
+
             } else if (channel.equals("aisector:global_weather_change")) {
                 String weatherType = data.get("weatherType").getAsString();
                 for (World world : Bukkit.getWorlds()) {
