@@ -69,7 +69,7 @@ public class PlayerListener implements Listener {
         if (previousSectorId != null && !previousSectorId.equals(newSectorId)) {
             if (newSectorId == null || newSectorId.isEmpty()) {
                 player.teleport(from);
-                player.sendMessage("moprzejdalej ten obszar nie naledo sektora.");
+                player.sendMessage("§cGRANICA SEKTORA!.");
                 return;
             }
             removeBossBar(player);
