@@ -850,10 +850,13 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        user.setGuildTag(tag);
-        user.setGuildRole("OWNER");
+        if (user != null) {
+            user.setGuildTag(guild.getTag());
+            user.setGuildRole("OWNER");
+        }
+
         String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
-                " §estworzył gildię §f[" + tag + "] §e" + name + ".";
+                " §estworzył§x gildie §f[" + tag + "] §e" + name + ".";
         sendGlobal(msg);
 
         p.sendMessage(ChatColor.GREEN + "Stworzyłeś gildię [" + tag + "] " + name + ".");
@@ -896,13 +899,17 @@ public class GuildCommand implements CommandExecutor {
         guild.getMembers().add(uuid);
         guildManager.saveGuild(guild);
 
-        user.setGuildTag(tag);
-        user.setGuildRole("MEMBER");
+// USTAWIAMY DANE UŻYTKOWNIKA
+        if (user != null) {
+            user.setGuildTag(guild.getTag());
+            user.setGuildRole("MEMBER");
+        }
 
-        p.sendMessage(ChatColor.GREEN + "Dołączyłeś do gildii [" + tag + "] " + guild.getName() + ".");
+        p.sendMessage(ChatColor.GREEN + "Dołączyłeś do gildii [" + guild.getTag() + "] " + guild.getName() + ".");
         String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
-                " §edołączył do gildii §f[" + tag + "] §e" + guild.getName() + ".";
+                " §edołączył do gildii §f[" + guild.getTag() + "] §e" + guild.getName() + ".";
         sendGlobal(msg);
+
 
     }
 

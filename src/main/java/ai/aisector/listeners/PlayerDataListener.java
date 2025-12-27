@@ -97,6 +97,8 @@ public class PlayerDataListener implements Listener {
                     Bukkit.getScheduler().runTaskLater(plugin, () -> {
                         if (player.isOnline()) {
                             player.teleport(finalTargetLocation);
+                            plugin.getGuildTagManager().updateTagsFor(player);
+
                             if (finalHeld != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
 
                             // Jeśli gracz się respawnuje, pokaż tytuł śmierci, w przeciwnym wypadku normalne powitanie
@@ -119,10 +121,13 @@ public class PlayerDataListener implements Listener {
                     Bukkit.getScheduler().runTaskLater(plugin, () -> {
                         if (player.isOnline()) {
                             Sector targetSector = sectorManager.getSectorByName(targetSectorName);
+                            plugin.getGuildTagManager().updateTagsFor(player);
+
                             if (targetSector != null) {
                                 Location sectorSpawn = sectorManager.getSectorSpawnLocation(targetSector);
                                 if (sectorSpawn != null) {
                                     player.teleport(sectorSpawn);
+
                                     if (finalHeld != null)
                                         new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
                                     sendWelcomePackage(player);

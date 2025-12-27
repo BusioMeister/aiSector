@@ -10,6 +10,7 @@ import ai.aisector.drop.DropGuiListener;
 import ai.aisector.drop.StoneDropListener;
 import ai.aisector.generators.GeneratorManager;
 import ai.aisector.guilds.GuildManager;
+import ai.aisector.guilds.GuildTagManager;
 import ai.aisector.listeners.*;
 import ai.aisector.redis.packet.JsonPacketCodec;
 import ai.aisector.redis.packet.PacketBus;
@@ -34,6 +35,7 @@ import ai.aisector.scoreboard.ScoreboardManager;
 import ai.aisector.utils.GlobalChatPlugin;
 import com.google.gson.JsonObject;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.md_5.bungee.api.score.Scoreboard;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -68,6 +70,7 @@ public class SectorPlugin extends JavaPlugin {
     private MiningLevelManager miningLevelManager;
     private ai.aisector.generators.GeneratorManager generatorManager;
     private CobbleXManager cobbleXManager;
+    private GuildTagManager guildTagManager;
 
 
 
@@ -97,6 +100,7 @@ public class SectorPlugin extends JavaPlugin {
         vanishManager = new VanishManager(this);
         miningLevelManager = new MiningLevelManager(this); // Przeniesiono tutaj!
         guildManager = new GuildManager(this);
+        guildTagManager = new GuildTagManager(this);
 
 
         // Rejestracja komend
@@ -320,6 +324,7 @@ public class SectorPlugin extends JavaPlugin {
         }
     }
 
+
     // Gettery
     public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
     public RedisManager getRedisManager() { return redisManager; }
@@ -342,5 +347,5 @@ public class SectorPlugin extends JavaPlugin {
     public GuildManager getGuildManager() {
         return guildManager;
     }
-
+    public GuildTagManager getGuildTagManager() {return guildTagManager;}
 }
