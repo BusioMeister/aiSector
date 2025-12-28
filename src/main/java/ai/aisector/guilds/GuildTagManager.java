@@ -50,9 +50,6 @@ public class GuildTagManager {
 
     // Główna metoda – wołamy ją dla WIDZA
     public void updateTagsFor(Player viewer) {
-        Bukkit.getLogger().info("[GuildTagManager] updateTagsFor " + viewer.getName());
-        viewer.sendMessage("§e[DEBUG] updateTagsFor");
-
         User viewerUser = userManager.loadOrGetUser(viewer);
 
         List<String> playerData = new ArrayList<>();
@@ -74,8 +71,6 @@ public class GuildTagManager {
         GuildTagUpdatePacket packet = new GuildTagUpdatePacket(viewer.getUniqueId().toString(), playersArray);
 
         packetPublisher.publish("aisector:packet", packet);
-
-        viewer.sendMessage("§e[DEBUG] Wysyłanie pakietu z " + playersArray.length + " tagami");
     }
     public void refreshAllOnline() {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
