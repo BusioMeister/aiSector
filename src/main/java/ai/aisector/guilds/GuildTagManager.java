@@ -1,12 +1,21 @@
 package ai.aisector.guilds;
 
 import ai.aisector.SectorPlugin;
+import ai.aisector.database.RedisManager;
+import ai.aisector.network.packet.GuildTagUpdatePacket;
+import ai.aisector.redis.packet.PacketBus;
+import ai.aisector.redis.packet.PacketEnvelope;
+import ai.aisector.redis.packet.RedisPacketPublisher;
 import ai.aisector.user.User;
 import ai.aisector.user.UserManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 public class GuildTagManager {
 
@@ -15,14 +24,15 @@ public class GuildTagManager {
     private final Scoreboard scoreboard;
     private final Team greenTeam;
     private final Team redTeam;
+    private final RedisPacketPublisher packetPublisher;
 
-    public GuildTagManager(SectorPlugin plugin) {
+    public GuildTagManager(SectorPlugin plugin, UserManager userManager, GuildManager guildManager, RedisManager redisManager) {
         Bukkit.getLogger().info("[GuildTagManager] init");
 
         this.plugin = plugin;
         this.userManager = plugin.getUserManager();
         this.scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
-
+        this.packetPublisher = new RedisPacketPublisher(redisManager);  // <- DODAJ TO
         this.greenTeam = getOrCreateTeam("guild_green");
         this.greenTeam.setColor(org.bukkit.ChatColor.GREEN);
 
@@ -44,38 +54,61 @@ public class GuildTagManager {
         viewer.sendMessage("§e[DEBUG] updateTagsFor");
 
         User viewerUser = userManager.loadOrGetUser(viewer);
-        viewer.sendMessage("§e[DEBUG] viewer tag=" + (viewerUser != null ? viewerUser.getGuildTag() : "null"));
-        scoreboard.getEntries().forEach(entry -> {
-            greenTeam.removeEntry(entry);
-            redTeam.removeEntry(entry);
-        });
+
+        List<String> playerData = new ArrayList<>();
 
         for (Player target : Bukkit.getOnlinePlayers()) {
             User targetUser = userManager.loadOrGetUser(target);
-            viewer.sendMessage("§e[DEBUG] target " + target.getName() + " tag=" +
-                    (targetUser != null ? targetUser.getGuildTag() : "null"));
+
             if (targetUser == null || !targetUser.hasGuild()) {
                 continue;
             }
 
-            String entry = target.getName();
-            String tag = targetUser.getGuildTag(); // np. "ABC"
+            String color = isSameGuild(viewerUser, targetUser) ? "GREEN" : "RED";
+            String data = target.getUniqueId().toString() + ":" + targetUser.getGuildTag() + ":" + color;
+            playerData.add(data);
+        }
 
-            // ustawiamy prefix, ten sam TAG, różne kolory teamu
-            String coloredTag;
-            if (isSameGuild(viewerUser, targetUser)) {
-                coloredTag = "§a[" + tag + "] ";
-                greenTeam.setPrefix(coloredTag);
-                greenTeam.addEntry(entry);
-            } else {
-                coloredTag = "§c[" + tag + "] ";
-                redTeam.setPrefix(coloredTag);
-                redTeam.addEntry(entry);
+        // WYSYŁAJ PAKIET
+        String[] playersArray = playerData.toArray(new String[0]);
+        GuildTagUpdatePacket packet = new GuildTagUpdatePacket(viewer.getUniqueId().toString(), playersArray);
+
+        packetPublisher.publish("aisector:packet", packet);
+
+        viewer.sendMessage("§e[DEBUG] Wysyłanie pakietu z " + playersArray.length + " tagami");
+    }
+
+    public void applyGuildTags(Player viewer, String[] playerData) {
+        // czyść stare teamy
+        for (Team team : scoreboard.getTeams()) {
+            team.unregister();
+        }
+
+        // dla każdego gracza stwórz team i dodaj
+        for (String data : playerData) {
+            String[] parts = data.split(":");
+            if (parts.length != 3) continue;
+
+            String targetUuid = parts[0];
+            String tag = parts[1];
+            String color = parts[2];
+
+            Player target = Bukkit.getPlayer(UUID.fromString(targetUuid));
+            if (target == null) continue;
+
+            String teamName = "g_" + tag;
+            Team team = scoreboard.getTeam(teamName);
+            if (team == null) {
+                team = scoreboard.registerNewTeam(teamName);
+                String coloredTag = "GREEN".equals(color) ? "§a[" + tag + "] " : "§c[" + tag + "] ";
+                team.setPrefix(coloredTag);
             }
+            team.addEntry(target.getName());
         }
 
         viewer.setScoreboard(scoreboard);
     }
+
 
     private boolean isSameGuild(User a, User b) {
         if (a == null || b == null) return false;

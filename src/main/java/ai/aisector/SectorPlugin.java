@@ -12,6 +12,7 @@ import ai.aisector.generators.GeneratorManager;
 import ai.aisector.guilds.GuildManager;
 import ai.aisector.guilds.GuildTagManager;
 import ai.aisector.listeners.*;
+import ai.aisector.network.packet.GuildTagUpdatePacket;
 import ai.aisector.redis.packet.JsonPacketCodec;
 import ai.aisector.redis.packet.PacketBus;
 import ai.aisector.redis.packet.PacketRegistry;
@@ -71,6 +72,7 @@ public class SectorPlugin extends JavaPlugin {
     private ai.aisector.generators.GeneratorManager generatorManager;
     private CobbleXManager cobbleXManager;
     private GuildTagManager guildTagManager;
+    private PacketBus packetBus;
 
 
 
@@ -100,9 +102,17 @@ public class SectorPlugin extends JavaPlugin {
         vanishManager = new VanishManager(this);
         miningLevelManager = new MiningLevelManager(this); // Przeniesiono tutaj!
         guildManager = new GuildManager(this);
-        guildTagManager = new GuildTagManager(this);
+        guildTagManager = new GuildTagManager(this, userManager, guildManager, redisManager);
+        PacketRegistry.register(GuildTagUpdatePacket.ID, new JsonPacketCodec<>(GuildTagUpdatePacket.class));
 
-
+// 2) listener, który odpali applyGuildTags
+        PacketBus.register(GuildTagUpdatePacket.ID, packet -> {
+            GuildTagUpdatePacket p = (GuildTagUpdatePacket) packet;
+            Player viewer = Bukkit.getPlayer(UUID.fromString(p.viewerUuid));
+            if (viewer != null) {
+                guildTagManager.applyGuildTags(viewer, p.playerData);
+            }
+        });
         // Rejestracja komend
         getCommand("enderchest").setExecutor(new EnderchestCommand());
         getCommand("ci").setExecutor(new ClearInventoryCommand());
@@ -166,6 +176,7 @@ public class SectorPlugin extends JavaPlugin {
         if(thisSectorName != null && !thisSectorName.isEmpty()){
             new SectorStatsPublisher(this, redisManager, thisSectorName).runTaskTimerAsynchronously(this, 100L, 100L); // co 5 sekund
         }
+
         // Rejestracja listenerów eventów Bukkit
         getServer().getPluginManager().registerEvents(new CobbleXListener(this, cobbleXManager), this);
 
@@ -202,9 +213,15 @@ public class SectorPlugin extends JavaPlugin {
     private void startRedisListeners() {
         // Listener dla komend i odpowiedzi
         new Thread(() -> {
+            String thisSectorName = getConfig().getString("this-sector-name");
+            if (thisSectorName == null || thisSectorName.isEmpty()) {
+                getLogger().severe("Brak this-sector-name w config.yml!");
+                return;
+            }
             try (Jedis jedis = redisManager.getJedis()) {
                 jedis.subscribe(new CommandResponseListener(this, sectorManager, worldBorderManager),
                         "aisector:packet",
+                        "aisector:packet:" + thisSectorName, // <-- TO MUSI BYĆ
                         "aisector:tp_execute_local",
                         "aisector:global_weather_change",
                         "aisector:global_time_change",

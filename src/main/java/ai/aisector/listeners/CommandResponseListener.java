@@ -44,7 +44,9 @@ public class CommandResponseListener extends JedisPubSub {
     @Override
     public void onMessage(String channel, String message) {
         Bukkit.getScheduler().runTask(plugin, () -> {
-            if (channel.equals("aisector:packet")) {
+            if (channel.equals("aisector:packet") || channel.startsWith("aisector:packet:")) {
+                plugin.getLogger().info("REDIS-IN channel=" + channel + " len=" + message.length());
+
                 handlePacketMessage(message);
                 return;
             }
