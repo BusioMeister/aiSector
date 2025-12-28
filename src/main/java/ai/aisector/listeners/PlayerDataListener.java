@@ -69,7 +69,10 @@ public class PlayerDataListener implements Listener {
             }
 
             applyPersistentData(player, user);
-
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!player.isOnline()) return;
+                plugin.getGuildTagManager().updateTagsFor(player);
+            }, 40L); // np. 2 sekundy po join
             try (Jedis jedis = redisManager.getJedis()) {
                 // --- POCZĄTEK ZMIANY ---
                 // Sprawdzamy, czy gracz dołącza w wyniku respawnu
@@ -98,7 +101,9 @@ public class PlayerDataListener implements Listener {
                         if (player.isOnline()) {
                             player.teleport(finalTargetLocation);
                             plugin.getGuildTagManager().updateTagsFor(player);
-
+                            for (Player viewer : Bukkit.getOnlinePlayers()) {
+                                plugin.getGuildTagManager().updateTagsFor(viewer);
+                            }
                             if (finalHeld != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
 
                             // Jeśli gracz się respawnuje, pokaż tytuł śmierci, w przeciwnym wypadku normalne powitanie
@@ -122,7 +127,9 @@ public class PlayerDataListener implements Listener {
                         if (player.isOnline()) {
                             Sector targetSector = sectorManager.getSectorByName(targetSectorName);
                             plugin.getGuildTagManager().updateTagsFor(player);
-
+                            for (Player viewer : Bukkit.getOnlinePlayers()) {
+                                plugin.getGuildTagManager().updateTagsFor(viewer);
+                            }
                             if (targetSector != null) {
                                 Location sectorSpawn = sectorManager.getSectorSpawnLocation(targetSector);
                                 if (sectorSpawn != null) {

@@ -345,12 +345,16 @@ public class GuildCommand implements CommandExecutor {
             guild.setDeputy(null);
             guildManager.saveGuild(guild);
             guildManager.reloadGuild(tag);
+            plugin.getGuildTagManager().refreshAllOnline();
+
             p.sendMessage(ChatColor.YELLOW + "Zdjąłeś rangę zastępcy z " + target.getName() + ".");
             target.sendMessage(ChatColor.RED + "Straciłeś rangę zastępcy w gildii " + tag + ".");
         } else {
             guild.setDeputy(uuid);
             guildManager.saveGuild(guild);
             guildManager.reloadGuild(tag);
+            plugin.getGuildTagManager().refreshAllOnline();
+
             p.sendMessage(ChatColor.GREEN + "Nadałeś rangę zastępcy graczowi " + target.getName() + ".");
             target.sendMessage(ChatColor.GREEN + "Otrzymałeś rangę zastępcy w gildii " + tag + ".");
         }
@@ -399,6 +403,8 @@ public class GuildCommand implements CommandExecutor {
             guild.getMods().remove(uuid);
             guildManager.saveGuild(guild);
             guildManager.reloadGuild(tag);
+            plugin.getGuildTagManager().refreshAllOnline();
+
             if ("MOD".equalsIgnoreCase(targetUser.getGuildRole())) {
                 targetUser.setGuildRole("MEMBER");
             }
@@ -408,6 +414,8 @@ public class GuildCommand implements CommandExecutor {
             guild.getMods().add(uuid);
             guildManager.saveGuild(guild);
             guildManager.reloadGuild(tag);
+            plugin.getGuildTagManager().refreshAllOnline();
+
             targetUser.setGuildRole("MOD");
             p.sendMessage(ChatColor.GREEN + "Nadałeś rangę mistrza graczowi " + target.getName() + ".");
             target.sendMessage(ChatColor.GREEN + "Otrzymałeś rangę mistrza w gildii " + tag + ".");
@@ -465,6 +473,7 @@ public class GuildCommand implements CommandExecutor {
 
         targetUser.setGuildTag(null);
         targetUser.setGuildRole(null);
+        plugin.getGuildTagManager().refreshAllOnline();
 
         p.sendMessage(ChatColor.GREEN + "Wyrzuciłeś gracza " + target.getName() + " z gildii.");
         target.sendMessage(ChatColor.RED + "Zostałeś wyrzucony z gildii " + tag + ".");
@@ -518,6 +527,7 @@ public class GuildCommand implements CommandExecutor {
 
         guildManager.saveGuild(guild);
         guildManager.reloadGuild(tag);
+        plugin.getGuildTagManager().refreshAllOnline();
 
         p.sendMessage(ChatColor.GREEN + "Przekazałeś przywództwo gildii graczowi " + target.getName() + ".");
         target.sendMessage(ChatColor.GREEN + "Zostałeś nowym liderem gildii " + tag + ".");
@@ -554,6 +564,8 @@ public class GuildCommand implements CommandExecutor {
 
         guildManager.saveGuild(guild);
         guildManager.reloadGuild(tag);
+        plugin.getGuildTagManager().refreshAllOnline();
+
 
         p.sendMessage(ChatColor.GREEN + "Ustawiono dom gildii w tym miejscu.");
     }
@@ -566,6 +578,8 @@ public class GuildCommand implements CommandExecutor {
 
         String tag = user.getGuildTag();
         Guild guild = guildManager.reloadGuild(tag); // zawsze najnowsze dane
+        plugin.getGuildTagManager().refreshAllOnline();
+
         if (guild == null) {
             p.sendMessage(ChatColor.RED + "Twoja gildia nie istnieje.");
             return;
@@ -640,6 +654,7 @@ public class GuildCommand implements CommandExecutor {
             guildManager.saveGuild(otherGuild);
             guildManager.reloadGuild(myTag);
             guildManager.reloadGuild(otherTag);
+            plugin.getGuildTagManager().refreshAllOnline();
 
             String msg = "§6[GILDIA] §eSojusz między gildiami §f[" + myTag + "] §ea §f[" + otherTag + "] §ezostał zerwany.";
             sendGlobal(msg);
@@ -710,7 +725,7 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(ChatColor.RED + "Gildia już nie istnieje, dane wyczyszczono.");
             return;
         }
-
+        plugin.getGuildTagManager().refreshAllOnline();
         String msg = "§6[GILDIA] §eGildia §f[" + tag + "] §e" + guild.getName() + " została rozwiązana.";
         sendGlobal(msg);
 
@@ -731,7 +746,7 @@ public class GuildCommand implements CommandExecutor {
         guildManager.deleteGuild(guild);
         user.setGuildTag(null);
         user.setGuildRole(null);
-
+        plugin.getGuildTagManager().refreshAllOnline();
         p.sendMessage(ChatColor.YELLOW + "Rozwiązałeś gildię [" + tag + "] " + guild.getName() + ".");
     }
 
@@ -777,7 +792,7 @@ public class GuildCommand implements CommandExecutor {
 
         guild.getInvitations().add(target.getUniqueId());
         guildManager.saveGuild(guild);
-
+        plugin.getGuildTagManager().refreshAllOnline();
         p.sendMessage(ChatColor.GREEN + "Wysłałeś zaproszenie do gildii [" + tag + "] dla " + target.getName() + ".");
         target.sendMessage(ChatColor.YELLOW + "Otrzymałeś zaproszenie do gildii [" + tag + "] " + guild.getName()
                 + ". Użyj /gildia akceptuj " + tag + " aby dołączyć.");
@@ -809,6 +824,7 @@ public class GuildCommand implements CommandExecutor {
         guild.getInvitations().remove(uuid);
         guild.getMembers().add(uuid);
         guildManager.saveGuild(guild);
+        plugin.getGuildTagManager().refreshAllOnline();
 
         user.setGuildTag(tag);
         user.setGuildRole("MEMBER");
@@ -853,12 +869,13 @@ public class GuildCommand implements CommandExecutor {
         if (user != null) {
             user.setGuildTag(guild.getTag());
             user.setGuildRole("OWNER");
+            plugin.getGuildTagManager().refreshAllOnline();
         }
 
         String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
                 " §estworzył§x gildie §f[" + tag + "] §e" + name + ".";
         sendGlobal(msg);
-
+        plugin.getGuildTagManager().refreshAllOnline();
         p.sendMessage(ChatColor.GREEN + "Stworzyłeś gildię [" + tag + "] " + name + ".");
     }
 
@@ -898,7 +915,7 @@ public class GuildCommand implements CommandExecutor {
         guild.getInvitations().remove(uuid);
         guild.getMembers().add(uuid);
         guildManager.saveGuild(guild);
-
+        plugin.getGuildTagManager().refreshAllOnline();
 // USTAWIAMY DANE UŻYTKOWNIKA
         if (user != null) {
             user.setGuildTag(guild.getTag());
@@ -909,7 +926,7 @@ public class GuildCommand implements CommandExecutor {
         String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
                 " §edołączył do gildii §f[" + guild.getTag() + "] §e" + guild.getName() + ".";
         sendGlobal(msg);
-
+        plugin.getGuildTagManager().refreshAllOnline();
 
     }
 
@@ -940,7 +957,7 @@ public class GuildCommand implements CommandExecutor {
         guild.getMembers().remove(uuid);
         guild.getMods().remove(uuid);
         guildManager.saveGuild(guild);
-
+        plugin.getGuildTagManager().refreshAllOnline();
         user.setGuildTag(null);
         user.setGuildRole(null);
 

@@ -113,6 +113,7 @@ public class SectorPlugin extends JavaPlugin {
                 guildTagManager.applyGuildTags(viewer, p.playerData);
             }
         });
+
         // Rejestracja komend
         getCommand("enderchest").setExecutor(new EnderchestCommand());
         getCommand("ci").setExecutor(new ClearInventoryCommand());

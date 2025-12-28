@@ -31,7 +31,7 @@ public class GuildTagManager {
 
         this.plugin = plugin;
         this.userManager = plugin.getUserManager();
-        this.scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
+        this.scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
         this.packetPublisher = new RedisPacketPublisher(redisManager);  // <- DODAJ TO
         this.greenTeam = getOrCreateTeam("guild_green");
         this.greenTeam.setColor(org.bukkit.ChatColor.GREEN);
@@ -77,12 +77,22 @@ public class GuildTagManager {
 
         viewer.sendMessage("§e[DEBUG] Wysyłanie pakietu z " + playersArray.length + " tagami");
     }
+    public void refreshAllOnline() {
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            updateTagsFor(viewer);
+        }
+    }
+
 
     public void applyGuildTags(Player viewer, String[] playerData) {
         // czyść stare teamy
-        for (Team team : scoreboard.getTeams()) {
-            team.unregister();
+        Scoreboard sb = viewer.getScoreboard();
+        if (sb == null) sb = Bukkit.getScoreboardManager().getMainScoreboard();
+
+        for (Team t : new ArrayList<>(sb.getTeams())) {
+            if (t.getName().startsWith("g_")) t.unregister();
         }
+
 
         // dla każdego gracza stwórz team i dodaj
         for (String data : playerData) {
@@ -97,16 +107,14 @@ public class GuildTagManager {
             if (target == null) continue;
 
             String teamName = "g_" + tag;
-            Team team = scoreboard.getTeam(teamName);
+            Team team = sb.getTeam(teamName);
             if (team == null) {
-                team = scoreboard.registerNewTeam(teamName);
+                team = sb.registerNewTeam(teamName);
                 String coloredTag = "GREEN".equals(color) ? "§a[" + tag + "] " : "§c[" + tag + "] ";
                 team.setPrefix(coloredTag);
             }
             team.addEntry(target.getName());
         }
-
-        viewer.setScoreboard(scoreboard);
     }
 
 
