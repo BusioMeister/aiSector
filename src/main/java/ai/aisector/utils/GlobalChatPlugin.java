@@ -63,10 +63,14 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
         String sectorName = plugin.getConfig().getString("this-sector-name", "Sektor");
 
         // Tworzymy finalny format wiadomości z użyciem prefixu rangi
-        String formattedMessage = "§7[§b" + sectorName  + "§7] " + player.getName() + "§f: " + event.getMessage();
-        // --- KONIEC NOWEJ LOGIKI ---
+        User user = plugin.getUserManager().loadOrGetUser(player);
+        String guildPart = (user != null && user.hasGuild())
+                ? " §7[§a" + user.getGuildTag() + "§7]"
+                : "";
 
+        String formattedMessage = "§7[§b" + sectorName + "§7]" + guildPart + " " + player.getName() + "§f: " + event.getMessage();
         sendToProxy(formattedMessage);
+
     }
     private void sendGuildChatToProxy(Player sender, String content) {
         User user = plugin.getUserManager().loadOrGetUser(sender);
