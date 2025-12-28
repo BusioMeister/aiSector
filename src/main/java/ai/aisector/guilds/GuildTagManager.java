@@ -82,19 +82,44 @@ public class GuildTagManager {
             updateTagsFor(viewer);
         }
     }
+    public void applyLocalTagsNow(Player viewer) {
+        User viewerUser = userManager.loadOrGetUser(viewer);
+        List<String> playerData = new ArrayList<>();
+
+        for (Player target : Bukkit.getOnlinePlayers()) {
+            User targetUser = userManager.loadOrGetUser(target);
+            if (targetUser == null || !targetUser.hasGuild()) continue;
+
+            String color = isSameGuild(viewerUser, targetUser) ? "GREEN" : "RED";
+            playerData.add(target.getUniqueId() + ":" + targetUser.getGuildTag() + ":" + color);
+        }
+
+        applyGuildTags(viewer, playerData.toArray(new String[0]));
+    }
+
 
 
     public void applyGuildTags(Player viewer, String[] playerData) {
-        // czyść stare teamy
         Scoreboard sb = viewer.getScoreboard();
         if (sb == null) sb = Bukkit.getScoreboardManager().getMainScoreboard();
 
+        // 1) Usuń wszystkich graczy z naszych teamów gildii
         for (Team t : new ArrayList<>(sb.getTeams())) {
-            if (t.getName().startsWith("g_")) t.unregister();
+            if (!t.getName().startsWith("g_")) continue;
+
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                t.removeEntry(online.getName());
+            }
         }
 
+        // 2) Usuń puste teamy gildii (opcjonalne, ale czyści nazwy)
+        for (Team t : new ArrayList<>(sb.getTeams())) {
+            if (t.getName().startsWith("g_") && t.getEntries().isEmpty()) {
+                t.unregister();
+            }
+        }
 
-        // dla każdego gracza stwórz team i dodaj
+        // 3) Dodaj aktualne tagi
         for (String data : playerData) {
             String[] parts = data.split(":");
             if (parts.length != 3) continue;
@@ -110,12 +135,14 @@ public class GuildTagManager {
             Team team = sb.getTeam(teamName);
             if (team == null) {
                 team = sb.registerNewTeam(teamName);
-                String coloredTag = "GREEN".equals(color) ? "§a[" + tag + "] " : "§c[" + tag + "] ";
-                team.setPrefix(coloredTag);
             }
+
+            String prefix = "GREEN".equals(color) ? "§a[" + tag + "] " : "§c[" + tag + "] ";
+            team.setPrefix(prefix);
             team.addEntry(target.getName());
         }
     }
+
 
 
     private boolean isSameGuild(User a, User b) {

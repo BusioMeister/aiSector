@@ -957,10 +957,9 @@ public class GuildCommand implements CommandExecutor {
         guild.getMembers().remove(uuid);
         guild.getMods().remove(uuid);
         guildManager.saveGuild(guild);
-        plugin.getGuildTagManager().refreshAllOnline();
         user.setGuildTag(null);
         user.setGuildRole(null);
-
+        plugin.getGuildTagManager().refreshAllOnline();
         p.sendMessage(ChatColor.YELLOW + "Opuściłeś gildię [" + tag + "] " + guild.getName() + ".");
         String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
                 " §eopuścił gildię §f[" + tag + "] §e" + guild.getName() + ".";

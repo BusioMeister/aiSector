@@ -63,6 +63,8 @@ public class PlayerDataListener implements Listener {
             if (!player.isOnline()) return;
 
             User user = userManager.getUser(player);
+            plugin.getGuildTagManager().applyLocalTagsNow(player);
+
             if (user == null) {
                 player.kickPlayer("§cWystąpił krytyczny błąd podczas ładowania Twojego profilu.");
                 return;
@@ -72,7 +74,7 @@ public class PlayerDataListener implements Listener {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!player.isOnline()) return;
                 plugin.getGuildTagManager().updateTagsFor(player);
-            }, 40L); // np. 2 sekundy po join
+            }, 25L);
             try (Jedis jedis = redisManager.getJedis()) {
                 // --- POCZĄTEK ZMIANY ---
                 // Sprawdzamy, czy gracz dołącza w wyniku respawnu
