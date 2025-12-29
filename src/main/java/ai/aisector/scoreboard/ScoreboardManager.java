@@ -64,13 +64,9 @@ public class ScoreboardManager {
         Objective obj = board.registerNewObjective("aisector", "dummy");
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
         obj.setDisplayName(LOGO_CHAR);
-        User user = plugin.getUserManager().loadOrGetUser(player);
-        String guildTag = (user != null && user.hasGuild()) ? user.getGuildTag() : "-";
 
-        Score guildScore = obj.getScore(ChatColor.YELLOW + "Gildia: " + ChatColor.WHITE + guildTag);
-        guildScore.setScore( /* jakaś wolna liczba, np. 6 */ 6 );
-        // odstęp od logo
-        obj.getScore(" ").setScore(7);
+        registerTeamWithEntry(board, obj, "guild", "§7", 6);
+
 
         // tło
         obj.getScore(ChatColor.of("#202020") + "               ").setScore(13);
@@ -184,7 +180,19 @@ public class ScoreboardManager {
             Component value = Component.text(" " + sector, NamedTextColor.WHITE);
             t.prefix(label.append(value));
         }
+        {
+            Team tg = board.getTeam("guild");
+            if (tg == null) registerTeamWithEntry(board, obj, "guild", "§7", 6);
+            tg = board.getTeam("guild");
 
+            String guildTag = "-";
+            if (user != null && user.hasGuild()) guildTag = user.getGuildTag();
+
+            Component label = Component.text(ChatColor.YELLOW + "Gildia: ");
+            Component value = Component.text(ChatColor.WHITE + guildTag);
+            tg.prefix(label.append(value));
+
+        }
         // ZABÓJSTWA (gradient)
         {
             Team t = board.getTeam("kills");

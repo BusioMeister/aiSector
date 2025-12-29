@@ -4,12 +4,10 @@ import ai.aisector.SectorPlugin;
 import ai.aisector.guilds.Guild;
 import ai.aisector.guilds.GuildManager;
 import ai.aisector.user.User;
-import ai.aisector.user.UserManager;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -34,52 +32,41 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
-    // Używamy priorytetu MONITOR, aby mieć pewność, że event nie jest już anulowany
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         if (event.isCancelled()) return;
 
-        // Anulujemy event, aby przejąć pełną kontrolę nad formatowaniem i wysyłką
         event.setCancelled(true);
 
         Player player = event.getPlayer();
         String raw = event.getMessage();
 
         if (raw.startsWith("!!")) {
-            event.setCancelled(true);
             String content = raw.substring(2).trim();
             sendAllyChatToProxy(player, content);
             return;
         }
+
         if (raw.startsWith("!")) {
-            event.setCancelled(true);
             String content = raw.substring(1).trim();
             sendGuildChatToProxy(player, content);
             return;
         }
 
-
-
+        // GLOBAL (per-odbiorca format na serwerach docelowych)
         String sectorName = plugin.getConfig().getString("this-sector-name", "Sektor");
-
-        // Tworzymy finalny format wiadomości z użyciem prefixu rangi
-        User user = plugin.getUserManager().loadOrGetUser(player);
-        String guildPart = (user != null && user.hasGuild())
-                ? " §7[§a" + user.getGuildTag() + "§7]"
-                : "";
-
-        String formattedMessage = "§7[§b" + sectorName + "§7]" + guildPart + " " + player.getName() + "§f: " + event.getMessage();
-        sendToProxy(formattedMessage);
-
+        String payload = "[GLOBAL]" + sectorName + "|" + player.getName() + "|" + player.getUniqueId() + "|" + raw;
+        sendToProxy(payload);
     }
+
     private void sendGuildChatToProxy(Player sender, String content) {
         User user = plugin.getUserManager().loadOrGetUser(sender);
         if (user == null || !user.hasGuild()) {
             sender.sendMessage("§cNie jesteś w gildii.");
             return;
         }
-        String tag = user.getGuildTag();
 
+        String tag = user.getGuildTag();
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
         out.writeUTF("[GCHAT]" + tag + "|" + sender.getName() + "|" + content);
         sender.sendPluginMessage(plugin, CHANNEL, out.toByteArray());
@@ -91,77 +78,18 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
             sender.sendMessage("§cNie jesteś w gildii.");
             return;
         }
-        String tag = user.getGuildTag();
 
+        String tag = user.getGuildTag();
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
         out.writeUTF("[ALLYCHAT]" + tag + "|" + sender.getName() + "|" + content);
         sender.sendPluginMessage(plugin, CHANNEL, out.toByteArray());
     }
 
-
-    private void sendGuildChat(Player sender, String content) {
-        GuildManager gm = plugin.getGuildManager();
-        UserManager um = plugin.getUserManager();
-
-        User user = um.loadOrGetUser(sender);
-        if (user == null || !user.hasGuild()) {
-            sender.sendMessage("§cNie jesteś w gildii.");
-            return;
-        }
-
-        Guild guild = gm.getGuild(user.getGuildTag());
-        if (guild == null) {
-            sender.sendMessage("§cTwoja gildia nie istnieje.");
-            return;
-        }
-
-        String formatted = "§6[G] §f[" + guild.getTag() + "] §e" + sender.getName() + "§7: §f" + content;
-
-        for (UUID memberId : guild.getMembers()) {
-            Player p = Bukkit.getPlayer(memberId);
-            if (p != null) p.sendMessage(formatted);
-        }
-    }
-
-    private void sendAllyChat(Player sender, String content) {
-        GuildManager gm = plugin.getGuildManager();
-        UserManager um = plugin.getUserManager();
-
-        User user = um.loadOrGetUser(sender);
-        if (user == null || !user.hasGuild()) {
-            sender.sendMessage("§cNie jesteś w gildii.");
-            return;
-        }
-
-        Guild guild = gm.getGuild(user.getGuildTag());
-        if (guild == null) {
-            sender.sendMessage("§cTwoja gildia nie istnieje.");
-            return;
-        }
-
-        String formatted = "§d[ALLY] §f[" + guild.getTag() + "] §e" + sender.getName() + "§7: §f" + content;
-
-        // do własnej gildii
-        for (UUID memberId : guild.getMembers()) {
-            Player p = Bukkit.getPlayer(memberId);
-            if (p != null) p.sendMessage(formatted);
-        }
-        // do wszystkich sojuszy
-        for (String allyTag : guild.getAlliedGuilds()) {
-            Guild ally = gm.getGuild(allyTag);
-            if (ally == null) continue;
-            for (UUID memberId : ally.getMembers()) {
-                Player p = Bukkit.getPlayer(memberId);
-                if (p != null) p.sendMessage(formatted);
-            }
-        }
-    }
-
-
     private void sendToProxy(String message) {
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
         out.writeUTF(message);
 
+        // plugin message musi wyjść "od gracza"
         Player sender = Bukkit.getOnlinePlayers().stream().findFirst().orElse(null);
         if (sender != null) {
             sender.sendPluginMessage(plugin, CHANNEL, out.toByteArray());
@@ -171,51 +99,92 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
         if (!channel.equals(CHANNEL)) return;
-
-        // Mogą przychodzić też inne pakiety na tym kanale – zabezpieczamy się
-        if (message == null || message.length < 2) {
-            return;
-        }
+        if (message == null || message.length < 2) return;
 
         ByteArrayDataInput in = ByteStreams.newDataInput(message);
         final String msg;
         try {
             msg = in.readUTF();
         } catch (Exception e) {
-            // To nie jest pakiet w formacie writeUTF – ignorujemy
             return;
         }
 
-        // PRYWATNY CZAT GILDYJNY
         if (msg.startsWith("[GCHAT]")) {
-            plugin.getLogger().info("[GlobalChatPlugin] recv from "
-                    + (player != null ? player.getName() : "proxy")
-                    + " msg=" + msg);
-
             handleIncomingGuildChat(msg.substring(7));
-            return; // nic nie broadcastujemy globalnie
+            return;
         }
 
-        // PRYWATNY CZAT SOJUSZY
         if (msg.startsWith("[ALLYCHAT]")) {
-            plugin.getLogger().info("[GlobalChatPlugin] recv from "
-                    + (player != null ? player.getName() : "proxy")
-                    + " msg=" + msg);
-
             handleIncomingAllyChat(msg.substring(10));
-            return; // też bez broadcastu
+            return;
         }
 
-        // NORMALNY GLOBAL – tylko wiadomości bez prefiksów
-        plugin.getLogger().info("[GlobalChatPlugin] recv from "
-                + (player != null ? player.getName() : "proxy")
-                + " msg=" + msg);
+        if (msg.startsWith("[GLOBAL]")) {
+            handleIncomingGlobal(msg.substring(8));
+            return;
+        }
 
+        // fallback (gdyby przyszły stare wiadomości w starym formacie)
         Bukkit.broadcastMessage(msg);
     }
 
-    // teraz używasz gm.getGuild(...)
-// zmień na reloadGuild
+    private void handleIncomingGlobal(String payload) {
+        // format: sector|senderName|senderUuid|content
+        String[] parts = payload.split("\\|", 4);
+        if (parts.length < 4) return;
+
+        String sectorName = parts[0];
+        String senderName = parts[1];
+        String senderUuidStr = parts[2];
+        String content = parts[3];
+
+        UUID senderUuid;
+        try {
+            senderUuid = UUID.fromString(senderUuidStr);
+        } catch (Exception e) {
+            return;
+        }
+
+        Player senderOnline = Bukkit.getPlayer(senderUuid);
+        User senderUser = (senderOnline != null) ? plugin.getUserManager().loadOrGetUser(senderOnline) : null;
+
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            User viewerUser = plugin.getUserManager().loadOrGetUser(viewer);
+
+            String guildPart = buildColoredGuildPart(viewerUser, senderUser);
+            String formatted = "§7[§b" + sectorName + "§7]" + guildPart + " §f" + senderName + "§7: §f" + content;
+
+            viewer.sendMessage(formatted);
+        }
+    }
+
+    private String buildColoredGuildPart(User viewerUser, User senderUser) {
+        if (senderUser == null || !senderUser.hasGuild()) return "";
+
+        String senderTag = senderUser.getGuildTag();
+        if (senderTag == null || senderTag.isEmpty()) return "";
+
+        // viewer bez gildii -> dla niego wszystko z gildii jest "obce" (czerwone)
+        if (viewerUser == null || !viewerUser.hasGuild()) {
+            return " §7[§c" + senderTag + "§7]";
+        }
+
+        String viewerTag = viewerUser.getGuildTag();
+        if (viewerTag != null && viewerTag.equalsIgnoreCase(senderTag)) {
+            return " §7[§a" + senderTag + "§7]"; // SAME (zielony)
+        }
+
+        // ALLY (niebieski)
+        GuildManager gm = plugin.getGuildManager();
+        Guild viewerGuild = gm.reloadGuild(viewerTag);
+        if (viewerGuild != null && viewerGuild.getAlliedGuilds() != null
+                && viewerGuild.getAlliedGuilds().contains(senderTag)) {
+            return " §7[§9" + senderTag + "§7]";
+        }
+
+        // ENEMY (czerwony)
+        return " §7[§c" + senderTag + "§7]";
+    }
 
     private void handleIncomingGuildChat(String payload) {
         String[] parts = payload.split("\\|", 3);
@@ -225,17 +194,14 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
         String senderName = parts[1];
         String content = parts[2];
 
-        GuildManager gm = plugin.getGuildManager();          // <-- dodaj
-        Guild guild = gm.reloadGuild(tag);                   // KLUCZ: reload
+        GuildManager gm = plugin.getGuildManager();
+        Guild guild = gm.reloadGuild(tag);
         if (guild == null) return;
 
-        String formatted = "§6G §f[" + tag + "] §e" + senderName + "§7: §f" + content;
-
+        String formatted = "§6[G] §f[" + tag + "] §e" + senderName + "§7: §f" + content;
         for (UUID memberId : guild.getMembers()) {
             Player p = Bukkit.getPlayer(memberId);
-            if (p != null) {
-                p.sendMessage(formatted);
-            }
+            if (p != null) p.sendMessage(formatted);
         }
     }
 
@@ -248,10 +214,10 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
         String content = parts[2];
 
         GuildManager gm = plugin.getGuildManager();
-        Guild guild = gm.reloadGuild(tag);                   // też reload
+        Guild guild = gm.reloadGuild(tag);
         if (guild == null) return;
 
-        String formatted = "§dALLY §f[" + tag + "] §e" + senderName + "§7: §f" + content;
+        String formatted = "§d[ALLY] §f[" + tag + "] §e" + senderName + "§7: §f" + content;
 
         // własna gildia
         for (UUID memberId : guild.getMembers()) {
@@ -259,9 +225,9 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
             if (p != null) p.sendMessage(formatted);
         }
 
-        // wszystkie sojusze
+        // sojusze
         for (String allyTag : guild.getAlliedGuilds()) {
-            Guild ally = gm.reloadGuild(allyTag);            // KLUCZ: reload dla ally
+            Guild ally = gm.reloadGuild(allyTag);
             if (ally == null) continue;
 
             for (UUID memberId : ally.getMembers()) {
@@ -270,7 +236,4 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
             }
         }
     }
-
-
-
 }

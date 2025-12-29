@@ -55,39 +55,54 @@ public class PlayerDataListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerConfigure(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+
+        // (opcjonalnie) odśwież guild cache jeśli gracz jest w gildii
         Guild guild = plugin.getGuildManager().getGuildByMember(player.getUniqueId());
         if (guild != null) {
             plugin.getGuildManager().reloadGuild(guild.getTag());
         }
+
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
 
             User user = userManager.getUser(player);
-            plugin.getGuildTagManager().applyLocalTagsNow(player);
-
             if (user == null) {
                 player.kickPlayer("§cWystąpił krytyczny błąd podczas ładowania Twojego profilu.");
                 return;
             }
 
             applyPersistentData(player, user);
+
+            // 1) natychmiast lokalnie (żeby nie było “pustych tagów” po join)
+            plugin.getGuildTagManager().applyLocalTagsNow(player);
+
+            // 2) po chwili pełny update dla gracza (pakiet/redis)
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!player.isOnline()) return;
                 plugin.getGuildTagManager().updateTagsFor(player);
             }, 25L);
+
+            // 3) jeśli gracz ma gildię -> odśwież widok wszystkim, którzy już są na serwerze
+            User joined = plugin.getUserManager().loadOrGetUser(player);
+            if (joined != null && joined.hasGuild()) {
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    for (Player viewer : Bukkit.getOnlinePlayers()) {
+                        if (viewer.equals(player)) continue;
+                        plugin.getGuildTagManager().updateTagsFor(viewer);
+                    }
+                }, 30L);
+            }
+
             try (Jedis jedis = redisManager.getJedis()) {
-                // --- POCZĄTEK ZMIANY ---
-                // Sprawdzamy, czy gracz dołącza w wyniku respawnu
                 String respawnKey = "player:is_respawning:" + player.getUniqueId();
                 boolean isRespawning = jedis.exists(respawnKey);
-                if (isRespawning) {
-                    jedis.del(respawnKey); // Usuwamy sygnał
-                }
-                // --- KONIEC ZMIANY ---
+                if (isRespawning) jedis.del(respawnKey);
 
                 String playerDataKey = "player:data:" + player.getUniqueId();
                 String playerData = jedis.get(playerDataKey);
                 Integer heldSlotBox = null;
+
                 if (playerData != null) {
                     jedis.del(playerDataKey);
                     heldSlotBox = loadTransferData(player, playerData);
@@ -99,24 +114,24 @@ public class PlayerDataListener implements Listener {
                     jedis.del(finalTargetKey);
                     Location finalTargetLocation = locationFromJson(finalTargetData);
                     Integer finalHeld = heldSlotBox;
+
                     Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        if (player.isOnline()) {
-                            player.teleport(finalTargetLocation);
-                            plugin.getGuildTagManager().updateTagsFor(player);
-                            for (Player viewer : Bukkit.getOnlinePlayers()) {
-                                plugin.getGuildTagManager().updateTagsFor(viewer);
-                            }
-                            if (finalHeld != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
+                        if (!player.isOnline()) return;
 
-                            // Jeśli gracz się respawnuje, pokaż tytuł śmierci, w przeciwnym wypadku normalne powitanie
-                            if (isRespawning) {
-                                showDeathTitle(player);
-                            } else {
-                                sendWelcomePackage(player);
-                            }
+                        player.teleport(finalTargetLocation);
 
+                        // po teleportach odśwież jeszcze raz (żeby nie było “sekundy bez taga”)
+                        plugin.getGuildTagManager().updateTagsFor(player);
+
+                        if (finalHeld != null) {
+                            new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
                         }
+
+                        if (isRespawning) showDeathTitle(player);
+                        else sendWelcomePackage(player);
+
                     }, 2L);
+
                     return;
                 }
 
@@ -125,40 +140,48 @@ public class PlayerDataListener implements Listener {
                 if (targetSectorName != null) {
                     jedis.del(forceSpawnKey);
                     Integer finalHeld = heldSlotBox;
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        if (player.isOnline()) {
-                            Sector targetSector = sectorManager.getSectorByName(targetSectorName);
-                            plugin.getGuildTagManager().updateTagsFor(player);
-                            for (Player viewer : Bukkit.getOnlinePlayers()) {
-                                plugin.getGuildTagManager().updateTagsFor(viewer);
-                            }
-                            if (targetSector != null) {
-                                Location sectorSpawn = sectorManager.getSectorSpawnLocation(targetSector);
-                                if (sectorSpawn != null) {
-                                    player.teleport(sectorSpawn);
 
-                                    if (finalHeld != null)
-                                        new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
-                                    sendWelcomePackage(player);
-                                    player.sendMessage("§aZostałeś przeniesiony na sektor §e" + targetSector.getName() + "§a.");
-                                }
-                            }
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (!player.isOnline()) return;
+
+                        Sector targetSector = sectorManager.getSectorByName(targetSectorName);
+
+                        plugin.getGuildTagManager().updateTagsFor(player);
+
+                        if (targetSector != null) {
+                            Location sectorSpawn = sectorManager.getSectorSpawnLocation(targetSector);
+                            if (sectorSpawn != null) player.teleport(sectorSpawn);
                         }
+
+                        if (finalHeld != null) {
+                            new HotbarSlotSync(plugin).ensureSelectedSlot(player, finalHeld);
+                        }
+
+                        sendWelcomePackage(player);
+
+                        if (targetSector != null) {
+                            player.sendMessage("§aZostałeś przeniesiony na sektor §e" + targetSector.getName() + "§a.");
+                        }
+
                     }, 5L);
+
                     return;
                 }
 
                 if (heldSlotBox != null) {
                     new HotbarSlotSync(plugin).ensureSelectedSlot(player, heldSlotBox);
                 }
-                if (isRespawning) {
-                    showDeathTitle(player);
-                } else {
-                    sendWelcomePackage(player);
-                }
+
+                if (isRespawning) showDeathTitle(player);
+                else sendWelcomePackage(player);
+
+            } catch (Exception e) {
+                e.printStackTrace();
             }
+
         }, 1L);
     }
+
     private void applyPersistentData(Player player, User user) {
         player.setInvulnerable(user.isGodMode());
         player.setAllowFlight(user.isFlying());

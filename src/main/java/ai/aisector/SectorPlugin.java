@@ -72,7 +72,6 @@ public class SectorPlugin extends JavaPlugin {
     private ai.aisector.generators.GeneratorManager generatorManager;
     private CobbleXManager cobbleXManager;
     private GuildTagManager guildTagManager;
-    private PacketBus packetBus;
 
 
 
@@ -327,20 +326,30 @@ public class SectorPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        try {
+            if (guildManager != null) {
+                guildManager.saveAll();
+            }
+        } catch (Exception e) {
+            getLogger().severe("Błąd zapisu gildii przy onDisable: " + e.getMessage());
+        }
+
         if (this.publisherTask != null && !this.publisherTask.isCancelled()) {
             this.publisherTask.cancel();
         }
         if (redisManager != null) {
-            redisManager.unsubscribe(); // To powinno zamknąć wszystkie subskrypcje
+            redisManager.unsubscribe();
             redisManager.closePool();
         }
         if (mySQLManager != null) {
-            mySQLManager.close(); // Zamykamy połączenie z bazą danych
+            mySQLManager.close();
         }
         if (this.generatorManager != null) {
             this.generatorManager.saveAll();
         }
     }
+
+
 
 
     // Gettery

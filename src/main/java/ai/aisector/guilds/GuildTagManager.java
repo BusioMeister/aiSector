@@ -25,6 +25,7 @@ public class GuildTagManager {
     private final Team greenTeam;
     private final Team redTeam;
     private final RedisPacketPublisher packetPublisher;
+    private enum Relation { SAME, ALLY, ENEMY, NONE }
 
     public GuildTagManager(SectorPlugin plugin, UserManager userManager, GuildManager guildManager, RedisManager redisManager) {
         Bukkit.getLogger().info("[GuildTagManager] init");
@@ -47,6 +48,26 @@ public class GuildTagManager {
         }
         return team;
     }
+    private String getRelationColor(User viewer, User target) {
+        if (viewer == null || target == null) return "RED";
+        if (!viewer.hasGuild() || !target.hasGuild()) return "RED";
+
+        String viewerTag = viewer.getGuildTag();
+        String targetTag = target.getGuildTag();
+        if (viewerTag == null || targetTag == null) return "RED";
+
+        if (viewerTag.equalsIgnoreCase(targetTag)) return "GREEN";
+
+        Guild viewerGuild = plugin.getGuildManager().reloadGuild(viewerTag);
+        if (viewerGuild != null && viewerGuild.getAlliedGuilds() != null
+                && viewerGuild.getAlliedGuilds().contains(targetTag)) {
+            return "BLUE";
+        }
+
+        return "RED";
+    }
+
+
 
     // Główna metoda – wołamy ją dla WIDZA
     public void updateTagsFor(Player viewer) {
@@ -61,7 +82,7 @@ public class GuildTagManager {
                 continue;
             }
 
-            String color = isSameGuild(viewerUser, targetUser) ? "GREEN" : "RED";
+            String color = getRelationColor(viewerUser, targetUser);
             String data = target.getUniqueId().toString() + ":" + targetUser.getGuildTag() + ":" + color;
             playerData.add(data);
         }
@@ -132,11 +153,21 @@ public class GuildTagManager {
                 team = sb.registerNewTeam(teamName);
             }
 
-            String prefix = "GREEN".equals(color) ? "§a[" + tag + "] " : "§c[" + tag + "] ";
+            String prefix;
+            if ("GREEN".equals(color)) {
+                prefix = "§a[" + tag + "] ";
+            } else if ("BLUE".equals(color)) {
+                prefix = "§9[" + tag + "] ";
+            } else {
+                prefix = "§c[" + tag + "] ";
+            }
+
             team.setPrefix(prefix);
             team.addEntry(target.getName());
         }
     }
+
+
 
 
 
@@ -148,5 +179,6 @@ public class GuildTagManager {
 
     public Scoreboard getScoreboard() {
         return scoreboard;
+
     }
 }

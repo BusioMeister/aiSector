@@ -193,6 +193,12 @@ public class GuildManager {
                 .append("homeYaw", guild.getHomeYaw())
                 .append("homePitch", guild.getHomePitch());
     }
+    public void saveAll() {
+        for (Guild g : getAllGuilds()) {
+            saveGuild(g);
+        }
+    }
+
 
 
     private Set<UUID> toUuidSet(List<String> list) {
