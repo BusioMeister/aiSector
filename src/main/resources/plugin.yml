@@ -4,6 +4,8 @@ main: ai.aisector.SectorPlugin
 api-version: 1.20
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
+  pastetest:
+    usage: /pastetest <nazwa>
   ga:
     description: Administracja gildiami
     usage: /ga usun <tag>

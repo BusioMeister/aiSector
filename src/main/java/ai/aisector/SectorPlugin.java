@@ -34,6 +34,7 @@ import ai.aisector.user.UserManager;
 import ai.aisector.scoreboard.ScoreboardManager;
 
 import ai.aisector.utils.GlobalChatPlugin;
+import ai.aisector.utils.SchematicPaster;
 import com.google.gson.JsonObject;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.md_5.bungee.api.score.Scoreboard;
@@ -72,7 +73,7 @@ public class SectorPlugin extends JavaPlugin {
     private ai.aisector.generators.GeneratorManager generatorManager;
     private CobbleXManager cobbleXManager;
     private GuildTagManager guildTagManager;
-
+    private SchematicPaster schematicPaster;
 
 
     @Override
@@ -80,6 +81,14 @@ public class SectorPlugin extends JavaPlugin {
         saveDefaultConfig();
         saveResource("permissions.yml", false); // <-- DODAJ TĘ LINIĘ
         getDataFolder().mkdirs();
+
+        File schemFolder = new File(getDataFolder(), "schematics");
+        if (!schemFolder.exists()) schemFolder.mkdirs();
+
+        this.schematicPaster = new SchematicPaster(schemFolder);
+
+
+
         File cxFile = new File(getDataFolder(), "cobblex.yml");
         if (!cxFile.exists()) {
             saveResource("cobblex.yml", false);
@@ -114,6 +123,7 @@ public class SectorPlugin extends JavaPlugin {
         });
 
         // Rejestracja komend
+        getCommand("pastetest").setExecutor(new PasteTestCommand(this.schematicPaster));
         getCommand("enderchest").setExecutor(new EnderchestCommand());
         getCommand("ci").setExecutor(new ClearInventoryCommand());
         getCommand("repair").setExecutor(new RepairCommand());
@@ -176,10 +186,9 @@ public class SectorPlugin extends JavaPlugin {
         if(thisSectorName != null && !thisSectorName.isEmpty()){
             new SectorStatsPublisher(this, redisManager, thisSectorName).runTaskTimerAsynchronously(this, 100L, 100L); // co 5 sekund
         }
-
         // Rejestracja listenerów eventów Bukkit
         getServer().getPluginManager().registerEvents(new CobbleXListener(this, cobbleXManager), this);
-
+        getServer().getPluginManager().registerEvents(new ai.aisector.guilds.GuildRegionListener(this), this);
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
@@ -353,6 +362,7 @@ public class SectorPlugin extends JavaPlugin {
 
 
     // Gettery
+    public SchematicPaster getSchematicPaster() {return schematicPaster;}
     public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
     public RedisManager getRedisManager() { return redisManager; }
     public SectorManager getSectorManager() { return sectorManager; }

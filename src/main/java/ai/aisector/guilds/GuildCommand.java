@@ -870,13 +870,33 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(ChatColor.RED + "Nie udało się utworzyć gildii.");
             return;
         }
+        Location loc = p.getLocation();
+        guild.setHomeWorld(loc.getWorld().getName());
+        guild.setHomeX(loc.getX());
+        guild.setHomeY(loc.getY());
+        guild.setHomeZ(loc.getZ());
+        guildManager.saveGuild(guild);
+        guildManager.reloadGuild(guild.getTag());
+        Location center = new Location(
+                Bukkit.getWorld(guild.getHomeWorld()),
+                guild.getHomeX(),
+                guild.getHomeY(),
+                guild.getHomeZ()
+        );
 
+        try {
+            plugin.getSchematicPaster().pasteSchem(center, "gildia_jajko");
+        } catch (Exception e) {
+            p.sendMessage(ChatColor.RED + "Nie udało się wkleić schem: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+
+// teleport właściciela na środek (np. 1 blok wyżej żeby nie wbiło w blok)
+        p.teleport(center.clone().add(0.5, 1, 0.5));
         if (user != null) {
             user.setGuildTag(guild.getTag());
             user.setGuildRole("OWNER");
-            plugin.getGuildTagManager().refreshAllOnline();
-            plugin.getScoreboardManager().updateBoard(p);
-
         }
 
         String msg = "§6[GILDIA] §eGracz §f" + p.getName() +

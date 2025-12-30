@@ -35,10 +35,22 @@
             <id>central</id>
             <url>https://repo1.maven.org/maven2/</url>
         </repository>
+        <repository>
+            <id>enginehub</id>
+            <url>https://maven.enginehub.org/repo/</url>
+        </repository>
     </repositories>
 
     <dependencies>
         <!-- LuckPerms API -->
+        <dependency>
+            <groupId>com.sk89q.worldedit</groupId>
+            <artifactId>worldedit-bukkit</artifactId>
+            <version>7.3.11</version>
+            <scope>provided</scope>
+        </dependency>
+
+
         <dependency>
             <groupId>net.luckperms</groupId>
             <artifactId>api</artifactId>
