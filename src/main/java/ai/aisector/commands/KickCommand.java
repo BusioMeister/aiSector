@@ -1,55 +1,87 @@
 package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
+import ai.aisector.shared.RedisChannels;
 import ai.aisector.resolver.NameResolver;
+import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
-import org.bukkit.command.*;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.json.JSONObject;
-import redis.clients.jedis.Jedis;
+import ai.aisector.utils.BukkitTaskScheduler;
 
-import java.util.Optional;
+import java.util.Arrays;
 import java.util.UUID;
 
-public class KickCommand implements CommandExecutor {
+public final class KickCommand implements CommandExecutor {
     private final SectorPlugin plugin;
-    public KickCommand(SectorPlugin plugin) { this.plugin = plugin; }
 
-    @Override public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!sender.hasPermission("aisector.kick")) { sender.sendMessage("§cBrak uprawnień."); return true; }
-        if (args.length < 2) { sender.sendMessage("§cUżycie: /kick <nick> <powód>"); return true; }
+    public KickCommand(SectorPlugin plugin) {
+        this.plugin = plugin;
+    }
 
-        String targetNameArg = args[0];
-        String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
-        String by = (sender instanceof Player) ? ((Player) sender).getName() : "Konsola";
-
-        NameResolver resolver = new NameResolver(plugin);
-        Optional<UUID> optUuid = resolver.resolveUuid(targetNameArg);
-        if (optUuid.isEmpty()) { sender.sendMessage("§cNie znaleziono gracza: " + targetNameArg); return true; }
-        UUID uuid = optUuid.get();
-
-        String kickMsg = "§cZostałeś wyrzucony!\n§7Powód: §f" + reason + "\n§7Przez: §f" + by;
-
-        try (Jedis j = plugin.getRedisManager().getJedis()) {
-            // Broadcast globalny (type=kick)
-            JSONObject bc = new JSONObject();
-            bc.put("type", "kick");
-            bc.put("name", targetNameArg);
-            bc.put("by", by);
-            bc.put("reason", reason);
-            j.publish("aisector:ban_broadcast", bc.toString());
-
-            // Natychmiastowy kick na proxy
-            JSONObject kick = new JSONObject();
-            kick.put("uuid", uuid.toString());
-            kick.put("message", kickMsg);
-            j.publish("aisector:ban_kick", kick.toString());
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!sender.hasPermission("aisector.kick")) {
+            sender.sendMessage("§cBrak uprawnień.");
+            return true;
+        }
+        if (args.length < 2) {
+            sender.sendMessage("§cUżycie: /kick <nick> <powód>");
+            return true;
         }
 
-        Player online = Bukkit.getPlayer(uuid);
-        if (online != null) online.kick(net.kyori.adventure.text.Component.text(kickMsg));
+        String targetName = args[0];
+        String reason = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        if (targetName.isBlank() || targetName.length() > 16 || reason.length() > 256) {
+            sender.sendMessage("§cNieprawidłowy nick lub powód (maksymalnie 256 znaków).");
+            return true;
+        }
+        String kickedBy = sender instanceof Player player ? player.getName() : "Konsola";
+        String kickMessage = "§cZostałeś wyrzucony!\n§7Powód: §f" + reason + "\n§7Przez: §f" + kickedBy;
+        sender.sendMessage("§7Wyszukuję gracza i wysyłam kick do proxy...");
 
-        sender.sendMessage("§aWyrzucono " + targetNameArg + " §8- §f" + reason);
+        new NameResolver(plugin).resolveUuidAsync(targetName).whenComplete((uuid, lookupError) ->
+                BukkitTaskScheduler.execute(plugin, () -> {
+                    if (sender instanceof Player player && !player.isOnline()) return;
+                    if (lookupError != null || uuid == null || uuid.isEmpty()) {
+                        sender.sendMessage("§cNie znaleziono gracza: " + targetName);
+                        return;
+                    }
+                    persistKick(sender, targetName, kickedBy, reason, uuid.get(), kickMessage);
+                }));
         return true;
+    }
+
+    private void persistKick(CommandSender sender, String targetName, String kickedBy,
+                             String reason, UUID uuid, String kickMessage) {
+        JsonObject broadcast = new JsonObject();
+        broadcast.addProperty("type", "kick");
+        broadcast.addProperty("name", targetName);
+        broadcast.addProperty("by", kickedBy);
+        broadcast.addProperty("reason", reason);
+
+        JsonObject kick = new JsonObject();
+        kick.addProperty("uuid", uuid.toString());
+        kick.addProperty("message", kickMessage);
+
+        plugin.getRedisManager().executeAsync(jedis -> jedis.eval(
+                "redis.call('publish', KEYS[1], ARGV[1]); return redis.call('publish', KEYS[2], ARGV[2])",
+                java.util.List.of(RedisChannels.BAN_BROADCAST, RedisChannels.BAN_KICK),
+                java.util.List.of(broadcast.toString(), kick.toString())))
+                .whenComplete((published, error) -> BukkitTaskScheduler.execute(plugin, () -> {
+            if (sender instanceof Player player && !player.isOnline()) return;
+            if (error != null) {
+                plugin.getLogger().warning("Could not publish kick for " + uuid + ": " + error.getMessage());
+                sender.sendMessage("§cNie udało się wysłać kicka przez proxy.");
+                return;
+            }
+            Player localPlayer = Bukkit.getPlayer(uuid);
+            if (localPlayer != null) {
+                localPlayer.kick(net.kyori.adventure.text.Component.text(kickMessage));
+            }
+            sender.sendMessage("§aWyrzucono " + targetName + " §8- §f" + reason);
+        }));
     }
 }

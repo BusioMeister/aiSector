@@ -73,7 +73,7 @@ public class MySQLManager {
                     ")");
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Could not create MySQL tables", e);
         }
     }
 }

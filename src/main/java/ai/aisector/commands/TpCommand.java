@@ -1,23 +1,21 @@
 package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
-import ai.aisector.user.UserManager;
+import ai.aisector.shared.RedisChannels;
 import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import redis.clients.jedis.Jedis;
+import ai.aisector.utils.BukkitTaskScheduler;
 
 public class TpCommand implements CommandExecutor {
 
     private final SectorPlugin plugin;
-    private final UserManager userManager;
 
     public TpCommand(SectorPlugin plugin) {
         this.plugin = plugin;
-        this.userManager = plugin.getUserManager();
     }
 
     @Override
@@ -37,6 +35,10 @@ public class TpCommand implements CommandExecutor {
 
         Player admin = (Player) sender;
         String targetName = args[0];
+        if (targetName.isBlank() || targetName.length() > 16) {
+            admin.sendMessage("§cNieprawidłowa nazwa gracza.");
+            return true;
+        }
 
         // Przypadek 1: Gracz jest na tym samym serwerze (działa jak dotychczas)
         Player targetPlayer = Bukkit.getPlayer(targetName);
@@ -47,18 +49,19 @@ public class TpCommand implements CommandExecutor {
         }
 
         // Przypadek 2: Gracz jest na innym serwerze.
-        // Krok A: Zapisujemy dane admina, aby były gotowe do transferu.
-        userManager.savePlayerDataForTransfer(admin, admin.getLocation());
-
-        // Krok B: Wysyłamy prośbę do Velocity o zorganizowanie teleportacji.
+        // Velocity coordinates the remote lookup and waits for the source backend save before transfer.
         JsonObject request = new JsonObject();
         request.addProperty("adminUUID", admin.getUniqueId().toString());
         request.addProperty("targetName", targetName);
 
-        try (Jedis jedis = plugin.getRedisManager().getJedis()) {
-            jedis.publish("aisector:admin_tp_request", request.toString());
-        }
         sender.sendMessage("§7Przetwarzanie prośby o teleportację do gracza na innym sektorze...");
+        plugin.getRedisManager().publishAsync(RedisChannels.ADMIN_TP_REQUEST, request.toString())
+                .whenComplete((subscribers, error) -> BukkitTaskScheduler.execute(plugin, () -> {
+                    if (!admin.isOnline()) return;
+                    if (error != null || subscribers == null || subscribers == 0) {
+                        sender.sendMessage("§cNie udało się wysłać żądania teleportacji do proxy.");
+                    }
+                }));
 
         return true;
     }

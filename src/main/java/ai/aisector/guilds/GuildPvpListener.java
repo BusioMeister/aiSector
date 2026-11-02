@@ -7,6 +7,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.entity.Projectile;
+import org.bukkit.projectiles.ProjectileSource;
 
 public class GuildPvpListener implements Listener {
 
@@ -18,24 +20,42 @@ public class GuildPvpListener implements Listener {
         this.userManager = plugin.getUserManager();
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Player) || !(event.getDamager() instanceof Player)) return;
-
-        Player victim = (Player) event.getEntity();
-        Player attacker = (Player) event.getDamager();
+        if (!(event.getEntity() instanceof Player victim)) return;
+        Player attacker;
+        if (event.getDamager() instanceof Player directAttacker) {
+            attacker = directAttacker;
+        } else if (event.getDamager() instanceof Projectile projectile) {
+            ProjectileSource shooter = projectile.getShooter();
+            if (!(shooter instanceof Player projectileAttacker)) return;
+            attacker = projectileAttacker;
+        } else {
+            return;
+        }
+        if (!guildManager.isReady()) {
+            event.setCancelled(true);
+            return;
+        }
 
         User vUser = userManager.loadOrGetUser(victim);
         User aUser = userManager.loadOrGetUser(attacker);
-        if (vUser == null || aUser == null) return;
+        if (vUser == null || aUser == null) {
+            // Match the fail-closed policy used while the guild cache is loading.
+            event.setCancelled(true);
+            return;
+        }
 
         String vTag = vUser.getGuildTag();
         String aTag = aUser.getGuildTag();
+        Guild vGuild = vTag == null ? null : guildManager.getGuild(vTag);
+        Guild aGuild = aTag == null ? null : guildManager.getGuild(aTag);
+        if (GuildPvpPolicy.hasUnresolvedGuild(vTag, vGuild)
+                || GuildPvpPolicy.hasUnresolvedGuild(aTag, aGuild)) {
+            event.setCancelled(true);
+            return;
+        }
         if (vTag == null || aTag == null) return;
-
-        Guild vGuild = guildManager.getGuild(vTag);
-        Guild aGuild = guildManager.getGuild(aTag);
-        if (vGuild == null || aGuild == null) return;
 
         // PvP wewnątrz gildii
         if (vTag.equalsIgnoreCase(aTag)) {
@@ -46,7 +66,8 @@ public class GuildPvpListener implements Listener {
         }
 
         // PvP między sojuszami – działa tylko jeśli obie gildie mają FF włączone
-        if (vGuild.getAlliedGuilds().contains(aTag) && aGuild.getAlliedGuilds().contains(vTag)) {
+        if (GuildManager.containsTag(vGuild.getAlliedGuilds(), aTag)
+                && GuildManager.containsTag(aGuild.getAlliedGuilds(), vTag)) {
             if (!(vGuild.isFriendlyFireAllies() && aGuild.isFriendlyFireAllies())) {
                 event.setCancelled(true);
             }

@@ -1,17 +1,20 @@
 package ai.aisector.sectors;
 
 import ai.aisector.database.RedisManager;
+import ai.aisector.shared.RedisChannels;
 import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
-import redis.clients.jedis.Jedis;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class SectorStatsPublisher extends BukkitRunnable {
 
     private final JavaPlugin plugin;
     private final RedisManager redisManager;
     private final String sectorName;
+    private final AtomicLong lastWarningNanos = new AtomicLong();
 
     public SectorStatsPublisher(JavaPlugin plugin, RedisManager redisManager, String sectorName) {
         this.plugin = plugin;
@@ -21,23 +24,24 @@ public class SectorStatsPublisher extends BukkitRunnable {
 
     @Override
     public void run() {
-        try (Jedis jedis = redisManager.getJedis()) {
-            JsonObject stats = new JsonObject();
+        double tps = Bukkit.getServer().getTPS()[0];
+        Runtime runtime = Runtime.getRuntime();
+        long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1_048_576L;
 
-            // Pobierz TPS (działa na Paper i nowszych wersjach Spigota)
-            double tps = Bukkit.getServer().getTPS()[0]; // TPS z ostatniej minuty
+        JsonObject stats = new JsonObject();
+        stats.addProperty("sectorName", sectorName);
+        stats.addProperty("tps", String.format(Locale.ROOT, "%.2f", tps));
+        stats.addProperty("ram", usedMemory);
+        String payload = stats.toString();
 
-            // Pobierz użycie RAM w MB
-            Runtime runtime = Runtime.getRuntime();
-            long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1048576L;
-
-            stats.addProperty("sectorName", this.sectorName);
-            stats.addProperty("tps", String.format("%.2f", tps)); // Formatuj do 2 miejsc po przecinku
-            stats.addProperty("ram", usedMemory);
-
-            jedis.publish("aisector:sector_stats", stats.toString());
-        } catch (Exception e) {
-            plugin.getLogger().warning("Nie udało się opublikować statystyk sektora: " + e.getMessage());
-        }
+        redisManager.publishAsync(RedisChannels.SECTOR_STATS, payload)
+                .exceptionally(error -> {
+            long now = System.nanoTime();
+            long previous = lastWarningNanos.get();
+            if (now - previous >= 30_000_000_000L && lastWarningNanos.compareAndSet(previous, now)) {
+                plugin.getLogger().warning("Nie udało się opublikować statystyk sektora: " + error.getMessage());
+            }
+            return null;
+        });
     }
 }

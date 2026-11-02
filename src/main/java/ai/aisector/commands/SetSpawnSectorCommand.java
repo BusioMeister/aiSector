@@ -1,23 +1,28 @@
 package ai.aisector.commands;
 
+import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
+import ai.aisector.shared.RedisChannels;
 import ai.aisector.sectors.SectorManager;
+import ai.aisector.utils.BukkitTaskScheduler;
 import org.bson.Document;
 import org.bukkit.Location;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import redis.clients.jedis.Jedis;
 
 public class SetSpawnSectorCommand implements CommandExecutor {
 
     private final SectorManager sectorManager;
     private final RedisManager redisManager;
+    private final SectorPlugin plugin;
 
-    public SetSpawnSectorCommand(SectorManager sectorManager, RedisManager redisManager) {
-        this.sectorManager = sectorManager;
-        this.redisManager = redisManager;
+    public SetSpawnSectorCommand(SectorPlugin plugin) {
+        this.plugin = plugin;
+        this.sectorManager = plugin.getSectorManager();
+        this.redisManager = plugin.getRedisManager();
     }
 
     @Override
@@ -47,16 +52,21 @@ public class SetSpawnSectorCommand implements CommandExecutor {
                 .append("z", spawnLocation.getZ())
                 .append("yaw", spawnLocation.getYaw())
                 .append("pitch", spawnLocation.getPitch());
+        java.util.UUID playerId = player.getUniqueId();
 
-        try (Jedis jedis = redisManager.getJedis()) {
-            jedis.set("aisector:global_spawn", spawnData.toJson());
-        } catch (Exception e) {
-            player.sendMessage("§cWystąpił błąd podczas zapisu spawnu do bazy danych Redis.");
-            e.printStackTrace();
-            return true;
-        }
-
-        player.sendMessage("§aPomyślnie ustawiono globalny spawn serwera w sektorze §e" + sectorName + "§a!");
+        redisManager.setAsync(RedisChannels.GLOBAL_SPAWN, spawnData.toJson())
+                .whenComplete((result, error) -> {
+                    BukkitTaskScheduler.execute(plugin, () -> {
+                        if (!player.isOnline() || !player.getUniqueId().equals(playerId)
+                                || Bukkit.getPlayer(playerId) != player) return;
+                        if (error != null) {
+                            player.sendMessage("§cWystąpił błąd podczas zapisu spawnu do Redis.");
+                        } else {
+                            player.sendMessage("§aPomyślnie ustawiono globalny spawn serwera w sektorze §e"
+                                    + sectorName + "§a!");
+                        }
+                    });
+                });
         return true;
     }
 }

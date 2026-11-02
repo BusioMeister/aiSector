@@ -13,9 +13,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import redis.clients.jedis.Jedis;
-
 import java.util.Date;
+import java.util.UUID;
 
 public class PlayerDeathListener implements Listener {
 
@@ -37,54 +36,55 @@ public class PlayerDeathListener implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player victim = event.getEntity();
+        UUID victimUuid = victim.getUniqueId();
         Location location = victim.getLocation();
         String sectorName = sectorManager.getSectorForLocation(location.getBlockX(), location.getBlockZ());
 
         // 🔥 TWOJA ORYGINALNA LOGIKA: Zapisujemy sektor śmierci do celów respawnu 🔥
-        plugin.getPlayerDeathSectors().put(victim.getUniqueId(), sectorName);
-        try (Jedis jedis = redisManager.getJedis()) {
-            jedis.del("player:data:" + victim.getUniqueId());
-        }
+        plugin.getPlayerDeathSectors().put(victimUuid, sectorName);
+        redisManager.executeAsync(jedis -> jedis.del("player:data:" + victimUuid))
+                .exceptionally(error -> {
+                    plugin.getLogger().warning("Could not clear stale player data after death: " + error.getMessage());
+                    return null;
+                });
 
         // 🔥 NOWA LOGIKA: Zapisujemy pełny backup do bazy danych MongoDB 🔥
         // 1. Serializujemy ekwipunek
-        String inventoryData = InventorySerializer.serializeInventory(
-                victim.getInventory().getContents(),
-                victim.getInventory().getArmorContents(),
-                victim.getInventory().getItemInOffHand()
-        );
+        try {
+            String inventoryData = InventorySerializer.serializeInventory(
+                    victim.getInventory().getStorageContents(), victim.getInventory().getArmorContents(),
+                    victim.getInventory().getItemInOffHand());
 
-        // 2. Przygotowujemy dokument do zapisu
-        Document deathRecord = new Document();
-        deathRecord.append("victim_uuid", victim.getUniqueId().toString());
-        deathRecord.append("victim_name", victim.getName());
-        deathRecord.append("timestamp", new Date());
-        deathRecord.append("sector", sectorName);
+            Document deathRecord = new Document();
+            deathRecord.append("victim_uuid", victim.getUniqueId().toString());
+            deathRecord.append("victim_name", victim.getName());
+            deathRecord.append("timestamp", new Date());
+            deathRecord.append("sector", sectorName);
 
-        String killerName = "Środowisko";
-        if (victim.getKiller() != null) {
-            killerName = victim.getKiller().getName();
-        } else if (event.getDeathMessage() != null) {
-            String msg = event.getDeathMessage();
-            if (msg.contains("by")) {
-                killerName = msg.substring(msg.lastIndexOf("by") + 3).trim();
+            String killerName = "Środowisko";
+            if (victim.getKiller() != null) {
+                killerName = victim.getKiller().getName();
+            } else if (event.getDeathMessage() != null) {
+                String msg = event.getDeathMessage();
+                if (msg.contains("by")) killerName = msg.substring(msg.lastIndexOf("by") + 3).trim();
             }
+            deathRecord.append("killer_name", killerName);
+
+            Document locationDoc = new Document("world", location.getWorld().getName())
+                    .append("x", location.getBlockX()).append("y", location.getBlockY()).append("z", location.getBlockZ());
+            deathRecord.append("location", locationDoc);
+            deathRecord.append("inventory_data", inventoryData);
+            deathRecord.append("restored_by", "Nikt");
+            deathRecord.append("restored_at", null);
+
+            mongoDBManager.insertOneAsync("death_backups", deathRecord).exceptionally(error -> {
+                plugin.getLogger().severe("Could not save death backup for " + victimUuid + ": " + error.getMessage());
+                return null;
+            });
+        } catch (RuntimeException invalidInventory) {
+            plugin.getLogger().severe("Could not capture death backup for " + victimUuid
+                    + "; no usable backup record was created: " + invalidInventory.getMessage());
         }
-        deathRecord.append("killer_name", killerName);
-
-        Document locationDoc = new Document();
-        locationDoc.append("world", location.getWorld().getName());
-        locationDoc.append("x", location.getBlockX());
-        locationDoc.append("y", location.getBlockY());
-        locationDoc.append("z", location.getBlockZ());
-        deathRecord.append("location", locationDoc);
-
-        deathRecord.append("inventory_data", inventoryData);
-        deathRecord.append("restored_by", "Nikt");
-        deathRecord.append("restored_at", null);
-
-        // 3. Zapisujemy dokument w kolekcji 'death_backups'
-        mongoDBManager.insertOne("death_backups", deathRecord);
         // === STATYSTYKI PVP ===
         // Ofiara
         User victimUser = userManager.getUser(victim);

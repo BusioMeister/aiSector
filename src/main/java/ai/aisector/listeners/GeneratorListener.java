@@ -4,6 +4,7 @@ import ai.aisector.SectorPlugin;
 import ai.aisector.generators.GeneratorItems;
 import ai.aisector.generators.GeneratorManager;
 import ai.aisector.generators.GeneratorType;
+import ai.aisector.generators.GeneratorLifecyclePolicy;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
@@ -12,6 +13,9 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
+import org.bukkit.event.block.BlockBurnEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -26,7 +30,7 @@ public class GeneratorListener implements Listener {
         this.manager = manager;
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true, priority = org.bukkit.event.EventPriority.HIGHEST)
     public void onPlace(BlockPlaceEvent e) {
         ItemStack inHand = e.getItemInHand();
         if (inHand == null) return;
@@ -37,7 +41,16 @@ public class GeneratorListener implements Listener {
                 .get(GeneratorItems.genKey(plugin), PersistentDataType.STRING);
         if (typeStr == null) return;
 
-        GeneratorType type = GeneratorType.valueOf(typeStr);
+        final GeneratorType type;
+        try {
+            Integer version = meta.getPersistentDataContainer()
+                    .get(GeneratorItems.versionKey(plugin), PersistentDataType.INTEGER);
+            type = ai.aisector.generators.GeneratorItemData
+                    .parse(typeStr, version, inHand.getType()).type();
+        } catch (IllegalArgumentException invalidType) {
+            e.setCancelled(true);
+            return;
+        }
 
         // Wymuś zgodność typu bloku z typem generatora
         if ((type == GeneratorType.STONE && e.getBlockPlaced().getType() != Material.STONE) ||
@@ -50,7 +63,7 @@ public class GeneratorListener implements Listener {
         e.getPlayer().sendMessage("§aPostawiono " + (type == GeneratorType.STONE ? "Stoniarkę" : "Obsydianarkę") + "!");
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true, priority = org.bukkit.event.EventPriority.HIGHEST)
     public void onBreak(org.bukkit.event.block.BlockBreakEvent e) {
         org.bukkit.block.Block b = e.getBlock();
         if (!manager.isGenerator(b.getLocation())) return;
@@ -63,19 +76,28 @@ public class GeneratorListener implements Listener {
             ai.aisector.generators.GeneratorType type =
                     manager.getType(b.getLocation());
 
-            // Usuń generator z pamięci i Mongo – brak regeneracji i brak wpisu po restarcie
-            manager.unregister(b.getLocation());
-
-            // Rozkręć blok i upuść gotowy item generatora z PDC
-            b.setType(org.bukkit.Material.AIR);
-            org.bukkit.inventory.ItemStack drop =
-                    ai.aisector.generators.GeneratorItems.createItemForType(plugin, type);
-            b.getWorld().dropItemNaturally(
-                    b.getLocation().add(0.5, 0.25, 0.5), drop);
-
-            e.getPlayer().sendMessage("§eZdemontowano " +
-                    (type == ai.aisector.generators.GeneratorType.STONE ? "Stoniarkę" : "Obsydianarkę") +
-                    " – możesz postawić ją ponownie gdzie indziej!");
+            if (type == null) return;
+            java.util.UUID playerId = e.getPlayer().getUniqueId();
+            org.bukkit.entity.Player player = e.getPlayer();
+            manager.unregisterAsync(b.getLocation()).whenComplete((removed, error) ->
+                    ai.aisector.utils.BukkitTaskScheduler.execute(plugin, () -> {
+                        boolean deleteConfirmed = error == null && Boolean.TRUE.equals(removed);
+                        if (!deleteConfirmed) {
+                            if (player.isOnline() && player.getUniqueId().equals(playerId)) {
+                                player.sendMessage("§cNie udało się trwale zdemontować generatora; spróbuj ponownie.");
+                            }
+                            return;
+                        }
+                        if (!GeneratorLifecyclePolicy.shouldDeliverDismantle(type, deleteConfirmed, b.getType())) return;
+                        b.setType(org.bukkit.Material.AIR);
+                        org.bukkit.inventory.ItemStack drop = GeneratorItems.createItemForType(plugin, type);
+                        b.getWorld().dropItemNaturally(b.getLocation().add(0.5, 0.25, 0.5), drop);
+                        if (player.isOnline() && player.getUniqueId().equals(playerId)) {
+                            player.sendMessage("§eZdemontowano "
+                                    + (type == GeneratorType.STONE ? "Stoniarkę" : "Obsydianarkę")
+                                    + " – możesz postawić ją ponownie gdzie indziej!");
+                        }
+                    }));
             return;
         }
 
@@ -97,5 +119,20 @@ public class GeneratorListener implements Listener {
         if (e.getBlocks().stream().anyMatch(b -> manager.isGenerator(b.getLocation()))) {
             e.setCancelled(true);
         }
+    }
+
+    @EventHandler
+    public void onBlockBurn(BlockBurnEvent event) {
+        if (manager.isGenerator(event.getBlock().getLocation())) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onBlockExplosion(BlockExplodeEvent event) {
+        event.blockList().removeIf(block -> manager.isGenerator(block.getLocation()));
+    }
+
+    @EventHandler
+    public void onEntityExplosion(EntityExplodeEvent event) {
+        event.blockList().removeIf(block -> manager.isGenerator(block.getLocation()));
     }
 }

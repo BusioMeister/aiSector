@@ -25,6 +25,7 @@ public class GuildHomeTeleportWarmupTask {
         this.task = new BaseTeleportWarmupTask(
                 player,
                 targetLocation,
+                targetLocationJson.get("world").getAsString(),
                 targetSector,
                 5,
                 "§aTeleportacja do domu gildii za: §e",

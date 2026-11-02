@@ -11,14 +11,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 
 public class CobbleXManager {
 
     private final SectorPlugin plugin;
-    private final List<Loot> table = new ArrayList<>();
-    private double totalPct = 0.0;
-    private final Random rnd = new Random();
+    private record LootTable(List<Loot> entries, double totalChance) { }
+    private volatile LootTable lootTable = new LootTable(List.of(), 0.0);
     private File file;
     private YamlConfiguration cfg;
 
@@ -50,50 +48,61 @@ public class CobbleXManager {
             ConfigurationSection root = cfg.getConfigurationSection("cobblex");
             if (root == null) root = cfg;
 
-            // 3) Parsowanie
-            this.table.clear();
-            this.totalPct = 0.0;
+            // Parse into a candidate and publish only after the file was read successfully.
+            List<Loot> candidate = new ArrayList<>();
+            double candidateTotal = 0.0;
 
             for (String k : root.getKeys(false)) {
-                String matStr = root.getString(k + ".material", "AIR");
-                double chance = root.getDouble(k + ".chance", 0.0);
-                int min = root.getInt(k + ".min", 1);
-                int max = root.getInt(k + ".max", 1);
-
-                Material mat = Material.matchMaterial(matStr);
-                if (mat == null || chance <= 0.0 || min <= 0 || max < min) {
+                try {
+                    CobbleXLootDefinition definition = CobbleXLootDefinition.parse(
+                            root.get(k + ".material"), root.get(k + ".chance"),
+                            root.get(k + ".min"), root.get(k + ".max"));
+                    double nextTotal = candidateTotal + definition.chancePct();
+                    if (!Double.isFinite(nextTotal)) {
+                        throw new IllegalArgumentException("total chance overflow");
+                    }
+                    candidate.add(new Loot(definition.material(), definition.chancePct(),
+                            definition.min(), definition.max()));
+                    candidateTotal = nextTotal;
+                } catch (IllegalArgumentException invalidEntry) {
+                    plugin.getLogger().warning("[CobbleX] Skipping invalid loot entry '" + k + "': "
+                            + invalidEntry.getMessage());
                     continue;
                 }
-                this.table.add(new Loot(mat, chance, min, max));
-                this.totalPct += chance;
             }
 
-            plugin.getLogger().info("[CobbleX] Loaded " + table.size() + " loot entries (sum=" + totalPct + "%) from " + file.getName());
+            this.lootTable = new LootTable(List.copyOf(candidate), candidateTotal);
+
+            plugin.getLogger().info("[CobbleX] Loaded " + candidate.size() + " loot entries (sum="
+                    + candidateTotal + "%) from " + file.getName());
         } catch (Exception ex) {
             plugin.getLogger().severe("[CobbleX] Failed to load cobblex.yml: " + ex.getMessage());
-            this.table.clear();
-            this.totalPct = 0.0;
         }
     }
 
     public Optional<ItemStack> roll() {
-        if (table.isEmpty()) return Optional.empty();
-        double roll = rnd.nextDouble() * totalPct;
+        LootTable snapshot = lootTable;
+        List<Loot> currentTable = snapshot.entries();
+        double currentTotal = snapshot.totalChance();
+        if (currentTable.isEmpty() || !Double.isFinite(currentTotal) || currentTotal <= 0.0) {
+            return Optional.empty();
+        }
+        double roll = java.util.concurrent.ThreadLocalRandom.current().nextDouble(currentTotal);
         double acc = 0.0;
-        for (Loot l : table) {
+        for (Loot l : currentTable) {
             acc += l.chancePct;
-            if (roll <= acc) {
-                int amt = l.min + rnd.nextInt(l.max - l.min + 1);
+            if (roll < acc) {
+                int amt = java.util.concurrent.ThreadLocalRandom.current().nextInt(l.min, l.max + 1);
                 return Optional.of(new ItemStack(l.mat, amt));
             }
         }
         // fallback
-        Loot last = table.get(table.size() - 1);
-        int amt = last.min + rnd.nextInt(last.max - last.min + 1);
+        Loot last = currentTable.get(currentTable.size() - 1);
+        int amt = java.util.concurrent.ThreadLocalRandom.current().nextInt(last.min, last.max + 1);
         return Optional.of(new ItemStack(last.mat, amt));
     }
 
     public List<Loot> getTable() {
-        return Collections.unmodifiableList(table);
+        return lootTable.entries();
     }
 }

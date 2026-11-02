@@ -28,6 +28,10 @@ public class GuildRegionListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent e) {
+        if (!guildDataReady(e.getPlayer())) {
+            e.setCancelled(true);
+            return;
+        }
         if (!canBuild(e.getPlayer(), e.getBlock().getLocation())) {
             e.setCancelled(true);
             e.getPlayer().sendMessage("§cNie możesz budować na terenie tej gildii.");
@@ -36,10 +40,20 @@ public class GuildRegionListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent e) {
+        if (!guildDataReady(e.getPlayer())) {
+            e.setCancelled(true);
+            return;
+        }
         if (!canBuild(e.getPlayer(), e.getBlock().getLocation())) {
             e.setCancelled(true);
             e.getPlayer().sendMessage("§cNie możesz niszczyć na terenie tej gildii.");
         }
+    }
+
+    private boolean guildDataReady(Player player) {
+        if (guildManager.isReady()) return true;
+        player.sendMessage("§cDane gildii są ładowane. Spróbuj ponownie za chwilę.");
+        return false;
     }
 
     private boolean canBuild(Player player, Location loc) {
@@ -64,11 +78,8 @@ public class GuildRegionListener implements Listener {
             if (g.getHomeWorld() == null) continue;
             if (!g.getHomeWorld().equalsIgnoreCase(w.getName())) continue;
 
-            double dx = loc.getX() - g.getHomeX();
-            double dz = loc.getZ() - g.getHomeZ();
-
             // kwadrat 11x11 “od środka” (czyli +/- 11)
-            if (Math.abs(dx) <= RADIUS && Math.abs(dz) <= RADIUS) {
+            if (GuildRegionBounds.contains(loc.getX(), loc.getZ(), g.getHomeX(), g.getHomeZ(), RADIUS)) {
                 return g;
             }
         }

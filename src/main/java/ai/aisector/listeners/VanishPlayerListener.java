@@ -10,13 +10,17 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import ai.aisector.utils.BukkitTaskScheduler;
+import org.bukkit.Bukkit;
 
 public class VanishPlayerListener implements Listener {
 
+    private final SectorPlugin plugin;
     private final VanishManager vanishManager;
     private final UserManager userManager;
 
     public VanishPlayerListener(SectorPlugin plugin, VanishManager vanishManager) {
+        this.plugin = plugin;
         this.vanishManager = vanishManager;
         this.userManager = plugin.getUserManager();
     }
@@ -25,26 +29,26 @@ public class VanishPlayerListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        User user = userManager.getUser(player);
-
-        if (user == null) return;
-
-        // Krok 1: Najpierw ukryj przed dołączającym graczem adminów, którzy już są w vanish.
-        vanishManager.handlePlayerJoin(player);
-
-        // Krok 2: Teraz podejmij ostateczną decyzję o stanie vanish dołączającego gracza
-        // na podstawie danych wczytanych z MongoDB.
-        if (user.isVanished()) {
-            vanishManager.vanish(player);
-        } else {
-            vanishManager.unvanish(player);
-        }
+        java.util.UUID playerId = player.getUniqueId();
+        userManager.loadUserAsync(player).whenComplete((user, error) ->
+                BukkitTaskScheduler.execute(plugin, () -> {
+                    if (!player.isOnline() || Bukkit.getPlayer(playerId) != player) return;
+                    if (error != null || user == null) {
+                        plugin.getLogger().warning("Could not reconcile vanish state for " + player.getName()
+                                + (error == null ? ": profile unavailable" : ": " + error.getMessage()));
+                        return;
+                    }
+                    // Profile loading is async: reconcile only after its cache entry exists.
+                    vanishManager.handlePlayerJoin(player);
+                    if (user.isVanished()) vanishManager.vanish(player);
+                    else vanishManager.unvanish(player);
+                }));
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event){
-        // Gdy gracz wychodzi, zawsze usuwaj go z listy vanish "na żywo" na tym serwerze.
-        // Stan w MongoDB jest już zapisany przez UserDataListener.
-        vanishManager.unvanish(event.getPlayer());
+        // Disconnect removes local Bukkit state but must not publish an UNVANISH update:
+        // the persisted vanish flag remains authoritative for the next backend/session.
+        vanishManager.handlePlayerQuit(event.getPlayer());
     }
 }

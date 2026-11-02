@@ -29,6 +29,12 @@ public class InvseeGuiListener implements Listener {
             return;
         }
 
+        ai.aisector.SectorPlugin plugin = (ai.aisector.SectorPlugin) Bukkit.getPluginManager().getPlugin("aiSECTOR");
+        if (plugin != null && plugin.getUserManager().isTransferPending(targetPlayer)) {
+            event.getPlayer().sendMessage("§cGracz jest w trakcie transferu. Zmiany nie zostały zapisane.");
+            return;
+        }
+
         Inventory gui = event.getInventory();
         PlayerInventory targetInventory = targetPlayer.getInventory();
 

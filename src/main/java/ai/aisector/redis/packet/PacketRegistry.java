@@ -1,5 +1,6 @@
 package ai.aisector.redis.packet;
 
+import ai.aisector.shared.Packet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 

@@ -1,13 +1,20 @@
-servers:
-  Sector1:
-    address: 127.0.0.1:25567
-    motd: "Sektor 1"
-    restricted: false
-  Sector2:
-    address: 127.0.0.1:25568
-    motd: "Sektor 2"
-    restricted: false
-  Sector3:
-    address: 127.0.0.1:25569
-    motd: "Sektor 2"
-    restricted: false
+# Each Paper instance uses one sector name. Server addresses are configured on Velocity.
+this-sector-name: "Sector1"
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: ""
+
+mongodb:
+  uri: "mongodb://127.0.0.1:27017"
+  database: "users"
+
+# This database is unused by current features; enable only when configured.
+mysql:
+  enabled: false
+  host: "127.0.0.1"
+  port: 3306
+  database: "minecraft"
+  username: "minecraft"
+  password: ""

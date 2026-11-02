@@ -1,11 +1,9 @@
 package ai.aisector.listeners;
 
+import ai.aisector.shared.RedisChannels;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import ai.aisector.utils.BukkitTaskScheduler;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -34,51 +32,80 @@ public class GuiDataListener extends JedisPubSub {
 
     @Override
     public void onPMessage(String pattern, String channel, String message) {
-        if (!channel.startsWith("aisector:gui_data_response:")) return;
+        String channelPrefix = RedisChannels.GUI_DATA_RESPONSE_PREFIX;
+        if (channel == null || !channel.startsWith(channelPrefix) || message == null
+                || message.length() > 65_536) return;
 
-        UUID playerUUID = UUID.fromString(channel.substring("aisector:gui_data_response:".length()));
-        Player player = Bukkit.getPlayer(playerUUID);
-        if (player == null || !player.isOnline()) return;
+        UUID playerUUID;
+        try {
+            String uuidText = channel.substring(channelPrefix.length());
+            if (uuidText.length() != 36) return;
+            playerUUID = UUID.fromString(uuidText);
+        } catch (IllegalArgumentException exception) {
+            plugin.getLogger().warning("Ignoring GUI response with invalid player UUID in channel " + channel);
+            return;
+        }
+
+        final List<SectorGuiPayload> sectorsData;
+        try {
+            sectorsData = SectorGuiPayload.parse(message);
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("Ignoring malformed sector GUI response: " + exception.getMessage());
+            return;
+        }
 
         // Używamy schedulera, bo jesteśmy w wątku Redis
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            JsonArray sectorsData = JsonParser.parseString(message).getAsJsonArray();
-            int invSize = (int) (Math.ceil(sectorsData.size() / 9.0) * 9);
-            invSize = Math.max(9, invSize); // Minimalny rozmiar to 9
-            Inventory gui = Bukkit.createInventory(null, invSize, Component.text("Informacje o Sektorach"));
+        BukkitTaskScheduler.execute(plugin, () -> {
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null || !player.isOnline()) return;
+                try {
+                    int visibleCount = Math.min(54, sectorsData.size());
+                    int inventorySize = Math.max(9, (int) (Math.ceil(visibleCount / 9.0) * 9));
+                    Inventory gui = Bukkit.createInventory(null, inventorySize,
+                            Component.text("Informacje o Sektorach"));
 
-            for (int i = 0; i < sectorsData.size(); i++) {
-                JsonObject data = sectorsData.get(i).getAsJsonObject();
-                String name = data.get("name").getAsString();
-                boolean isOnline = data.get("isOnline").getAsBoolean();
+                    for (int i = 0; i < visibleCount; i++) {
+                        SectorGuiPayload data = sectorsData.get(i);
+                        String name = data.name();
+                        boolean isOnline = data.online();
 
-                ItemStack item = new ItemStack(isOnline ? Material.GREEN_CONCRETE : Material.RED_CONCRETE);
-                ItemMeta meta = item.getItemMeta();
-                meta.displayName(Component.text(name, isOnline ? NamedTextColor.GREEN : NamedTextColor.RED, TextDecoration.BOLD));
+                        ItemStack item = new ItemStack(isOnline ? Material.GREEN_CONCRETE : Material.RED_CONCRETE);
+                        ItemMeta meta = item.getItemMeta();
+                        meta.displayName(Component.text(name,
+                                isOnline ? NamedTextColor.GREEN : NamedTextColor.RED, TextDecoration.BOLD));
 
-                List<Component> lore = new ArrayList<>();
-                lore.add(Component.text(""));
-                if (isOnline) {
-                    lore.add(Component.text("Status: ").color(NamedTextColor.GRAY).append(Component.text("Online", NamedTextColor.GREEN)));
-                    lore.add(Component.text("Gracze: ").color(NamedTextColor.GRAY).append(Component.text(data.get("players").getAsInt(), NamedTextColor.WHITE)));
-                    lore.add(Component.text("TPS: ").color(NamedTextColor.GRAY).append(Component.text(data.get("tps").getAsString(), NamedTextColor.WHITE)));
-                    lore.add(Component.text("RAM: ").color(NamedTextColor.GRAY).append(Component.text(data.get("ram").getAsInt() + " MB", NamedTextColor.WHITE)));
-                } else {
-                    lore.add(Component.text("Status: ").color(NamedTextColor.GRAY).append(Component.text("Offline", NamedTextColor.RED)));
+                        List<Component> lore = new ArrayList<>();
+                        lore.add(Component.text(""));
+                        if (isOnline) {
+                            lore.add(Component.text("Status: ").color(NamedTextColor.GRAY)
+                                    .append(Component.text("Online", NamedTextColor.GREEN)));
+                            lore.add(Component.text("Gracze: ").color(NamedTextColor.GRAY)
+                                    .append(Component.text(data.players(), NamedTextColor.WHITE)));
+                            lore.add(Component.text("TPS: ").color(NamedTextColor.GRAY)
+                                    .append(Component.text(data.tps(), NamedTextColor.WHITE)));
+                            lore.add(Component.text("RAM: ").color(NamedTextColor.GRAY)
+                                    .append(Component.text(data.ramMb() + " MB", NamedTextColor.WHITE)));
+                        } else {
+                            lore.add(Component.text("Status: ").color(NamedTextColor.GRAY)
+                                    .append(Component.text("Offline", NamedTextColor.RED)));
+                        }
+
+                        Sector sectorInfo = sectorManager.getSectorByName(name);
+                        if (sectorInfo != null) {
+                            lore.add(Component.text(""));
+                            lore.add(Component.text("Wielkość: ").color(NamedTextColor.GRAY)
+                                    .append(Component.text(sectorInfo.getWidth() + "x" + sectorInfo.getDepth(),
+                                            NamedTextColor.WHITE)));
+                        }
+
+                        meta.lore(lore);
+                        item.setItemMeta(meta);
+                        gui.setItem(i, item);
+                    }
+                    player.openInventory(gui);
+                } catch (RuntimeException exception) {
+                    plugin.getLogger().warning("Ignoring malformed sector GUI response: " + exception.getMessage());
                 }
-
-                // Dodaj informacje o wielkości z sectors.yml
-                Sector sectorInfo = sectorManager.getSectorByName(name);
-                if (sectorInfo != null) {
-                    lore.add(Component.text(""));
-                    lore.add(Component.text("Wielkość: ").color(NamedTextColor.GRAY).append(Component.text(sectorInfo.getWidth() + "x" + sectorInfo.getDepth(), NamedTextColor.WHITE)));
-                }
-
-                meta.lore(lore);
-                item.setItemMeta(meta);
-                gui.setItem(i, item);
-            }
-            player.openInventory(gui);
-        });
+            });
     }
 }

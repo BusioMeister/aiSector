@@ -14,11 +14,14 @@ permissions:
   - aisector.command.gamemode
   - aisector.command.god
   - aisector.command.heal
+  - aisector.command.heal.others
   - aisector.command.rank
   - aisector.command.sectorinfo
+  - ai.sector.info
   - aisector.command.sektor
   - aisector.command.send
   - aisector.command.setspawn
+  - aisector.setspawn
   - aisector.command.speed
   - aisector.command.s
   - aisector.command.time
@@ -28,6 +31,7 @@ permissions:
   - aisector.command.weather
   - aisector.command.vanish.see
   - aisector.command.invsee
+  - aisector.command.pastetest
   - aisector.command.drop
   - aisector.wyjebane.bypass
   - aisector.cx
@@ -39,5 +43,6 @@ permissions:
   - aisector.ban.perm
   - aisector.kick
   - aisector.ban.list
+  - gildie.admin
   - aisector.server.maintenance
   - aisector.whitelist.manage

@@ -2,21 +2,25 @@ package ai.aisector.skills;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
-import net.luckperms.api.LuckPerms;
-import net.luckperms.api.cacheddata.CachedMetaData;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
+import java.lang.reflect.Method;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MiningLevelManager {
 
     private final SectorPlugin plugin;
-    private final LuckPerms luckPerms;
+    private final LuckPermsBridge luckPerms;
+    private final AtomicBoolean luckPermsWarningLogged = new AtomicBoolean();
+
+    private record LuckPermsBridge(Object playerAdapter, Method getMetaData, Method getUser,
+                                   Method getMetaValue, Method getPrimaryGroup) { }
 
     private static final int MAX_LEVEL = 100;
     private static final int BASE_XP = 200;
@@ -55,9 +59,7 @@ public class MiningLevelManager {
 
     public MiningLevelManager(SectorPlugin plugin) {
         this.plugin = plugin;
-        RegisteredServiceProvider<LuckPerms> provider =
-                Bukkit.getServicesManager().getRegistration(LuckPerms.class);
-        this.luckPerms = (provider != null) ? provider.getProvider() : null;
+        this.luckPerms = loadLuckPermsBridge();
     }
 
     // XP kalkulacje
@@ -125,24 +127,67 @@ public class MiningLevelManager {
 
     private Double readMetaDropBonus(Player player, Material material) {
         if (luckPerms == null) return null;
-        CachedMetaData meta = luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
-
         String keySpecific = "dropbonus." + material.name().toLowerCase();
         String keyAll = "dropbonus.all";
-
-        String raw = meta.getMetaValue(keySpecific);
-        if (raw == null) raw = meta.getMetaValue(keyAll);
-        if (raw == null) return null;
-
         try {
+            Object meta = luckPerms.getMetaData().invoke(luckPerms.playerAdapter(), player);
+            String raw = (String) luckPerms.getMetaValue().invoke(meta, keySpecific);
+            if (raw == null) raw = (String) luckPerms.getMetaValue().invoke(meta, keyAll);
+            if (raw == null) return null;
             return Double.parseDouble(raw);
         } catch (NumberFormatException e) {
             return 0.0;
+        } catch (ReflectiveOperationException e) {
+            logLuckPermsFailure(e);
+            return null;
         }
     }
 
     private String getPrimaryGroup(Player player) {
         if (luckPerms == null) return null;
-        return luckPerms.getPlayerAdapter(Player.class).getUser(player).getPrimaryGroup();
+        try {
+            Object user = luckPerms.getUser().invoke(luckPerms.playerAdapter(), player);
+            return (String) luckPerms.getPrimaryGroup().invoke(user);
+        } catch (ReflectiveOperationException e) {
+            logLuckPermsFailure(e);
+            return null;
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private LuckPermsBridge loadLuckPermsBridge() {
+        if (Bukkit.getPluginManager().getPlugin("LuckPerms") == null) {
+            return null;
+        }
+        try {
+            Class<?> apiClass = Class.forName("net.luckperms.api.LuckPerms");
+            RegisteredServiceProvider<?> provider = Bukkit.getServicesManager().getRegistration((Class) apiClass);
+            if (provider == null) {
+                plugin.getLogger().warning("LuckPerms plugin is present but its API service is unavailable; using configured fallback bonuses.");
+                return null;
+            }
+
+            Class<?> adapterClass = Class.forName("net.luckperms.api.platform.PlayerAdapter");
+            Class<?> metadataClass = Class.forName("net.luckperms.api.cacheddata.CachedMetaData");
+            Class<?> userClass = Class.forName("net.luckperms.api.model.user.User");
+            Object adapter = apiClass.getMethod("getPlayerAdapter", Class.class)
+                    .invoke(provider.getProvider(), Player.class);
+            return new LuckPermsBridge(adapter,
+                    adapterClass.getMethod("getMetaData", Object.class),
+                    adapterClass.getMethod("getUser", Object.class),
+                    metadataClass.getMethod("getMetaValue", String.class),
+                    userClass.getMethod("getPrimaryGroup"));
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            plugin.getLogger().warning("Could not initialize optional LuckPerms integration; using configured fallback bonuses: "
+                    + exception.getMessage());
+            return null;
+        }
+    }
+
+    private void logLuckPermsFailure(Exception exception) {
+        if (luckPermsWarningLogged.compareAndSet(false, true)) {
+            plugin.getLogger().warning("LuckPerms bonus lookup failed; using configured fallback bonuses: "
+                    + exception.getMessage());
+        }
     }
 }

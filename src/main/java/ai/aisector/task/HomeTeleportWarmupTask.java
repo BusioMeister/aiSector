@@ -25,6 +25,7 @@ public class HomeTeleportWarmupTask {
         this.task = new BaseTeleportWarmupTask(
                 player,
                 targetLocation,
+                targetLocationJson.get("world").getAsString(),
                 targetSector,
                 5,
                 "§aTeleportacja do domu za: §e",

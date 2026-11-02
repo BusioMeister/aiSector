@@ -1,18 +1,23 @@
 package ai.aisector.task; // Upewnij się, że pakiet jest poprawny
 
+import ai.aisector.SectorPlugin;
+import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
+import ai.aisector.utils.BukkitTaskScheduler;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
-import java.util.concurrent.CompletableFuture;
 
 public class LocalTeleportWarmupTask extends BukkitRunnable {
 
     private final Player player;
+    private final SectorPlugin plugin;
+    private final Location startLocation;
     private final Location targetLocation;
     private final String successMessage;
     private final SectorManager sectorManager;
@@ -20,25 +25,54 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
     private int timeLeft = 5; // 5 sekund odliczania
     private final BossBar bossBar;
 
-    public LocalTeleportWarmupTask(Player player, Location targetLocation, String successMessage, SectorManager sectorManager, WorldBorderManager borderManager) {
+    public LocalTeleportWarmupTask(Player player, Location targetLocation, String successMessage,
+                                   SectorManager sectorManager, WorldBorderManager borderManager,
+                                   SectorPlugin plugin) {
         this.player = player;
+        this.plugin = plugin;
+        this.startLocation = player.getLocation().clone();
         this.targetLocation = targetLocation;
         this.successMessage = successMessage;
         this.sectorManager = sectorManager;
         this.borderManager = borderManager;
         this.bossBar = org.bukkit.Bukkit.createBossBar("§aTeleportacja za: §e" + timeLeft, BarColor.GREEN, BarStyle.SOLID);
-        this.bossBar.addPlayer(player);
+    }
+
+    public void start() {
+        if (!TeleportWarmupRegistry.registerWarmup(player, this)) {
+            bossBar.removeAll();
+            player.sendMessage("§ePoprzednia teleportacja jest już w trakcie wykonywania.");
+            return;
+        }
+        try {
+            bossBar.addPlayer(player);
+            runTaskTimer(plugin, 0L, 20L);
+        } catch (RuntimeException exception) {
+            TeleportWarmupRegistry.unregister(player, this);
+            bossBar.removeAll();
+            throw exception;
+        }
     }
 
     @Override
     public void run() {
-        if (!player.isOnline()) {
+        if (!isCurrentSession()) {
             this.cancel();
             return;
         }
 
+        if (!player.getWorld().equals(startLocation.getWorld())) {
+            player.sendMessage("§cTeleportacja anulowana! Zmieniłeś świat.");
+            cancel();
+            return;
+        }
+        if (player.getLocation().distanceSquared(startLocation) > 1.0) {
+            player.sendMessage("§cTeleportacja anulowana! Ruszyłeś się.");
+            cancel();
+            return;
+        }
+
         if (timeLeft <= 0) {
-            this.cancel();
             teleportPlayer();
             return;
         }
@@ -51,22 +85,56 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
 
     @Override
     public synchronized void cancel() throws IllegalStateException {
-        super.cancel();
-        if (bossBar != null) {
-            bossBar.removeAll();
+        try {
+            super.cancel();
+        } catch (IllegalStateException ignored) {
+            // The task may be cancelled before the scheduler starts it.
+        } finally {
+            TeleportWarmupRegistry.unregister(player, this);
+            if (bossBar != null) bossBar.removeAll();
         }
     }
 
     private void teleportPlayer() {
+        Object operationToken = TeleportWarmupRegistry.beginPendingOperation(player, this);
+        if (operationToken == null) {
+            cancel();
+            return;
+        }
+        try {
+            super.cancel();
+        } catch (IllegalStateException ignored) {
+            // The scheduled warmup has already ended.
+        }
+        bossBar.removeAll();
         player.sendMessage("§aTeleportacja...");
-        CompletableFuture<Boolean> teleportFuture = player.teleportAsync(targetLocation);
-        teleportFuture.thenAccept(success -> {
-            if (success) {
-                player.sendMessage(successMessage);
-                borderManager.sendWorldBorder(player, sectorManager.getSector(targetLocation.getBlockX(), targetLocation.getBlockZ()));
-            } else {
-                player.sendMessage("§cTeleportacja nie powiodła się.");
-            }
-        });
+        try {
+            player.teleportAsync(targetLocation).whenComplete((success, error) -> {
+                boolean scheduled = BukkitTaskScheduler.execute(plugin, () -> {
+                    try {
+                        if (!isCurrentSession()) return;
+                        if (error != null || !Boolean.TRUE.equals(success)) {
+                            player.sendMessage("§cTeleportacja nie powiodła się.");
+                            return;
+                        }
+                        player.sendMessage(successMessage);
+                        Sector sector = sectorManager.getSector(targetLocation.getBlockX(), targetLocation.getBlockZ());
+                        if (sector != null) borderManager.sendWorldBorder(player, sector);
+                    } finally {
+                        TeleportWarmupRegistry.completePendingOperation(player, operationToken);
+                    }
+                });
+                if (!scheduled) TeleportWarmupRegistry.completePendingOperation(player, operationToken);
+            });
+        } catch (RuntimeException exception) {
+            TeleportWarmupRegistry.completePendingOperation(player, operationToken);
+            player.sendMessage("§cTeleportacja nie powiodła się.");
+            plugin.getLogger().warning("Could not schedule local TPA teleport for " + player.getName()
+                    + ": " + exception.getMessage());
+        }
+    }
+
+    private boolean isCurrentSession() {
+        return player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player;
     }
 }

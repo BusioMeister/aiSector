@@ -2,7 +2,9 @@ package ai.aisector.guilds;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
+import ai.aisector.user.StoredHomeData;
 import ai.aisector.user.UserManager;
+import ai.aisector.utils.BukkitTaskScheduler;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
 import com.google.gson.JsonObject;
@@ -18,12 +20,22 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.UUID;
+import java.util.Locale;
+import java.util.Set;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 public class GuildCommand implements CommandExecutor {
 
     private final SectorPlugin plugin;
     private final GuildManager guildManager;
     private final UserManager userManager;
+    private final Set<UUID> pendingGuildSyncs = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> pendingGuildCreations = ConcurrentHashMap.newKeySet();
     private static final String GLOBAL_CHANNEL = "global:chat";
 
     public GuildCommand(SectorPlugin plugin) {
@@ -40,6 +52,93 @@ public class GuildCommand implements CommandExecutor {
         }
     }
 
+    private CompletableFuture<Void> persistGuilds(Player actor, Guild... guilds) {
+        UUID actorUuid = actor.getUniqueId();
+        CompletableFuture<?>[] writes = new CompletableFuture<?>[guilds.length];
+        int index = 0;
+        for (Guild guild : guilds) {
+            String tag = guild.getTag();
+            UUID ownerUuid = guild.getOwner();
+            CompletableFuture<Void> write = guildManager.saveGuild(guild);
+            writes[index++] = write;
+            write.whenComplete((ignored, error) -> {
+                if (error == null || actorUuid.equals(ownerUuid)) return;
+                try {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        Player currentActor = Bukkit.getPlayer(actorUuid);
+                        if (currentActor != null) {
+                            currentActor.sendMessage(ChatColor.RED + "Zmiany gildii [" + tag
+                                    + "] nie zostały zapisane. Cache został odświeżony; ponów operację.");
+                        }
+                    });
+                } catch (RuntimeException ignoredShutdown) {
+                    plugin.getLogger().warning("Guild command save failed during shutdown for " + tag + ": "
+                            + error.getMessage());
+                }
+            });
+        }
+        return CompletableFuture.allOf(writes);
+    }
+
+    private void persistGuildsThen(Player actor, Consumer<Player> onSaved, Guild... guilds) {
+        UUID actorUuid = actor.getUniqueId();
+        persistGuilds(actor, guilds).whenComplete((ignored, error) -> {
+            if (error != null) return;
+            try {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    Player currentActor = Bukkit.getPlayer(actorUuid);
+                    if (currentActor == actor && actor.isOnline()) onSaved.accept(currentActor);
+                });
+            } catch (RuntimeException ignoredShutdown) {
+                plugin.getLogger().warning("Could not finish a guild command during shutdown for " + actorUuid);
+            }
+        });
+    }
+
+    private void persistGuildMemberships(Player actor, Guild guild, Map<UUID, String> memberRoles,
+                                         Consumer<Player> onSuccess) {
+        UUID actorUuid = actor.getUniqueId();
+        persistGuilds(actor, guild).whenComplete((ignored, saveError) -> {
+            if (saveError != null) return;
+            try {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    CompletableFuture<?>[] profileWrites = memberRoles.entrySet().stream()
+                            .map(entry -> {
+                                boolean removeMembership = "NONE".equals(entry.getValue());
+                                return userManager.updateGuildMembershipAsync(entry.getKey(),
+                                        removeMembership ? null : guild.getTag(),
+                                        removeMembership ? null : entry.getValue(), removeMembership ? guild.getTag() : null);
+                            })
+                            .toArray(CompletableFuture[]::new);
+                    CompletableFuture.allOf(profileWrites).whenComplete((profilesSaved, profileError) -> {
+                        try {
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                Player currentActor = Bukkit.getPlayer(actorUuid);
+                                if (profileError != null) {
+                                    plugin.getLogger().severe("Guild " + guild.getTag()
+                                            + " was saved but member profiles could not be updated: "
+                                            + profileError.getMessage());
+                                    if (currentActor == actor && actor.isOnline()) {
+                                        currentActor.sendMessage(ChatColor.RED
+                                                + "Gildia została zapisana, ale profili członków nie udało się odświeżyć.");
+                                    }
+                                    return;
+                                }
+                                if (currentActor == actor && actor.isOnline()) onSuccess.accept(currentActor);
+                            });
+                        } catch (RuntimeException ignoredShutdown) {
+                            plugin.getLogger().warning("Could not complete guild membership update during shutdown for "
+                                    + guild.getTag());
+                        }
+                    });
+                });
+            } catch (RuntimeException ignoredShutdown) {
+                plugin.getLogger().warning("Could not queue guild membership update during shutdown for "
+                        + guild.getTag());
+            }
+        });
+    }
+
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
@@ -49,6 +148,10 @@ public class GuildCommand implements CommandExecutor {
         }
 
         Player player = (Player) sender;
+        if (!guildManager.isReady()) {
+            player.sendMessage(ChatColor.GRAY + "Dane gildii są jeszcze ładowane. Spróbuj ponownie za chwilę.");
+            return true;
+        }
         User user = userManager.loadOrGetUser(player);
         if (user == null) {
             player.sendMessage(ChatColor.RED + "Nie udało się załadować danych gracza.");
@@ -60,7 +163,85 @@ public class GuildCommand implements CommandExecutor {
             return true;
         }
 
-        String sub = args[0].toLowerCase();
+        if (user.hasGuild() && guildManager.getGuildCached(user.getGuildTag()) == null) {
+            UUID playerUuid = player.getUniqueId();
+            if (!pendingGuildSyncs.add(playerUuid)) {
+                player.sendMessage(ChatColor.GRAY + "Synchronizuję dane gildii. Spróbuj ponownie za chwilę.");
+                return true;
+            }
+
+            String guildTag = user.getGuildTag();
+            player.sendMessage(ChatColor.GRAY + "Synchronizuję dane gildii...");
+            guildManager.reloadGuildAsync(guildTag).whenComplete((guild, error) -> {
+                boolean scheduled = BukkitTaskScheduler.execute(plugin, () -> {
+                        pendingGuildSyncs.remove(playerUuid);
+                        Player currentPlayer = Bukkit.getPlayer(playerUuid);
+                        if (currentPlayer != player || !player.isOnline()) return;
+                        if (error != null) {
+                            currentPlayer.sendMessage(ChatColor.RED
+                                    + "Nie udało się zsynchronizować gildii. Spróbuj ponownie.");
+                            plugin.getLogger().warning("Could not synchronize guild " + guildTag + " for "
+                                    + playerUuid + ": " + error.getMessage());
+                            return;
+                        }
+
+                        User currentUser = userManager.getUser(playerUuid);
+                        if (currentUser == null) {
+                            currentPlayer.sendMessage(ChatColor.RED + "Dane gracza są nadal ładowane.");
+                            return;
+                        }
+                        if (guild == null) {
+                            currentUser.setGuildTag(null);
+                            currentUser.setGuildRole(null);
+                        }
+                        onCommand(currentPlayer, cmd, label, args.clone());
+                    });
+                if (!scheduled) pendingGuildSyncs.remove(playerUuid);
+            });
+            return true;
+        }
+
+        // A reused tag or refreshed guild cache must not inherit a stale profile's OWNER/MOD role.
+        if (user.hasGuild()) {
+            if (guildManager.isPersistencePending(user.getGuildTag())) {
+                player.sendMessage(ChatColor.GRAY + "Zmiany gildii są jeszcze zapisywane. Spróbuj za chwilę.");
+                return true;
+            }
+            Guild current = guildManager.getGuildCached(user.getGuildTag());
+            String role = current == null ? null : current.roleOf(player.getUniqueId());
+            user.setGuildTag(role == null ? null : current.getTag());
+            user.setGuildRole(role);
+        }
+        String sub = args[0].toLowerCase(Locale.ROOT);
+        String requestedGuildTag = guildTagArgument(sub, args);
+        if (requestedGuildTag != null && guildManager.getGuildCached(requestedGuildTag) == null) {
+            UUID playerUuid = player.getUniqueId();
+            if (!pendingGuildSyncs.add(playerUuid)) {
+                player.sendMessage(ChatColor.GRAY + "Synchronizuję dane gildii. Spróbuj ponownie za chwilę.");
+                return true;
+            }
+            player.sendMessage(ChatColor.GRAY + "Wczytuję gildię [" + requestedGuildTag + "] z Mongo...");
+            guildManager.reloadGuildAsync(requestedGuildTag).whenComplete((loadedGuild, error) -> {
+                boolean scheduled = BukkitTaskScheduler.execute(plugin, () -> {
+                        pendingGuildSyncs.remove(playerUuid);
+                        Player currentPlayer = Bukkit.getPlayer(playerUuid);
+                        if (currentPlayer != player || !player.isOnline()) return;
+                        if (error != null) {
+                            currentPlayer.sendMessage(ChatColor.RED + "Nie udało się wczytać gildii. Spróbuj ponownie.");
+                            plugin.getLogger().warning("Could not load requested guild " + requestedGuildTag + ": "
+                                    + error.getMessage());
+                        } else if (loadedGuild == null) {
+                            currentPlayer.sendMessage(ChatColor.RED + "Gildia o tagu [" + requestedGuildTag
+                                    + "] nie istnieje.");
+                        } else {
+                            onCommand(currentPlayer, cmd, label, args.clone());
+                        }
+                    });
+                if (!scheduled) pendingGuildSyncs.remove(playerUuid);
+            });
+            return true;
+        }
+
         switch (sub) {
             case "zaloz":
             case "create":
@@ -131,6 +312,16 @@ public class GuildCommand implements CommandExecutor {
         return true;
     }
 
+    private String guildTagArgument(String subcommand, String[] args) {
+        if (args.length < 2) return null;
+        return switch (subcommand) {
+            case "dolacz", "join", "akceptuj", "accept", "sojusz", "ally" ->
+                    GuildManager.normalizeTag(args[1]);
+            case "info" -> GuildManager.normalizeTag(args[1]);
+            default -> null;
+        };
+    }
+
     private void sendHelp(Player p) {
         p.sendMessage(ChatColor.YELLOW + "Gildia - komendy:");
         p.sendMessage(ChatColor.GRAY + "/g zaloz <tag> <nazwa> " + ChatColor.DARK_GRAY + "- tworzy nową gildię");
@@ -151,9 +342,6 @@ public class GuildCommand implements CommandExecutor {
         p.sendMessage(ChatColor.GRAY + "/g pvpsojusz " + ChatColor.DARK_GRAY + "- włącz/wyłącz pvp z sojuszami");
         p.sendMessage(ChatColor.GRAY + "/g alert <treść> " + ChatColor.DARK_GRAY + "- wysyła jednorazowy alert na ekran do gildii");
         p.sendMessage(ChatColor.GRAY + "/g alertchat <treść/off> " + ChatColor.DARK_GRAY + "- ustawia powitanie dla gildii");
-
-
-/// fsdfsdf
 
 
     }
@@ -181,20 +369,25 @@ public class GuildCommand implements CommandExecutor {
 
         if (args[1].equalsIgnoreCase("off")) {
             guild.setWelcomeMessage(null);
-            guildManager.saveGuild(guild);
-            p.sendMessage(ChatColor.YELLOW + "Powitanie gildii zostało wyłączone.");
+            persistGuildsThen(p, actor ->
+                    actor.sendMessage(ChatColor.YELLOW + "Powitanie gildii zostało wyłączone."), guild);
             return;
         }
 
         String message = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
-        guild.setWelcomeMessage(message);
-        guildManager.saveGuild(guild);
-        String formatted = "§6[GILDIA] §f[" + tag + "] §e" + message;
-        for (UUID memberId : guild.getMembers()) {
-            Player m = Bukkit.getPlayer(memberId);
-            if (m != null) m.sendMessage(formatted);
+        if (message.length() > 256) {
+            p.sendMessage(ChatColor.RED + "Powitanie może mieć maksymalnie 256 znaków.");
+            return;
         }
-        p.sendMessage(ChatColor.GREEN + "Ustawiono powitanie gildii.");
+        guild.setWelcomeMessage(message);
+        persistGuildsThen(p, actor -> {
+            String formatted = "§6[GILDIA] §f[" + tag + "] §e" + message;
+            for (UUID memberId : guild.getMembers()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member != null) member.sendMessage(formatted);
+            }
+            actor.sendMessage(ChatColor.GREEN + "Ustawiono powitanie gildii.");
+        }, guild);
     }
 
     // /g alert TREŚĆ
@@ -220,6 +413,10 @@ public class GuildCommand implements CommandExecutor {
         }
 
         String message = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
+        if (message.length() > 256) {
+            p.sendMessage(ChatColor.RED + "Alert może mieć maksymalnie 256 znaków.");
+            return;
+        }
 
         net.kyori.adventure.title.Title.Times times =
                 net.kyori.adventure.title.Title.Times.times(
@@ -268,11 +465,11 @@ public class GuildCommand implements CommandExecutor {
 
         boolean newValue = !guild.isFriendlyFireGuild();
         guild.setFriendlyFireGuild(newValue);
-        guildManager.saveGuild(guild);
-        guildManager.reloadGuild(tag);
-
-        p.sendMessage(ChatColor.YELLOW + "PvP wewnątrz gildii " +
-                (newValue ? ChatColor.RED + "WŁĄCZONE" : ChatColor.GREEN + "WYŁĄCZONE") + ChatColor.YELLOW + ".");
+        persistGuildsThen(p, actor -> {
+            guildManager.reloadGuild(tag);
+            actor.sendMessage(ChatColor.YELLOW + "PvP wewnątrz gildii " +
+                    (newValue ? ChatColor.RED + "WŁĄCZONE" : ChatColor.GREEN + "WYŁĄCZONE") + ChatColor.YELLOW + ".");
+        }, guild);
     }
 
     private void handlePvpAlliesToggle(Player p, User user) {
@@ -294,12 +491,12 @@ public class GuildCommand implements CommandExecutor {
 
         boolean newValue = !guild.isFriendlyFireAllies();
         guild.setFriendlyFireAllies(newValue);
-        guildManager.saveGuild(guild);
-        guildManager.reloadGuild(tag);
-
-        p.sendMessage(ChatColor.YELLOW + "PvP z sojuszami " +
-                (newValue ? ChatColor.RED + "WŁĄCZONE" : ChatColor.GREEN + "WYŁĄCZONE") + ChatColor.YELLOW + ". "
-                + ChatColor.GRAY + "Musi być tak samo ustawione w obu gildiach.");
+        persistGuildsThen(p, actor -> {
+            guildManager.reloadGuild(tag);
+            actor.sendMessage(ChatColor.YELLOW + "PvP z sojuszami " +
+                    (newValue ? ChatColor.RED + "WŁĄCZONE" : ChatColor.GREEN + "WYŁĄCZONE") + ChatColor.YELLOW + ". "
+                    + ChatColor.GRAY + "Musi być tak samo ustawione w obu gildiach.");
+        }, guild);
     }
 
 
@@ -343,20 +540,26 @@ public class GuildCommand implements CommandExecutor {
         UUID uuid = target.getUniqueId();
         if (guild.getDeputy() != null && guild.getDeputy().equals(uuid)) {
             guild.setDeputy(null);
-            guildManager.saveGuild(guild);
-            guildManager.reloadGuild(tag);
-            plugin.getGuildTagManager().refreshAllOnline();
-
-            p.sendMessage(ChatColor.YELLOW + "Zdjąłeś rangę zastępcy z " + target.getName() + ".");
-            target.sendMessage(ChatColor.RED + "Straciłeś rangę zastępcy w gildii " + tag + ".");
+            persistGuildsThen(p, actor -> {
+                guildManager.reloadGuild(tag);
+                plugin.getGuildTagManager().refreshAllOnline();
+                actor.sendMessage(ChatColor.YELLOW + "Zdjąłeś rangę zastępcy z " + targetName + ".");
+                Player currentTarget = Bukkit.getPlayer(uuid);
+                if (currentTarget != null) {
+                    currentTarget.sendMessage(ChatColor.RED + "Straciłeś rangę zastępcy w gildii " + tag + ".");
+                }
+            }, guild);
         } else {
             guild.setDeputy(uuid);
-            guildManager.saveGuild(guild);
-            guildManager.reloadGuild(tag);
-            plugin.getGuildTagManager().refreshAllOnline();
-
-            p.sendMessage(ChatColor.GREEN + "Nadałeś rangę zastępcy graczowi " + target.getName() + ".");
-            target.sendMessage(ChatColor.GREEN + "Otrzymałeś rangę zastępcy w gildii " + tag + ".");
+            persistGuildsThen(p, actor -> {
+                guildManager.reloadGuild(tag);
+                plugin.getGuildTagManager().refreshAllOnline();
+                actor.sendMessage(ChatColor.GREEN + "Nadałeś rangę zastępcy graczowi " + targetName + ".");
+                Player currentTarget = Bukkit.getPlayer(uuid);
+                if (currentTarget != null) {
+                    currentTarget.sendMessage(ChatColor.GREEN + "Otrzymałeś rangę zastępcy w gildii " + tag + ".");
+                }
+            }, guild);
         }
     }
 
@@ -401,24 +604,26 @@ public class GuildCommand implements CommandExecutor {
         UUID uuid = target.getUniqueId();
         if (guild.getMods().contains(uuid)) {
             guild.getMods().remove(uuid);
-            guildManager.saveGuild(guild);
-            guildManager.reloadGuild(tag);
-            plugin.getGuildTagManager().refreshAllOnline();
-
-            if ("MOD".equalsIgnoreCase(targetUser.getGuildRole())) {
-                targetUser.setGuildRole("MEMBER");
-            }
-            p.sendMessage(ChatColor.YELLOW + "Zabrałeś rangę mistrza graczowi " + target.getName() + ".");
-            target.sendMessage(ChatColor.RED + "Straciłeś rangę mistrza w gildii " + tag + ".");
+            persistGuildMemberships(p, guild, Map.of(uuid, "MEMBER"), actor -> {
+                guildManager.reloadGuild(tag);
+                plugin.getGuildTagManager().refreshAllOnline();
+                actor.sendMessage(ChatColor.YELLOW + "Zabrałeś rangę mistrza graczowi " + targetName + ".");
+                Player currentTarget = Bukkit.getPlayer(uuid);
+                if (currentTarget != null) {
+                    currentTarget.sendMessage(ChatColor.RED + "Straciłeś rangę mistrza w gildii " + tag + ".");
+                }
+            });
         } else {
             guild.getMods().add(uuid);
-            guildManager.saveGuild(guild);
-            guildManager.reloadGuild(tag);
-            plugin.getGuildTagManager().refreshAllOnline();
-
-            targetUser.setGuildRole("MOD");
-            p.sendMessage(ChatColor.GREEN + "Nadałeś rangę mistrza graczowi " + target.getName() + ".");
-            target.sendMessage(ChatColor.GREEN + "Otrzymałeś rangę mistrza w gildii " + tag + ".");
+            persistGuildMemberships(p, guild, Map.of(uuid, "MOD"), actor -> {
+                guildManager.reloadGuild(tag);
+                plugin.getGuildTagManager().refreshAllOnline();
+                actor.sendMessage(ChatColor.GREEN + "Nadałeś rangę mistrza graczowi " + targetName + ".");
+                Player currentTarget = Bukkit.getPlayer(uuid);
+                if (currentTarget != null) {
+                    currentTarget.sendMessage(ChatColor.GREEN + "Otrzymałeś rangę mistrza w gildii " + tag + ".");
+                }
+            });
         }
     }
 
@@ -468,18 +673,17 @@ public class GuildCommand implements CommandExecutor {
 
         guild.getMembers().remove(uuid);
         guild.getMods().remove(uuid);
-        guildManager.saveGuild(guild);
-        guildManager.reloadGuild(tag);
-
-        targetUser.setGuildTag(null);
-        targetUser.setGuildRole(null);
-        plugin.getGuildTagManager().refreshAllOnline();
-
-        p.sendMessage(ChatColor.GREEN + "Wyrzuciłeś gracza " + target.getName() + " z gildii.");
-        target.sendMessage(ChatColor.RED + "Zostałeś wyrzucony z gildii " + tag + ".");
-
-        String msg = "§6[GILDIA] §eGracz §f" + target.getName() + " §ezostał wyrzucony z gildii §f[" + tag + "]§e.";
-        sendGlobal(msg);
+        String kickedName = target.getName();
+        persistGuildMemberships(p, guild, Map.of(uuid, "NONE"), actor -> {
+            guildManager.reloadGuild(tag);
+            plugin.getGuildTagManager().refreshAllOnline();
+            actor.sendMessage(ChatColor.GREEN + "Wyrzuciłeś gracza " + kickedName + " z gildii.");
+            Player currentTarget = Bukkit.getPlayer(uuid);
+            if (currentTarget != null) {
+                currentTarget.sendMessage(ChatColor.RED + "Zostałeś wyrzucony z gildii " + tag + ".");
+            }
+            sendGlobal("§6[GILDIA] §eGracz §f" + kickedName + " §ezostał wyrzucony z gildii §f[" + tag + "]§e.");
+        });
     }
 
     private void handlePrzekaz(Player p, User user, String[] args) {
@@ -520,17 +724,18 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        user.setGuildRole("MEMBER");
-        targetUser.setGuildRole("OWNER");
         guild.setOwner(target.getUniqueId());
         guild.getMods().remove(target.getUniqueId());
 
-        guildManager.saveGuild(guild);
-        guildManager.reloadGuild(tag);
-        plugin.getGuildTagManager().refreshAllOnline();
-
-        p.sendMessage(ChatColor.GREEN + "Przekazałeś przywództwo gildii graczowi " + target.getName() + ".");
-        target.sendMessage(ChatColor.GREEN + "Zostałeś nowym liderem gildii " + tag + ".");
+        UUID currentOwnerUuid = p.getUniqueId();
+        UUID newOwnerUuid = target.getUniqueId();
+        persistGuildMemberships(p, guild, Map.of(currentOwnerUuid, "MEMBER", newOwnerUuid, "OWNER"), actor -> {
+            guildManager.reloadGuild(tag);
+            plugin.getGuildTagManager().refreshAllOnline();
+            actor.sendMessage(ChatColor.GREEN + "Przekazałeś przywództwo gildii graczowi " + targetName + ".");
+            Player newOwner = Bukkit.getPlayer(newOwnerUuid);
+            if (newOwner != null) newOwner.sendMessage(ChatColor.GREEN + "Zostałeś nowym liderem gildii " + tag + ".");
+        });
     }
 
     // /g ustawdom
@@ -562,12 +767,11 @@ public class GuildCommand implements CommandExecutor {
         guild.setHomeYaw(loc.getYaw());
         guild.setHomePitch(loc.getPitch());
 
-        guildManager.saveGuild(guild);
-        guildManager.reloadGuild(tag);
-        plugin.getGuildTagManager().refreshAllOnline();
-
-
-        p.sendMessage(ChatColor.GREEN + "Ustawiono dom gildii w tym miejscu.");
+        persistGuildsThen(p, actor -> {
+            guildManager.reloadGuild(tag);
+            plugin.getGuildTagManager().refreshAllOnline();
+            actor.sendMessage(ChatColor.GREEN + "Ustawiono dom gildii w tym miejscu.");
+        }, guild);
     }
 
     private void handleGuildHome(Player p, User user) {
@@ -589,9 +793,11 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        World world = Bukkit.getWorld(guild.getHomeWorld());
-        if (world == null) {
-            p.sendMessage(ChatColor.RED + "Świat domu gildii nie istnieje.");
+        try {
+            StoredHomeData.validateLocation(guild.getHomeWorld(), guild.getHomeX(), guild.getHomeY(),
+                    guild.getHomeZ(), guild.getHomeYaw(), guild.getHomePitch());
+        } catch (IllegalArgumentException invalidHome) {
+            p.sendMessage(ChatColor.RED + "Zapis domu gildii jest nieprawidłowy.");
             return;
         }
 
@@ -632,7 +838,7 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        String otherTag = args[1].toUpperCase();
+        String otherTag = GuildManager.normalizeTag(args[1]);
         if (myTag.equalsIgnoreCase(otherTag)) {
             p.sendMessage(ChatColor.RED + "Nie możesz zrobić sojuszu z własną gildią.");
             return;
@@ -646,18 +852,18 @@ public class GuildCommand implements CommandExecutor {
         }
 
         // 1) jeśli już jest sojusz -> ZERWIJ
-        if (myGuild.getAlliedGuilds().contains(otherTag)) {
+        if (GuildManager.containsTag(myGuild.getAlliedGuilds(), otherTag)) {
             myGuild.getAlliedGuilds().remove(otherTag);
             otherGuild.getAlliedGuilds().remove(myTag);
 
-            guildManager.saveGuild(myGuild);
-            guildManager.saveGuild(otherGuild);
-            guildManager.reloadGuild(myTag);
-            guildManager.reloadGuild(otherTag);
-            plugin.getGuildTagManager().refreshAllOnline();
-
-            String msg = "§6[GILDIA] §eSojusz między gildiami §f[" + myTag + "] §ea §f[" + otherTag + "] §ezostał zerwany.";
-            sendGlobal(msg);
+            persistGuildsThen(p, actor -> {
+                guildManager.reloadGuild(myTag);
+                guildManager.reloadGuild(otherTag);
+                plugin.getGuildTagManager().refreshAllOnline();
+                sendGlobal("§6[GILDIA] §eSojusz między gildiami §f[" + myTag + "] §ea §f["
+                        + otherTag + "] §ezostał zerwany.");
+                actor.sendMessage(ChatColor.GREEN + "Zerwano sojusz z gildią [" + otherTag + "].");
+            }, myGuild, otherGuild);
             return;
         }
 
@@ -668,40 +874,36 @@ public class GuildCommand implements CommandExecutor {
             myGuild.getAlliedGuilds().add(otherTag);
             otherGuild.getAlliedGuilds().add(myTag);
 
-            guildManager.saveGuild(myGuild);
-            guildManager.saveGuild(otherGuild);
-            guildManager.reloadGuild(myTag);
-            guildManager.reloadGuild(otherTag);
-            plugin.getGuildTagManager().refreshAllOnline();
-
-            String msg = "§6[GILDIA] §eGildie §f[" + myTag + "] §eoraz §f[" + otherTag + "] §ezawarły sojusz.";
-            sendGlobal(msg);
+            persistGuildsThen(p, actor -> {
+                guildManager.reloadGuild(myTag);
+                guildManager.reloadGuild(otherTag);
+                plugin.getGuildTagManager().refreshAllOnline();
+                sendGlobal("§6[GILDIA] §eGildie §f[" + myTag + "] §eoraz §f[" + otherTag
+                        + "] §ezawarły sojusz.");
+                actor.sendMessage(ChatColor.GREEN + "Zawarto sojusz z gildią [" + otherTag + "].");
+            }, myGuild, otherGuild);
             return;
         }
 
         // 3) w przeciwnym wypadku -> WYSYŁAMY ZAPROSZENIE
         // zapisujemy zaproszenie po stronie drugiej gildii
         otherGuild.getAllyInvitations().add(myTag);
-        guildManager.saveGuild(otherGuild);
-        guildManager.reloadGuild(otherTag);
-
-        // title dla członków docelowej gildii (bez lokalnych chatów)
-        for (UUID memberId : otherGuild.getMembers()) {
-            Player member = Bukkit.getPlayer(memberId);
-            if (member != null) {
-                member.sendTitle(
-                        ChatColor.GOLD + "Sojusz od [" + myTag + "]",
-                        ChatColor.YELLOW + "Lider: /g sojusz " + myTag,
-                        10, 60, 10
-                );
+        persistGuildsThen(p, actor -> {
+            guildManager.reloadGuild(otherTag);
+            for (UUID memberId : otherGuild.getMembers()) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member != null) {
+                    member.sendTitle(
+                            ChatColor.GOLD + "Sojusz od [" + myTag + "]",
+                            ChatColor.YELLOW + "Lider: /g sojusz " + myTag,
+                            10, 60, 10
+                    );
+                }
             }
-        }
-
-        // jeśli chcesz globalną informację o samym zaproszeniu:
-        String inviteMsg = "§6[GILDIA] §f[" + myTag + "] §ewysłała propozycję sojuszu do gildii §f[" + otherTag + "]§e.";
-        sendGlobal(inviteMsg);
-
-        p.sendMessage(ChatColor.GREEN + "Wysłałeś propozycję sojuszu do gildii [" + otherTag + "].");
+            sendGlobal("§6[GILDIA] §f[" + myTag + "] §ewysłała propozycję sojuszu do gildii §f["
+                    + otherTag + "]§e.");
+            actor.sendMessage(ChatColor.GREEN + "Wysłałeś propozycję sojuszu do gildii [" + otherTag + "].");
+        }, otherGuild);
     }
 
 
@@ -726,33 +928,49 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(ChatColor.RED + "Gildia już nie istnieje, dane wyczyszczono.");
             return;
         }
-        plugin.getGuildTagManager().refreshAllOnline();
-        plugin.getScoreboardManager().updateBoard(p);
+        UUID ownerUuid = p.getUniqueId();
+        String guildName = guild.getName();
+        List<UUID> members = new ArrayList<>(guild.getMembers());
+        p.sendMessage(ChatColor.GRAY + "Rozwiązuję gildię...");
+        guildManager.deleteGuildAsync(guild).whenComplete((deleted, error) ->
+                BukkitTaskScheduler.execute(plugin, () -> {
+                    Player owner = Bukkit.getPlayer(ownerUuid);
+                    if (error != null || !Boolean.TRUE.equals(deleted)) {
+                        if (owner != null) {
+                            owner.sendMessage(ChatColor.RED
+                                    + "Nie udało się bezpiecznie rozwiązać gildii. Spróbuj ponownie za chwilę.");
+                        }
+                        if (error != null) {
+                            plugin.getLogger().warning("Could not dissolve guild " + tag + ": "
+                                    + error.getMessage());
+                        }
+                        return;
+                    }
 
-        String msg = "§6[GILDIA] §eGildia §f[" + tag + "] §e" + guild.getName() + " została rozwiązana.";
-        sendGlobal(msg);
-
-        for (UUID memberId : guild.getMembers()) {
-            Player member = Bukkit.getPlayer(memberId);
-            if (member != null) {
-                User memberUser = userManager.loadOrGetUser(member);
-                if (memberUser != null) {
-                    memberUser.setGuildTag(null);
-                    memberUser.setGuildRole(null);
-                }
-                if (!memberId.equals(p.getUniqueId())) {
-                    member.sendMessage(ChatColor.RED + "Twoja gildia [" + tag + "] została rozwiązana.");
-                }
-            }
-        }
-
-        guildManager.deleteGuild(guild);
-        user.setGuildTag(null);
-        user.setGuildRole(null);
-        plugin.getGuildTagManager().refreshAllOnline();
-        plugin.getScoreboardManager().updateBoard(p);
-
-        p.sendMessage(ChatColor.YELLOW + "Rozwiązałeś gildię [" + tag + "] " + guild.getName() + ".");
+                    for (UUID memberId : members) {
+                        Player member = Bukkit.getPlayer(memberId);
+                        if (member == null) continue;
+                        User memberUser = userManager.getUser(memberId);
+                        if (memberUser != null) {
+                            memberUser.setGuildTag(null);
+                            memberUser.setGuildRole(null);
+                        }
+                        if (!memberId.equals(ownerUuid)) {
+                            member.sendMessage(ChatColor.RED + "Twoja gildia [" + tag + "] została rozwiązana.");
+                        }
+                    }
+                    User currentOwnerUser = userManager.getUser(ownerUuid);
+                    if (currentOwnerUser != null) {
+                        currentOwnerUser.setGuildTag(null);
+                        currentOwnerUser.setGuildRole(null);
+                    }
+                    plugin.getGuildTagManager().refreshAllOnline();
+                    if (owner != null) {
+                        plugin.getScoreboardManager().updateBoard(owner);
+                        owner.sendMessage(ChatColor.YELLOW + "Rozwiązałeś gildię [" + tag + "] " + guildName + ".");
+                    }
+                    sendGlobal("§6[GILDIA] §eGildia §f[" + tag + "] §e" + guildName + " została rozwiązana.");
+                }));
     }
 
     // /gildia zapros GRACZ
@@ -795,12 +1013,17 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        guild.getInvitations().add(target.getUniqueId());
-        guildManager.saveGuild(guild);
-        plugin.getGuildTagManager().refreshAllOnline();
-        p.sendMessage(ChatColor.GREEN + "Wysłałeś zaproszenie do gildii [" + tag + "] dla " + target.getName() + ".");
-        target.sendMessage(ChatColor.YELLOW + "Otrzymałeś zaproszenie do gildii [" + tag + "] " + guild.getName()
-                + ". Użyj /gildia akceptuj " + tag + " aby dołączyć.");
+        UUID targetUuid = target.getUniqueId();
+        guild.getInvitations().add(targetUuid);
+        persistGuildsThen(p, actor -> {
+            plugin.getGuildTagManager().refreshAllOnline();
+            actor.sendMessage(ChatColor.GREEN + "Wysłałeś zaproszenie do gildii [" + tag + "] dla " + targetName + ".");
+            Player currentTarget = Bukkit.getPlayer(targetUuid);
+            if (currentTarget != null) {
+                currentTarget.sendMessage(ChatColor.YELLOW + "Otrzymałeś zaproszenie do gildii [" + tag + "] "
+                        + guild.getName() + ". Użyj /gildia akceptuj " + tag + " aby dołączyć.");
+            }
+        }, guild);
     }
     // /gildia akceptuj TAG
     private void handleAccept(Player p, User user, String[] args) {
@@ -813,7 +1036,7 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        String tag = args[1].toUpperCase();
+        String tag = GuildManager.normalizeTag(args[1]);
         Guild guild = guildManager.getGuild(tag);
         if (guild == null) {
             p.sendMessage(ChatColor.RED + "Taka gildia nie istnieje.");
@@ -828,13 +1051,10 @@ public class GuildCommand implements CommandExecutor {
 
         guild.getInvitations().remove(uuid);
         guild.getMembers().add(uuid);
-        guildManager.saveGuild(guild);
-        plugin.getGuildTagManager().refreshAllOnline();
-
-        user.setGuildTag(tag);
-        user.setGuildRole("MEMBER");
-
-        p.sendMessage(ChatColor.GREEN + "Dołączyłeś do gildii [" + tag + "] " + guild.getName() + ".");
+        persistGuildMemberships(p, guild, Map.of(uuid, "MEMBER"), actor -> {
+            plugin.getGuildTagManager().refreshAllOnline();
+            actor.sendMessage(ChatColor.GREEN + "Dołączyłeś do gildii [" + tag + "] " + guild.getName() + ".");
+        });
     }
 
 
@@ -853,58 +1073,124 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        String tag = args[1].toUpperCase();
+        String tag = GuildManager.normalizeTag(args[1]);
         String name = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
 
-        if (tag.length() < 2 || tag.length() > 5) {
-            p.sendMessage(ChatColor.RED + "Tag musi mieć od 2 do 5 znaków.");
+        if (tag == null || !tag.matches("[A-Z0-9]{2,5}")) {
+            p.sendMessage(ChatColor.RED + "Tag musi mieć od 2 do 5 liter lub cyfr.");
             return;
         }
-        if (guildManager.exists(tag)) {
-            p.sendMessage(ChatColor.RED + "Gildia o takim tagu już istnieje.");
-            return;
-        }
-
-        Guild guild = guildManager.createGuild(tag, name, p.getUniqueId());
-        if (guild == null) {
-            p.sendMessage(ChatColor.RED + "Nie udało się utworzyć gildii.");
+        if (name.isBlank() || name.length() > 32) {
+            p.sendMessage(ChatColor.RED + "Nazwa gildii musi mieć od 1 do 32 znaków.");
             return;
         }
         Location loc = p.getLocation();
+        Guild guild = new Guild(tag, name, p.getUniqueId());
+        guild.getMembers().add(p.getUniqueId());
         guild.setHomeWorld(loc.getWorld().getName());
         guild.setHomeX(loc.getX());
         guild.setHomeY(loc.getY());
         guild.setHomeZ(loc.getZ());
-        guildManager.saveGuild(guild);
-        guildManager.reloadGuild(guild.getTag());
+        guild.setHomeYaw(loc.getYaw());
+        guild.setHomePitch(loc.getPitch());
+        UUID ownerUuid = p.getUniqueId();
+        String ownerName = p.getName();
+        if (!pendingGuildCreations.add(ownerUuid)) {
+            p.sendMessage(ChatColor.GRAY + "Tworzenie gildii już trwa.");
+            return;
+        }
+        p.sendMessage(ChatColor.GRAY + "Tworzę gildię...");
+        guildManager.createGuildAsync(guild).whenComplete((createdGuild, error) -> {
+            boolean scheduled = BukkitTaskScheduler.execute(plugin, () -> {
+                    pendingGuildCreations.remove(ownerUuid);
+                    Player owner = Bukkit.getPlayer(ownerUuid);
+                    if (owner == null) {
+                        if (error != null) {
+                            plugin.getLogger().warning("Could not create guild " + tag + " for " + ownerName
+                                    + ": " + error.getMessage());
+                        } else if (createdGuild != null) {
+                            userManager.updateGuildMembershipAsync(ownerUuid, createdGuild.getTag(), "OWNER")
+                                    .exceptionally(profileError -> {
+                                        plugin.getLogger().severe("Guild " + tag + " was created, but owner profile "
+                                                + ownerUuid + " could not be updated: " + profileError.getMessage());
+                                        return null;
+                                    });
+                        }
+                        return;
+                    }
+                    if (error != null) {
+                        plugin.getLogger().warning("Could not create guild " + tag + " for " + ownerName
+                                + ": " + error.getMessage());
+                        owner.sendMessage(ChatColor.RED + "Nie udało się utworzyć gildii. Spróbuj ponownie.");
+                        return;
+                    }
+                    if (createdGuild == null) {
+                        owner.sendMessage(ChatColor.RED + "Gildia o takim tagu już istnieje lub jest tworzona.");
+                        return;
+                    }
+                    userManager.updateGuildMembershipAsync(ownerUuid, createdGuild.getTag(), "OWNER")
+                            .whenComplete((ignored, profileError) -> BukkitTaskScheduler.execute(plugin, () -> {
+                                Player currentOwner = Bukkit.getPlayer(ownerUuid);
+                                if (currentOwner == null || !currentOwner.isOnline()) return;
+                                if (profileError != null) {
+                                    currentOwner.sendMessage(ChatColor.RED + "Gildia powstała, ale profil wymaga synchronizacji.");
+                                    plugin.getLogger().severe("Could not update guild owner profile " + ownerUuid
+                                            + ": " + profileError.getMessage());
+                                }
+                                finishGuildCreation(currentOwner, createdGuild);
+                            }));
+            });
+            if (!scheduled) {
+                pendingGuildCreations.remove(ownerUuid);
+                if (createdGuild != null) {
+                    userManager.updateGuildMembershipAsync(ownerUuid, createdGuild.getTag(), "OWNER")
+                            .exceptionally(profileError -> {
+                                plugin.getLogger().severe("Guild " + tag + " was created during shutdown, but owner "
+                                        + ownerUuid + " profile could not be updated: " + profileError.getMessage());
+                                return null;
+                            });
+                }
+            }
+        });
+    }
+
+    private void finishGuildCreation(Player owner, Guild guild) {
         Location center = new Location(
                 Bukkit.getWorld(guild.getHomeWorld()),
                 guild.getHomeX(),
                 guild.getHomeY(),
                 guild.getHomeZ()
         );
-
-        try {
-            plugin.getSchematicPaster().pasteSchem(center, "gildia_jajko");
-        } catch (Exception e) {
-            p.sendMessage(ChatColor.RED + "Nie udało się wkleić schem: " + e.getMessage());
-            e.printStackTrace();
+        if (center.getWorld() == null) {
+            owner.sendMessage(ChatColor.RED + "Nie można utworzyć gildii: świat docelowy jest niedostępny.");
+            return;
         }
+        UUID ownerUuid = owner.getUniqueId();
+        plugin.pasteSchematicAsync(center, "gildia_jajko").whenComplete((ignored, error) ->
+                BukkitTaskScheduler.execute(plugin, () -> {
+                    Player currentOwner = Bukkit.getPlayer(ownerUuid);
+                    if (currentOwner != owner || !owner.isOnline()) return;
+                    if (error != null) {
+                        plugin.getLogger().warning("Could not paste guild schematic for " + guild.getTag() + ": "
+                                + error.getMessage());
+                        currentOwner.sendMessage(ChatColor.RED + "Nie udało się wkleić schem gildii.");
+                    }
 
-
-// teleport właściciela na środek (np. 1 blok wyżej żeby nie wbiło w blok)
-        p.teleport(center.clone().add(0.5, 1, 0.5));
-        if (user != null) {
-            user.setGuildTag(guild.getTag());
-            user.setGuildRole("OWNER");
-        }
-
-        String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
-                " §estworzył§x gildie §f[" + tag + "] §e" + name + ".";
-        sendGlobal(msg);
-        plugin.getScoreboardManager().updateBoard(p);
-        plugin.getGuildTagManager().refreshAllOnline();
-        p.sendMessage(ChatColor.GREEN + "Stworzyłeś gildię [" + tag + "] " + name + ".");
+                    currentOwner.teleportAsync(center.clone().add(0.5, 1, 0.5))
+                            .whenComplete((teleported, teleportError) -> BukkitTaskScheduler.execute(plugin, () -> {
+                                if (Bukkit.getPlayer(ownerUuid) == owner && owner.isOnline()
+                                        && (teleportError != null || !Boolean.TRUE.equals(teleported))) {
+                                    owner.sendMessage(ChatColor.RED + "Gildia powstała, ale teleportacja nie powiodła się.");
+                                }
+                            }));
+                    String message = "§6[GILDIA] §eGracz §f" + currentOwner.getName()
+                            + " §estworzył§x gildie §f[" + guild.getTag() + "] §e" + guild.getName() + ".";
+                    sendGlobal(message);
+                    plugin.getScoreboardManager().updateBoard(currentOwner);
+                    plugin.getGuildTagManager().refreshAllOnline();
+                    currentOwner.sendMessage(ChatColor.GREEN + "Stworzyłeś gildię [" + guild.getTag() + "] "
+                            + guild.getName() + ".");
+                }));
     }
 
 
@@ -926,7 +1212,7 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
 
-        String tag = args[1].toUpperCase();
+        String tag = GuildManager.normalizeTag(args[1]);
         Guild guild = guildManager.getGuild(tag);
         if (guild == null) {
             p.sendMessage(ChatColor.RED + "Taka gildia nie istnieje.");
@@ -942,22 +1228,14 @@ public class GuildCommand implements CommandExecutor {
 
         guild.getInvitations().remove(uuid);
         guild.getMembers().add(uuid);
-        guildManager.saveGuild(guild);
-        plugin.getGuildTagManager().refreshAllOnline();
-        plugin.getScoreboardManager().updateBoard(p);
-
-// USTAWIAMY DANE UŻYTKOWNIKA
-        if (user != null) {
-            user.setGuildTag(guild.getTag());
-            user.setGuildRole("MEMBER");
-        }
-
-        p.sendMessage(ChatColor.GREEN + "Dołączyłeś do gildii [" + guild.getTag() + "] " + guild.getName() + ".");
-        String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
-                " §edołączył do gildii §f[" + guild.getTag() + "] §e" + guild.getName() + ".";
-        sendGlobal(msg);
-        plugin.getGuildTagManager().refreshAllOnline();
-        plugin.getScoreboardManager().updateBoard(p);
+        persistGuildMemberships(p, guild, Map.of(uuid, "MEMBER"), actor -> {
+            plugin.getGuildTagManager().refreshAllOnline();
+            plugin.getScoreboardManager().updateBoard(actor);
+            actor.sendMessage(ChatColor.GREEN + "Dołączyłeś do gildii [" + guild.getTag() + "] "
+                    + guild.getName() + ".");
+            sendGlobal("§6[GILDIA] §eGracz §f" + actor.getName() + " §edołączył do gildii §f["
+                    + guild.getTag() + "] §e" + guild.getName() + ".");
+        });
 
 
     }
@@ -988,16 +1266,13 @@ public class GuildCommand implements CommandExecutor {
 
         guild.getMembers().remove(uuid);
         guild.getMods().remove(uuid);
-        guildManager.saveGuild(guild);
-        user.setGuildTag(null);
-        user.setGuildRole(null);
-        plugin.getGuildTagManager().refreshAllOnline();
-        plugin.getScoreboardManager().updateBoard(p);
-
-        p.sendMessage(ChatColor.YELLOW + "Opuściłeś gildię [" + tag + "] " + guild.getName() + ".");
-        String msg = "§6[GILDIA] §eGracz §f" + p.getName() +
-                " §eopuścił gildię §f[" + tag + "] §e" + guild.getName() + ".";
-        sendGlobal(msg);
+        persistGuildMemberships(p, guild, Map.of(uuid, "NONE"), actor -> {
+            plugin.getGuildTagManager().refreshAllOnline();
+            plugin.getScoreboardManager().updateBoard(actor);
+            actor.sendMessage(ChatColor.YELLOW + "Opuściłeś gildię [" + tag + "] " + guild.getName() + ".");
+            sendGlobal("§6[GILDIA] §eGracz §f" + actor.getName() + " §eopuścił gildię §f["
+                    + tag + "] §e" + guild.getName() + ".");
+        });
 
     }
 
@@ -1005,7 +1280,7 @@ public class GuildCommand implements CommandExecutor {
     private void handleInfo(Player p, User user, String[] args) {
         String tag;
         if (args.length >= 2) {
-            tag = args[1].toUpperCase();
+            tag = GuildManager.normalizeTag(args[1]);
         } else if (user.hasGuild()) {
             tag = user.getGuildTag();
         } else {

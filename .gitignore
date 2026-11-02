@@ -111,3 +111,10 @@ buildNumber.properties
 
 # Common working directory
 run/
+
+# Local upstream checkout, database snapshots and credentials are never release inputs.
+Purpur/
+*.rdb
+.env
+.env.*
+!.env.example

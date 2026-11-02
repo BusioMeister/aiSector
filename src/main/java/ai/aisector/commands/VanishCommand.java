@@ -37,9 +37,15 @@ public class VanishCommand implements CommandExecutor {
         // Poproś VanishManager o wykonanie akcji
         if (user.isVanished()) {
             vanishManager.vanish(player);
+            // po vanish/unvanish:
+            plugin.getGuildTagManager().updateTagsFor(player);
+
             player.sendMessage("§aVanish został włączony.");
         } else {
             vanishManager.unvanish(player);
+            // po vanish/unvanish:
+            plugin.getGuildTagManager().updateTagsFor(player);
+
             player.sendMessage("§cVanish został wyłączony.");
         }
         return true;

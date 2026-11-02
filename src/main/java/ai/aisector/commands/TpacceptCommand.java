@@ -1,22 +1,32 @@
 package ai.aisector.commands;
 
+import ai.aisector.SectorPlugin;
+import ai.aisector.shared.RedisChannels;
 import ai.aisector.database.RedisManager;
+import ai.aisector.utils.BukkitTaskScheduler;
 import com.google.gson.JsonObject;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import redis.clients.jedis.Jedis;
 
 public class TpacceptCommand implements CommandExecutor {
+    private final SectorPlugin plugin;
     private final RedisManager redisManager;
-    public TpacceptCommand(RedisManager redisManager) { this.redisManager = redisManager; }
+    public TpacceptCommand(SectorPlugin plugin) {
+        this.plugin = plugin;
+        this.redisManager = plugin.getRedisManager();
+    }
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!(sender instanceof Player)) return true;
         Player accepter = (Player) sender;
+        if (accepter.getLocation().getWorld() == null) {
+            accepter.sendMessage("§cNie można odczytać twojej lokalizacji.");
+            return true;
+        }
 
 
         JsonObject req = new JsonObject();
@@ -32,9 +42,13 @@ public class TpacceptCommand implements CommandExecutor {
         locationJson.addProperty("pitch", loc.getPitch());
         req.add("location", locationJson);
 
-        try (Jedis jedis = redisManager.getJedis()) {
-            jedis.publish("aisector:tpa_accept", req.toString());
-        }
+        redisManager.publishAsync(RedisChannels.TPA_ACCEPT, req.toString()).whenComplete((subscribers, error) -> {
+            if (error != null || subscribers == null || subscribers == 0) {
+                BukkitTaskScheduler.execute(plugin, () -> {
+                    if (accepter.isOnline()) accepter.sendMessage("§cNie udało się wysłać akceptacji TPA przez sieć.");
+                });
+            }
+        });
         return true;
     }
 }

@@ -13,6 +13,15 @@ public enum GeneratorType {
         this.material = material;
         this.regenTicks = regenTicks;
     }
+
+    public static GeneratorType fromPersistentName(String value) {
+        if (value == null || value.length() > 32) throw new IllegalArgumentException("Invalid generator type");
+        try {
+            return valueOf(value);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Unknown generator type", invalid);
+        }
+    }
     public Material getMaterial() { return material; }
     public int getRegenTicks() { return regenTicks; }
 }

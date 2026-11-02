@@ -1,20 +1,21 @@
 package ai.aisector.sectors.player;
 
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class GlobalPlayerManager {
 
-    // Używamy ConcurrentHashMap, aby bezpiecznie przechowywać listę
-    private static final Set<String> globalPlayerList = ConcurrentHashMap.newKeySet();
+    private static final AtomicReference<Set<String>> globalPlayerList = new AtomicReference<>(Set.of());
 
     public static void updatePlayerList(Set<String> newPlayerList) {
-        globalPlayerList.clear();
-        globalPlayerList.addAll(newPlayerList);
+        if (newPlayerList == null) return;
+        Set<String> snapshot = new HashSet<>(newPlayerList);
+        snapshot.removeIf(java.util.Objects::isNull);
+        globalPlayerList.set(Set.copyOf(snapshot));
     }
 
     public static Set<String> getGlobalPlayerList() {
-        return Collections.unmodifiableSet(globalPlayerList);
+        return globalPlayerList.get();
     }
 }

@@ -2,9 +2,8 @@ package ai.aisector.guilds;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
-import ai.aisector.network.packet.GuildTagUpdatePacket;
-import ai.aisector.redis.packet.PacketBus;
-import ai.aisector.redis.packet.PacketEnvelope;
+import ai.aisector.shared.RedisChannels;
+import ai.aisector.shared.packet.GuildTagUpdatePacket;
 import ai.aisector.redis.packet.RedisPacketPublisher;
 import ai.aisector.user.User;
 import ai.aisector.user.UserManager;
@@ -58,9 +57,9 @@ public class GuildTagManager {
 
         if (viewerTag.equalsIgnoreCase(targetTag)) return "GREEN";
 
-        Guild viewerGuild = plugin.getGuildManager().reloadGuild(viewerTag);
+        Guild viewerGuild = plugin.getGuildManager().getGuildCached(viewerTag);
         if (viewerGuild != null && viewerGuild.getAlliedGuilds() != null
-                && viewerGuild.getAlliedGuilds().contains(targetTag)) {
+                && GuildManager.containsTag(viewerGuild.getAlliedGuilds(), targetTag)) {
             return "BLUE";
         }
 
@@ -90,8 +89,13 @@ public class GuildTagManager {
         // WYSYŁAJ PAKIET
         String[] playersArray = playerData.toArray(new String[0]);
         GuildTagUpdatePacket packet = new GuildTagUpdatePacket(viewer.getUniqueId().toString(), playersArray);
-
-        packetPublisher.publish("aisector:packet", packet);
+        String viewerName = viewer.getName();
+        packetPublisher.publishAsync(RedisChannels.PACKET, packet)
+                .exceptionally(error -> {
+                    plugin.getLogger().warning("Could not publish guild tag update for " + viewerName
+                            + ": " + error.getMessage());
+                    return null;
+                });
     }
     public void refreshAllOnline() {
         for (Player viewer : Bukkit.getOnlinePlayers()) {

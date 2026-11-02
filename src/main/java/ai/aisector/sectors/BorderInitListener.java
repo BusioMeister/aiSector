@@ -3,6 +3,7 @@ package ai.aisector.sectors;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import ai.aisector.utils.BukkitTaskScheduler;
 import redis.clients.jedis.JedisPubSub;
 
 import java.util.UUID;
@@ -23,9 +24,11 @@ public class BorderInitListener extends JedisPubSub {
 
     @Override
     public void onMessage(String channel, String message) {
-        if (!channel.startsWith("sector-border-init:")) return;
+        if (channel == null || !channel.startsWith("sector-border-init:")
+                || message == null || message.length() != 36) return;
 
         String sectorName = channel.substring("sector-border-init:".length());
+        if (!sectorName.matches("[A-Za-z0-9_-]{1,64}")) return;
 
         UUID uuid;
         try {
@@ -35,7 +38,7 @@ public class BorderInitListener extends JedisPubSub {
             return;
         }
 
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        BukkitTaskScheduler.execute(plugin, () -> Bukkit.getScheduler().runTaskLater(plugin, () -> {
             Player player = Bukkit.getPlayer(uuid);
             if (player == null || !player.isOnline()) {
                 // To nie jest błąd, gracz mógł się wylogować w międzyczasie
@@ -51,6 +54,6 @@ public class BorderInitListener extends JedisPubSub {
             // 🔥 POPRAWKA: Używamy teraz poprawnej metody z WorldBorderManager 🔥
             borderManager.sendWorldBorder(player, sector);
             plugin.getLogger().info("✅ Zainicjowano border dla gracza " + player.getName() + " w sektorze: " + sectorName);
-        }, 5L);
+        }, 5L));
     }
 }

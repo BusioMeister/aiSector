@@ -1,4 +1,23 @@
-aiSector
+# aiSector
+
+## Rewrite 2.0 — 2026-11-02
+
+Paper 26.3, Java **25**. Zgodny moduł proxy: [VelocityPlugin](https://github.com/BusioMeister/VelocityPlugin).
+
+Budowanie z samodzielnego klonu (bez nadrzędnego workspace):
+
+```powershell
+.\build.ps1
+```
+
+Linux/macOS: `sh build.sh`. Wrapper pobiera Maven; skrypt najpierw instaluje lokalny parent POM i zweryfikowany `shared`, potem wykonuje `clean verify` pluginu. Wynik: `target/aiSector-2.0.0-SNAPSHOT.jar`.
+
+`build-support/` zawiera zgodny snapshot źródeł współdzielonych i nadrzędnego POM-u; nie wymaga trzeciego prywatnego repozytorium ani pobierania własnych artefaktów z Maven Central. `source-manifest.json` zapisuje hashe wejść publikacji. Przy zmianach wspólnego protokołu aktualizować oba repozytoria razem.
+
+Konfiguracja backendu: `src/main/resources/config.yml` to szablon bez sekretów. Skonfiguruj nazwę sektora, Redis/Mongo i właściwy forwarding w swoim środowisku. MySQL domyślnie wyłączony. `/spawn` publiczny, `/msg` i `/reply` nieaktywne; lokalny edytowalny invsee zachowany. Szczegóły zmian i ograniczenia: [RELEASE_NOTES.md](RELEASE_NOTES.md).
+
+## Oryginalny opis projektu
+
 Zaawansowany plugin sektorowy dla serwerów Minecraft
 Witaj w repozytorium projektu aiSector! Jest to kompleksowy system zaprojektowany do zarządzania siecią połączonych serwerów Minecraft (sektorów), stworzony z myślą o płynnej i zintegrowanej rozgrywce na dużą skalę.
 

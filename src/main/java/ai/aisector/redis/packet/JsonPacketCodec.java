@@ -1,5 +1,6 @@
 package ai.aisector.redis.packet;
 
+import ai.aisector.shared.Packet;
 import com.google.gson.Gson;
 
 public class JsonPacketCodec<T extends Packet> implements PacketCodec<T> {

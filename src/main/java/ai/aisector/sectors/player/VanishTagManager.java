@@ -33,6 +33,17 @@ public class VanishTagManager {
         }
     }
 
+    public void reconcileViewer(Player viewer, java.util.Set<String> desiredNames) {
+        Team team = viewer.getScoreboard().getTeam(VANISHED_TEAM_NAME);
+        boolean allowed = viewer.hasPermission("aisector.command.vanish.see");
+        if (team != null) {
+            for (String entry : java.util.Set.copyOf(team.getEntries())) {
+                if (!allowed || !desiredNames.contains(entry)) team.removeEntry(entry);
+            }
+        }
+        if (allowed) desiredNames.forEach(name -> applyTagForStaff(viewer, name, true));
+    }
+
     private void applyTagForStaff(Player staff, String targetPlayerName, boolean isVanished) {
         Scoreboard scoreboard = staff.getScoreboard();
         Team vanishedTeam = scoreboard.getTeam(VANISHED_TEAM_NAME);

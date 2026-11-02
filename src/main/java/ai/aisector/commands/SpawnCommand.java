@@ -2,12 +2,12 @@ package ai.aisector.commands;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
-import ai.aisector.sectors.Sector;
+import ai.aisector.shared.RedisChannels;
 import ai.aisector.sectors.SectorManager;
-import ai.aisector.sectors.WorldBorderManager;
+import ai.aisector.listeners.GlobalSpawnData;
 import ai.aisector.user.UserManager;
+import ai.aisector.utils.BukkitTaskScheduler;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -15,7 +15,6 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import redis.clients.jedis.Jedis;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,7 +22,6 @@ public class SpawnCommand implements CommandExecutor {
 
     private final SectorPlugin plugin;
     private final SectorManager sectorManager;
-    private final WorldBorderManager borderManager;
     private final UserManager userManager;
     private final RedisManager redisManager;
     private final Gson gson = new Gson();
@@ -31,7 +29,6 @@ public class SpawnCommand implements CommandExecutor {
     public SpawnCommand(SectorPlugin plugin) {
         this.plugin = plugin;
         this.sectorManager = plugin.getSectorManager();
-        this.borderManager = plugin.getWorldBorderManager();
         this.userManager = plugin.getUserManager();
         this.redisManager = plugin.getRedisManager();
     }
@@ -44,43 +41,81 @@ public class SpawnCommand implements CommandExecutor {
         }
 
         Player player = (Player) sender;
-        String spawnDataJson;
-        try (Jedis jedis = redisManager.getJedis()) {
-            spawnDataJson = jedis.get("aisector:global_spawn");
-        }
+        player.sendMessage("§7Pobieram lokalizację globalnego spawnu...");
+        redisManager.getAsync(RedisChannels.GLOBAL_SPAWN).whenComplete((spawnDataJson, error) ->
+                BukkitTaskScheduler.execute(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    if (error != null) {
+                        plugin.getLogger().warning("Could not read global spawn: " + error.getMessage());
+                        player.sendMessage("§cNie udało się odczytać globalnego spawnu.");
+                        return;
+                    }
+                    teleportToGlobalSpawn(player, spawnDataJson);
+                }));
+        return true;
+    }
 
+    private void teleportToGlobalSpawn(Player player, String spawnDataJson) {
         if (spawnDataJson == null || spawnDataJson.isEmpty()) {
             player.sendMessage("§cSpawn serwera nie został jeszcze ustawiony!");
-            return true;
+            return;
         }
 
-        JsonObject spawnData = gson.fromJson(spawnDataJson, JsonObject.class);
-        String targetSector = spawnData.get("sector").getAsString();
-        String currentSectorName = sectorManager.getSectorForLocation(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
+        GlobalSpawnData spawnData;
+        try {
+            spawnData = GlobalSpawnData.parse(spawnDataJson);
+        } catch (RuntimeException exception) {
+            player.sendMessage("§cZapisany spawn jest nieprawidłowy.");
+            return;
+        }
+        String targetSector = spawnData.sector();
+        String currentSectorName = plugin.getConfig().getString("this-sector-name", "");
 
-        World world = Bukkit.getWorlds().get(0);
-        Location spawnLocation = new Location(world,
-                spawnData.get("x").getAsDouble(), spawnData.get("y").getAsDouble(), spawnData.get("z").getAsDouble(),
-                spawnData.get("yaw").getAsFloat(), spawnData.get("pitch").getAsFloat());
+        Location spawnLocation;
+        try {
+            World world = Bukkit.getWorlds().stream().findFirst()
+                    .orElseThrow(() -> new IllegalStateException("No world is loaded"));
+            spawnLocation = new Location(world, spawnData.x(), spawnData.y(), spawnData.z(),
+                    spawnData.yaw(), spawnData.pitch());
+        } catch (RuntimeException exception) {
+            player.sendMessage("§cLokalizacja globalnego spawnu jest nieprawidłowa.");
+            return;
+        }
 
-        if (targetSector.equals(currentSectorName)) {
-            player.teleport(spawnLocation);
-            player.sendMessage("§aZostałeś przeteleportowany na spawn!");
-        } else {
-            player.sendMessage("§7Trwa transfer na serwer spawnu...");
-
-            // 1. Zapisujemy dane (EQ, HP) do Redis za pomocą UserManager
-            userManager.savePlayerDataForTransfer(player, player.getLocation());
-
-            // 2. Zapisujemy OSTATECZNY cel teleportacji w Redis
-            try (Jedis jedis = redisManager.getJedis()) {
-                jedis.setex("player:final_teleport_target:" + player.getUniqueId(), 60, locationToJson(spawnLocation));
+        if (targetSector.equalsIgnoreCase(currentSectorName)) {
+            player.sendMessage("§7Teleportuję na spawn...");
+            try {
+                player.teleportAsync(spawnLocation).whenComplete((success, error) -> {
+                    BukkitTaskScheduler.execute(plugin, () -> {
+                            if (!player.isOnline()) return;
+                            if (error != null || !Boolean.TRUE.equals(success)) {
+                                plugin.getLogger().warning("Could not teleport " + player.getName()
+                                        + " to the local spawn" + (error == null ? "" : ": " + error.getMessage()));
+                                player.sendMessage("§cNie udało się teleportować na spawn.");
+                                return;
+                            }
+                            player.sendMessage("§aZostałeś przeteleportowany na spawn!");
+                    });
+                });
+            } catch (RuntimeException exception) {
+                plugin.getLogger().warning("Could not start local spawn teleport for " + player.getName()
+                        + ": " + exception.getMessage());
+                player.sendMessage("§cNie udało się teleportować na spawn.");
             }
-
-            // 3. Zlecamy transfer gracza
-            sectorManager.transferPlayer(player.getUniqueId(), targetSector);
+        } else {
+            try {
+                String snapshot = userManager.serializePlayerDataForTransfer(player, player.getLocation());
+                Map<String, String> transferKeys = Map.of(
+                        "player:final_teleport_target:" + player.getUniqueId(), locationToJson(spawnLocation));
+                sectorManager.transferPlayerAsync(player, targetSector, snapshot, transferKeys);
+            } catch (RuntimeException exception) {
+                plugin.getLogger().warning("Could not prepare spawn transfer for " + player.getName()
+                        + ": " + exception.getMessage());
+                player.sendMessage("§cNie udało się przygotować transferu na spawn.");
+                return;
+            }
+            player.sendMessage("§7Trwa bezpieczny transfer na serwer spawnu...");
         }
-        return true;
     }
 
     // Metoda pomocnicza do konwersji Location na JSON

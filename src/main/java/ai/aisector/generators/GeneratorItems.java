@@ -14,6 +14,10 @@ public final class GeneratorItems {
         return new NamespacedKey(plugin, "generator_type");
     }
 
+    public static NamespacedKey versionKey(SectorPlugin plugin) {
+        return new NamespacedKey(plugin, "generator_version");
+    }
+
     public static void registerRecipes(SectorPlugin plugin) {
         // Stoniarka
         ItemStack stoneGen = createGeneratorItem(plugin, Material.STONE, "§d§lStoniarka", GeneratorType.STONE);
@@ -33,10 +37,15 @@ public final class GeneratorItems {
     }
 
     public static ItemStack createGeneratorItem(SectorPlugin plugin, Material base, String name, GeneratorType type) {
+        if (type == null || base != type.getMaterial()) {
+            throw new IllegalArgumentException("Generator item material/type mismatch");
+        }
         ItemStack it = new ItemStack(base);
         ItemMeta meta = it.getItemMeta();
         meta.setDisplayName(name);
         meta.getPersistentDataContainer().set(genKey(plugin), PersistentDataType.STRING, type.name());
+        meta.getPersistentDataContainer().set(versionKey(plugin), PersistentDataType.INTEGER,
+                GeneratorItemData.CURRENT_VERSION);
         it.setItemMeta(meta);
         return it;
     }
