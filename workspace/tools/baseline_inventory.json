@@ -1,0 +1,275 @@
+{
+  "aiSector": {
+    "baseline_commit": "e0ae4972b415ff0d9b0a56c63fef88740fff2494",
+    "baseline_java_count": 123,
+    "current_java_count": 148,
+    "removed_java_paths": [
+      "src/main/java/ai/aisector/network/packet/GuildTagUpdatePacket.java",
+      "src/main/java/ai/aisector/redis/packet/Packet.java",
+      "src/main/java/ai/aisector/redis/packet/PacketEnvelope.java",
+      "src/main/java/ai/aisector/redis/packet/impl/AlertPacket.java",
+      "src/main/java/ai/aisector/redis/packet/impl/LocalTpaTeleportPacket.java",
+      "src/main/java/ai/aisector/redis/packet/impl/SendMessagePacket.java",
+      "src/main/java/ai/aisector/redis/packet/impl/TpaInitiateWarmupPacket.java"
+    ],
+    "added_java_paths": [
+      "src/main/java/ai/aisector/cobblex/CobbleXLootDefinition.java",
+      "src/main/java/ai/aisector/commands/BanRedisScripts.java",
+      "src/main/java/ai/aisector/commands/TpposCoordinates.java",
+      "src/main/java/ai/aisector/generators/GeneratorItemData.java",
+      "src/main/java/ai/aisector/generators/GeneratorLifecyclePolicy.java",
+      "src/main/java/ai/aisector/guilds/GuildDeletionNotice.java",
+      "src/main/java/ai/aisector/guilds/GuildProfileCleanup.java",
+      "src/main/java/ai/aisector/guilds/GuildPvpPolicy.java",
+      "src/main/java/ai/aisector/guilds/GuildRegionBounds.java",
+      "src/main/java/ai/aisector/guilds/WriteFailureFence.java",
+      "src/main/java/ai/aisector/listeners/BackupRestoreClaim.java",
+      "src/main/java/ai/aisector/listeners/CommandRedisPayloads.java",
+      "src/main/java/ai/aisector/listeners/GlobalSpawnData.java",
+      "src/main/java/ai/aisector/listeners/SectorGuiPayload.java",
+      "src/main/java/ai/aisector/listeners/TransferPayloadValidation.java",
+      "src/main/java/ai/aisector/listeners/VanishUpdatePayload.java",
+      "src/main/java/ai/aisector/sectors/SectorDefinitionValidation.java",
+      "src/main/java/ai/aisector/sectors/player/VanishNetworkStateCache.java",
+      "src/main/java/ai/aisector/task/TeleportWarmupRegistry.java",
+      "src/main/java/ai/aisector/user/HomeSlotMenu.java",
+      "src/main/java/ai/aisector/user/HomeSlotRepository.java",
+      "src/main/java/ai/aisector/user/PerKeyAsyncQueue.java",
+      "src/main/java/ai/aisector/user/ProfileMembershipVersion.java",
+      "src/main/java/ai/aisector/user/StoredHomeData.java",
+      "src/main/java/ai/aisector/user/TransferSnapshotGuard.java",
+      "src/main/java/ai/aisector/user/VerifiedGuildMembership.java",
+      "src/main/java/ai/aisector/utils/AsyncTeleportHandoff.java",
+      "src/main/java/ai/aisector/utils/BukkitTaskScheduler.java",
+      "src/main/java/ai/aisector/utils/GlobalChatPayloadValidation.java",
+      "src/main/java/ai/aisector/utils/LegacyItemInputStream.java",
+      "src/main/java/ai/aisector/utils/RuntimeConfigValidation.java",
+      "src/main/java/ai/aisector/utils/UserTextSanitizer.java"
+    ],
+    "removed_resources": [],
+    "command_executors_removed": {},
+    "command_executors_added": {},
+    "command_executors_changed": {},
+    "command_descriptor_changes": {
+      "heal": {
+        "before": {},
+        "after": {
+          "permission": "aisector.command.heal"
+        }
+      },
+      "tp": {
+        "before": {},
+        "after": {
+          "permission": "aisector.command.tp"
+        }
+      },
+      "pastetest": {
+        "before": {},
+        "after": {
+          "permission": "aisector.command.pastetest"
+        }
+      },
+      "banlist": {
+        "before": {},
+        "after": {
+          "permission": "aisector.ban.list"
+        }
+      },
+      "fly": {
+        "before": {},
+        "after": {
+          "permission": "aisector.command.fly"
+        }
+      },
+      "speed": {
+        "before": {},
+        "after": {
+          "permission": "aisector.command.speed"
+        }
+      },
+      "god": {
+        "before": {},
+        "after": {
+          "permission": "aisector.command.god"
+        }
+      },
+      "s": {
+        "before": {},
+        "after": {
+          "permission": "aisector.command.s"
+        }
+      },
+      "tpa": {
+        "before": {
+          "permission": ""
+        },
+        "after": {
+          "permission": "aisector.command.tpa"
+        }
+      },
+      "v": {
+        "before": {
+          "aliases": [
+            "vanish"
+          ]
+        },
+        "after": {
+          "aliases": [
+            "vanish"
+          ],
+          "permission": "aisector.command.vanish"
+        }
+      }
+    },
+    "literal_permissions_added": [
+      "aisector.ban.list",
+      "aisector.command.pastetest"
+    ],
+    "literal_permissions_removed": [],
+    "baseline_config_keys": [
+      "servers",
+      "servers.Sector1",
+      "servers.Sector1.address",
+      "servers.Sector1.motd",
+      "servers.Sector1.restricted",
+      "servers.Sector2",
+      "servers.Sector2.address",
+      "servers.Sector2.motd",
+      "servers.Sector2.restricted",
+      "servers.Sector3",
+      "servers.Sector3.address",
+      "servers.Sector3.motd",
+      "servers.Sector3.restricted"
+    ],
+    "current_config_keys": [
+      "mongodb",
+      "mongodb.database",
+      "mongodb.uri",
+      "mysql",
+      "mysql.database",
+      "mysql.enabled",
+      "mysql.host",
+      "mysql.password",
+      "mysql.port",
+      "mysql.username",
+      "redis",
+      "redis.host",
+      "redis.password",
+      "redis.port",
+      "this-sector-name"
+    ],
+    "velocity_registration_baseline": [],
+    "velocity_registration_current": [],
+    "config_parser_references_baseline": [
+      "ConfigurationSection",
+      "DropConfig",
+      "DropConfig.DropSpec",
+      "DropConfig.getAll",
+      "HikariConfig",
+      "JedisPoolConfig",
+      "YamlConfiguration",
+      "YamlConfiguration.loadConfiguration",
+      "cacheServerConfiguration",
+      "cfg.getConfigurationSection",
+      "com.zaxxer.hikari.HikariConfig",
+      "config.getConfigurationSection",
+      "getConfig",
+      "onPlayerConfigure",
+      "org.bukkit.configuration.ConfigurationSection",
+      "org.bukkit.configuration.file.YamlConfiguration",
+      "plugin.getConfig",
+      "poolConfig",
+      "poolConfig.setBlockWhenExhausted",
+      "poolConfig.setMaxIdle",
+      "poolConfig.setMaxTotal",
+      "poolConfig.setMinEvictableIdleTimeMillis",
+      "poolConfig.setMinIdle",
+      "poolConfig.setNumTestsPerEvictionRun",
+      "poolConfig.setTestOnBorrow",
+      "poolConfig.setTestOnReturn",
+      "poolConfig.setTestWhileIdle",
+      "poolConfig.setTimeBetweenEvictionRunsMillis",
+      "redis.clients.jedis.JedisPoolConfig",
+      "saveDefaultConfig",
+      "sectorSection.getConfigurationSection"
+    ],
+    "moved_or_renamed_classes": {
+      "src/main/java/ai/aisector/network/packet/GuildTagUpdatePacket.java": "shared/src/main/java/ai/aisector/shared/packet/GuildTagUpdatePacket.java",
+      "src/main/java/ai/aisector/redis/packet/Packet.java": "shared/src/main/java/ai/aisector/shared/Packet.java",
+      "src/main/java/ai/aisector/redis/packet/PacketEnvelope.java": "shared/src/main/java/ai/aisector/shared/PacketEnvelope.java",
+      "src/main/java/ai/aisector/redis/packet/impl/AlertPacket.java": "shared/src/main/java/ai/aisector/shared/packet/AlertPacket.java",
+      "src/main/java/ai/aisector/redis/packet/impl/LocalTpaTeleportPacket.java": "shared/src/main/java/ai/aisector/shared/packet/LocalTpaTeleportPacket.java",
+      "src/main/java/ai/aisector/redis/packet/impl/SendMessagePacket.java": "shared/src/main/java/ai/aisector/shared/packet/SendMessagePacket.java",
+      "src/main/java/ai/aisector/redis/packet/impl/TpaInitiateWarmupPacket.java": "shared/src/main/java/ai/aisector/shared/packet/TpaInitiateWarmupPacket.java"
+    },
+    "unmapped_removed_java_paths": []
+  },
+  "VelocityPlugin": {
+    "baseline_commit": "6f1ac27fe254fb94882413ea90001e90e3a36f67",
+    "baseline_java_count": 26,
+    "current_java_count": 24,
+    "removed_java_paths": [
+      "src/main/java/ai/velocitysector/GuildTagUpdatePacket.java",
+      "src/main/java/ai/velocitysector/PlayerDisconectListener.java",
+      "src/main/java/ai/velocitysector/redis/packet/AlertPacket.java",
+      "src/main/java/ai/velocitysector/redis/packet/LocalTpaTeleportPacket.java",
+      "src/main/java/ai/velocitysector/redis/packet/Packet.java",
+      "src/main/java/ai/velocitysector/redis/packet/PacketEnvelope.java",
+      "src/main/java/ai/velocitysector/redis/packet/SendMessagePacket.java",
+      "src/main/java/ai/velocitysector/redis/packet/TpaInitiateWarmupPacket.java"
+    ],
+    "added_java_paths": [
+      "src/main/java/ai/velocitysector/AsyncKeyedSequencer.java",
+      "src/main/java/ai/velocitysector/ConnectionGeneration.java",
+      "src/main/java/ai/velocitysector/PendingTpaRequest.java",
+      "src/main/java/ai/velocitysector/PlayerDisconnectListener.java",
+      "src/main/java/ai/velocitysector/PlayerSectorPersistence.java",
+      "src/main/java/ai/velocitysector/TpaLocation.java"
+    ],
+    "removed_resources": [
+      "src/main/resources/config.yml"
+    ],
+    "command_executors_removed": {},
+    "command_executors_added": {},
+    "command_executors_changed": {},
+    "command_descriptor_changes": {},
+    "literal_permissions_added": [],
+    "literal_permissions_removed": [],
+    "baseline_config_keys": [
+      "servers",
+      "servers.Sector1",
+      "servers.Sector1.address",
+      "servers.Sector2",
+      "servers.Sector2.address",
+      "servers.Sector3",
+      "servers.Sector3.address",
+      "servers.Sector4",
+      "servers.Sector4.address",
+      "servers.Sector5",
+      "servers.Sector5.address",
+      "try",
+      "try.connection-order"
+    ],
+    "current_config_keys": [],
+    "velocity_registration_baseline": [
+      "vwhitelist"
+    ],
+    "velocity_registration_current": [
+      "vwhitelist"
+    ],
+    "config_parser_references_baseline": [
+      "JedisPoolConfig"
+    ],
+    "moved_or_renamed_classes": {
+      "src/main/java/ai/velocitysector/GuildTagUpdatePacket.java": "shared/src/main/java/ai/aisector/shared/packet/GuildTagUpdatePacket.java",
+      "src/main/java/ai/velocitysector/PlayerDisconectListener.java": "VelocityPlugin/src/main/java/ai/velocitysector/PlayerDisconnectListener.java",
+      "src/main/java/ai/velocitysector/redis/packet/AlertPacket.java": "shared/src/main/java/ai/aisector/shared/packet/AlertPacket.java",
+      "src/main/java/ai/velocitysector/redis/packet/LocalTpaTeleportPacket.java": "shared/src/main/java/ai/aisector/shared/packet/LocalTpaTeleportPacket.java",
+      "src/main/java/ai/velocitysector/redis/packet/Packet.java": "shared/src/main/java/ai/aisector/shared/Packet.java",
+      "src/main/java/ai/velocitysector/redis/packet/PacketEnvelope.java": "shared/src/main/java/ai/aisector/shared/PacketEnvelope.java",
+      "src/main/java/ai/velocitysector/redis/packet/SendMessagePacket.java": "shared/src/main/java/ai/aisector/shared/packet/SendMessagePacket.java",
+      "src/main/java/ai/velocitysector/redis/packet/TpaInitiateWarmupPacket.java": "shared/src/main/java/ai/aisector/shared/packet/TpaInitiateWarmupPacket.java"
+    },
+    "unmapped_removed_java_paths": []
+  }
+}

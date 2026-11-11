@@ -1,5 +1,7 @@
 # aiSector
 
+**Pełny aktualny kod, narzędzia i dokumentacja workspace:** [WORKSPACE.md](WORKSPACE.md), katalog [`workspace/`](workspace/). Kod proxy jest w [VelocityPlugin](https://github.com/BusioMeister/VelocityPlugin).
+
 ## Rewrite 2.0 — 2026-11-02
 
 Paper 26.3, Java **25**. Zgodny moduł proxy: [VelocityPlugin](https://github.com/BusioMeister/VelocityPlugin).

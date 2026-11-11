@@ -1,0 +1,206 @@
+{
+  "descriptor": {
+    "commands": {
+      "pastetest": {
+        "permission": "aisector.command.pastetest"
+      },
+      "ga": {
+        "permission": "gildie.admin"
+      },
+      "gildia": {
+        "aliases": [
+          "g"
+        ]
+      },
+      "vserver": {},
+      "kick": {
+        "permission": "aisector.kick"
+      },
+      "ban": {
+        "permission": "aisector.ban.use"
+      },
+      "banip": {
+        "permission": "aisector.ban.ip"
+      },
+      "unban": {
+        "permission": "aisector.unban"
+      },
+      "banlist": {
+        "permission": "aisector.ban.list"
+      },
+      "ct": {
+        "aliases": [
+          "crafting"
+        ],
+        "permission": "aisector.command.crafting"
+      },
+      "cx": {
+        "permission": "aisector.cx"
+      },
+      "lvl": {
+        "aliases": [
+          "pkt"
+        ]
+      },
+      "drop": {},
+      "sektor": {},
+      "send": {},
+      "tpa": {
+        "permission": "aisector.command.tpa"
+      },
+      "tpaccept": {},
+      "alert": {},
+      "v": {
+        "aliases": [
+          "vanish"
+        ],
+        "permission": "aisector.command.vanish"
+      },
+      "fly": {
+        "permission": "aisector.command.fly"
+      },
+      "speed": {
+        "permission": "aisector.command.speed"
+      },
+      "heal": {
+        "permission": "aisector.command.heal"
+      },
+      "god": {
+        "permission": "aisector.command.god"
+      },
+      "wyjebane": {},
+      "s": {
+        "permission": "aisector.command.s"
+      },
+      "tp": {
+        "permission": "aisector.command.tp"
+      },
+      "setspawnsector": {
+        "permission": "aisector.command.setspawn"
+      },
+      "spawn": {},
+      "sectorinfo": {
+        "permission": "ai.sector.info"
+      },
+      "enderchest": {
+        "aliases": [
+          "ec"
+        ]
+      },
+      "ci": {
+        "aliases": [
+          "clear"
+        ],
+        "permission": "aisector.command.ci"
+      },
+      "repair": {
+        "permission": "aisector.command.repair.one"
+      },
+      "naprawkilof": {
+        "permission": "aisector.command.naprawkilof"
+      },
+      "gamemode": {
+        "aliases": [
+          "gm"
+        ],
+        "permission": "aisector.command.gamemode"
+      },
+      "weather": {
+        "permission": "aisector.command.weather"
+      },
+      "time": {
+        "permission": "aisector.command.time"
+      },
+      "invsee": {
+        "aliases": [
+          "eq"
+        ],
+        "permission": "aisector.command.invsee"
+      },
+      "tppos": {
+        "permission": "aisector.command.tppos"
+      },
+      "backup": {
+        "permission": "aisector.command.backup"
+      },
+      "sethome": {
+        "permission": "aisector.command.sethome"
+      },
+      "home": {
+        "permission": "aisector.command.home"
+      }
+    },
+    "permissions": {
+      "aisector.command.pastetest": {
+        "default": "op"
+      }
+    }
+  },
+  "executors": {
+    "pastetest": "PasteTestCommand",
+    "enderchest": "EnderchestCommand",
+    "ci": "ClearInventoryCommand",
+    "repair": "RepairCommand",
+    "naprawkilof": "NaprawKilofCommand",
+    "gamemode": "GameModeCommand",
+    "weather": "WeatherCommand",
+    "time": "TimeCommand",
+    "tppos": "TpposCommand",
+    "backup": "BackupCommand",
+    "sethome": "SetHomeCommand",
+    "home": "HomeCommand",
+    "lvl": "LevelCommand",
+    "ct": "CraftingCommand",
+    "ban": "BanCommand",
+    "banip": "BanIpCommand",
+    "unban": "UnbanCommand",
+    "banlist": "BanListCommand",
+    "kick": "KickCommand",
+    "alert": "AlertCommand",
+    "fly": "FlyCommand",
+    "speed": "SpeedCommand",
+    "heal": "HealCommand",
+    "god": "GodCommand",
+    "wyjebane": "WyjebaneCommand",
+    "v": "VanishCommand",
+    "spawn": "SpawnCommand",
+    "drop": "DropCommand",
+    "cx": "CobbleXCommand",
+    "gildia": "GuildCommand",
+    "ga": "GuildAdminCommand",
+    "sectorinfo": "SectorInfoCommand",
+    "setspawnsector": "SetSpawnSectorCommand",
+    "tp": "TpCommand",
+    "s": "SummonCommand",
+    "invsee": "InvseeCommand",
+    "tpa": "TpaCommand",
+    "tpaccept": "TpacceptCommand",
+    "sektor": "SektorCommand",
+    "send": "SendCommand",
+    "vserver": "ServerCommand"
+  },
+  "missing_nodes": [],
+  "mismatches": [
+    [
+      "sectorinfo",
+      "ai.sector.info",
+      "aisector.command.sectorinfo"
+    ]
+  ],
+  "commands_without_literal_check": [
+    "gildia",
+    "lvl",
+    "spawn",
+    "tpaccept",
+    "wyjebane"
+  ],
+  "descriptors_without_executor": [],
+  "catalog_only_nodes": [
+    "aisector.command.rank",
+    "aisector.setspawn",
+    "aisector.whitelist.manage",
+    "aisector.wyjebane.bypass"
+  ],
+  "alias_collisions": {},
+  "limitations": "Static advisory inventory; aliases/defaults are descriptor text; dynamic and Velocity policy require review."
+}

@@ -1,0 +1,19 @@
+# Maven outputs
+**/target/
+**/dependency-reduced-pom.xml
+
+# IDE and local machine files
+.idea/
+**/*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Local secrets and runtime data
+.env
+.env.*
+!.env.example
+run/
+logs/
+*.log
