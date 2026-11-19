@@ -69,7 +69,10 @@ public final class EastJoinProbe {
                     location.getMethod("setY", double.class).invoke(loc, 126.0);
                     location.getMethod("setZ", double.class).invoke(loc, 2048.5);
                 } else if (action.equals("flight-start")) {
+                    boolean east = (int) api.getMethod("getPort").invoke(null) == 25568;
+                    location.getMethod("setX", double.class).invoke(loc, east ? 32.5 : -32.5);
                     location.getMethod("setY", double.class).invoke(loc, 170.0);
+                    location.getMethod("setZ", double.class).invoke(loc, 32.5);
                 } else if (action.equals("seam")) {
                     boolean east = (int) api.getMethod("getPort").invoke(null) == 25568;
                     Object world = location.getMethod("getWorld").invoke(loc);

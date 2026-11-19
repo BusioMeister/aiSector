@@ -16,7 +16,7 @@ from staging_smoke import JAVA, REPO, TEMP, command
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, default=TEMP / "aisector-layout-live-db7j3scu")
-    parser.add_argument("--flight", action="store_true", help="Exercise 6.5 seconds of continuous in-sector flight")
+    parser.add_argument("--flight", action="store_true", help="Test continuous flight without the transfer suite")
     args = parser.parse_args()
     run = args.run
     marker = run / "READY.json"
@@ -91,6 +91,18 @@ def main():
             assert client("command", "god") == "OK"
             baseline = probe("GameEast", "seed")
             assert baseline.split()[1:3] == ["7", "0.42"], baseline
+            if args.flight:
+                assert probe("GameEast", "grant-fly") == "OK"
+                assert probe("GameEast", "flight-start") == "OK"
+                assert client("command", "fly") == "OK"
+                flight = [line.split() for line in client("trace-flight").splitlines()]
+                zs = [float(row[1]) for row in flight]
+                assert zs[-1] - zs[0] > 32 and all(row[2] == "true" for row in flight), flight
+                assert all(new >= old - .5 for old, new in zip(zs, zs[1:])), flight
+                (output / "results.json").write_text(json.dumps(
+                    {"flight": {"blocks": zs[-1] - zs[0], "backward_correction": False}}, indent=2))
+                print("INSTANT_LIVE_FLIGHT_OK", output, flush=True)
+                return
             results = {}
 
             def check_transfer(action, value, *targets):
@@ -138,16 +150,6 @@ def main():
             assert probe(source, "grant-tppos") == "OK"
             target_x = "0.5" if target == "GameEast" else "-0.5"
             results["tppos"] = check_transfer("trace-command", f"tppos {target_x} {flat_y} {flat_z}", target)
-            if args.flight:
-                assert probe(target, "grant-fly") == "OK"
-                assert client("command", "fly") == "OK"
-                assert probe(target, "flight-start") == "OK"
-                flight = [line.split() for line in client("trace-flight").splitlines()]
-                zs = [float(row[1]) for row in flight]
-                assert zs[-1] - zs[0] > 32 and all(row[2] == "true" for row in flight), flight
-                assert all(new >= old - .5 for old, new in zip(zs, zs[1:])), flight
-                results["flight"] = {"blocks": zs[-1] - zs[0], "backward_correction": False}
-                assert client("command", "fly") == "OK"
             results["spawn_again"] = check_transfer("trace-command", "spawn", "Spawn")
             (output / "results.json").write_text(json.dumps(results, indent=2))
             print("INSTANT_LIVE_SEAM_OK", output, flush=True)
