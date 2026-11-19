@@ -58,7 +58,9 @@ public class PlayerDataListener implements Listener {
     private final WorldBorderManager borderManager;
     private final RedisManager redisManager;
     private final Gson gson = new Gson();
-    private record PreparedLanding(String target, Location location) {}
+    record PreparedLanding(String target, Location location) {
+        boolean matches(String finalTarget) { return target.equals(finalTarget); }
+    }
     private record RestoredTransfer(int heldSlot, PlayerFlight flight) {}
     private final Map<UUID, PreparedLanding> preparedLandings = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -77,6 +79,7 @@ public class PlayerDataListener implements Listener {
         // Hold the joining player until async profile and transfer state are available.
         player.setInvulnerable(true);
         player.setWalkSpeed(0.0f);
+        if (!preparedLandings.containsKey(player.getUniqueId())) player.setFlySpeed(0.0f);
         CompletableFuture<JoinNetworkState> network = loadNetworkState(player.getUniqueId());
         userManager.loadUserAsync(player).whenComplete((user, loadError) ->
                 scheduleMainThread(() -> {
@@ -100,31 +103,39 @@ public class PlayerDataListener implements Listener {
                     .get(300, TimeUnit.MILLISECONDS);
             if (target == null || target.length() > 1024) return;
             var json = gson.fromJson(target, com.google.gson.JsonObject.class);
-            if (json != null && json.has("surface") && json.get("surface").isJsonPrimitive()
-                    && Boolean.TRUE.equals(json.get("surface").getAsBoolean()) && !sectorManager.isLockedSpawnBackend()) {
+            if (json == null) return;
+            Location landing;
+            if (isSurfaceTarget(json) && !sectorManager.isLockedSpawnBackend()) {
                 json.addProperty("y", 0);
                 Location seed = locationFromJson(json.toString());
                 Sector sector = sectorManager.randomArrivalSector(seed);
                 if (sector == null) return;
-                Location landing = new RandomSurfaceLanding(plugin).prepare(seed, sector).get(1400, TimeUnit.MILLISECONDS);
-                if (landing == null) return;
-                event.setSpawnLocation(landing);
-                var prepared = new PreparedLanding(target, landing);
-                preparedLandings.put(uuid, prepared);
-                Bukkit.getScheduler().runTaskLater(plugin, () -> preparedLandings.remove(uuid, prepared), 600L);
-                return;
+                landing = new RandomSurfaceLanding(plugin).prepare(seed, sector).get(1400, TimeUnit.MILLISECONDS);
+            } else {
+                landing = locationFromJson(target);
             }
-            var seam = json == null ? null : json.get("seam");
-            if (seam == null || !seam.isJsonPrimitive() || !seam.getAsJsonPrimitive().isString()) return;
-            String local = plugin.getConfig().getString("this-sector-name", "");
-            if (!local.equalsIgnoreCase(seam.getAsString())) return;
-            Location arrival = locationFromJson(target);
-            if (sectorManager.owns(arrival)) event.setSpawnLocation(arrival);
+            if (!validArrival(landing)) return;
+            event.setSpawnLocation(landing);
+            var prepared = new PreparedLanding(target, landing);
+            preparedLandings.put(uuid, prepared);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> preparedLandings.remove(uuid, prepared), 600L);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException | RuntimeException unavailable) {
             // This is an optimization only. Join will load and validate the complete transfer normally.
         }
+    }
+
+    private static boolean isSurfaceTarget(com.google.gson.JsonObject target) {
+        var surface = target.get("surface");
+        return surface != null && surface.isJsonPrimitive() && surface.getAsJsonPrimitive().isBoolean()
+                && surface.getAsBoolean();
+    }
+
+    private boolean validArrival(Location arrival) {
+        if (arrival == null || arrival.getWorld() == null || arrival.getY() < arrival.getWorld().getMinHeight()
+                || arrival.getY() >= arrival.getWorld().getMaxHeight()) return false;
+        return sectorManager.isLockedSpawnBackend() ? sectorManager.insideLockedSpawn(arrival) : sectorManager.owns(arrival);
     }
 
     private void reconcileGuildMembershipAndConfigure(Player player, User user,
@@ -249,37 +260,31 @@ public class PlayerDataListener implements Listener {
             player.sendMessage("§aTwój ekwipunek z backupu został przywrócony.");
         }
 
+        // The async spawn hook already submitted this exact request to Paper. Movement or mouse
+        // input between that packet and profile completion is not evidence of a missed arrival.
+        if (prepared != null && prepared.matches(state.finalTargetData()) && validArrival(prepared.location())) {
+            finishJoinAt(player, state, restored, null, true, state.forcedSector() != null);
+            return;
+        }
         if (sectorManager.isLockedSpawnBackend()) {
-            Location spawn = sectorManager.insideLockedSpawn(player.getLocation()) ? null : sectorManager.lockedSpawnLocation();
+            Location requested = state.finalTargetData() == null ? null : locationFromJson(state.finalTargetData());
+            Location spawn = validArrival(requested) ? requested : sectorManager.lockedSpawnLocation();
+            if (requested == null && sectorManager.insideLockedSpawn(player.getLocation())) spawn = null;
             finishJoinAt(player, state, restored, spawn, state.finalTargetData() != null, state.forcedSector() != null);
             return;
         }
 
         if (state.finalTargetData() != null) {
             var target = gson.fromJson(state.finalTargetData(), com.google.gson.JsonObject.class);
-            var surface = target.get("surface");
-            if (surface != null && surface.isJsonPrimitive() && surface.getAsJsonPrimitive().isBoolean()
-                    && surface.getAsBoolean()) {
+            if (isSurfaceTarget(target)) {
                 target.addProperty("y", 0);
                 Location seed = locationFromJson(target.toString());
-                if (prepared != null && prepared.target().equals(state.finalTargetData())
-                        && sectorManager.owns(prepared.location())) {
-                    Location current = player.getLocation();
-                    Location landing = prepared.location();
-                    finishJoinAt(player, state, restored,
-                            current.getWorld().equals(landing.getWorld()) && current.distanceSquared(landing) < 0.000001
-                                    ? null : landing, true, false);
-                    return;
-                }
                 finishRandomArrival(player, state, restored, seed, true);
                 return;
             }
             Location finalTargetLocation = locationFromJson(state.finalTargetData());
-            Location current = player.getLocation();
-            boolean alreadyAtSeam = target.has("seam") && current.getWorld().equals(finalTargetLocation.getWorld())
-                    && current.distanceSquared(finalTargetLocation) < 0.000001
-                    && current.getYaw() == finalTargetLocation.getYaw() && current.getPitch() == finalTargetLocation.getPitch();
-            finishJoinAt(player, state, restored, alreadyAtSeam ? null : finalTargetLocation, true, false);
+            if (!validArrival(finalTargetLocation)) throw new IllegalArgumentException("Transfer target is outside this sector");
+            finishJoinAt(player, state, restored, finalTargetLocation, true, false);
             return;
         }
 

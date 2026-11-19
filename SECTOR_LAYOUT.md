@@ -44,7 +44,10 @@ danych proxy wystawia jednorazową zgodę na konkretny backend docelowy.
 Samo wgranie JAR-a nie nadpisuje istniejącego `sectors.yml` ani mapy.
 
 Na przejściu pomiędzy sektorami gry Paper próbuje wystartować od razu przy
-krawędzi docelowego sektora. Jeśli odczyt pozycji się spóźni, zwykły transfer
+krawędzi docelowego sektora. Ta sama ścieżka ustawia docelową pozycję dla
+`/spawn` i pozostałych transferów z konkretnym celem. Jeżeli Paper już
+przyjął tę pozycję przy wejściu, przywrócenie profilu jej nie nadpisuje, nawet
+gdy gracz zdążył się ruszyć. Jeśli odczyt pozycji się spóźni, zwykły transfer
 nadal działa. Skrócona jest faza wczytywania, ale stockowy Velocity nadal zmienia
 stan protokołu klienta przy przełączeniu — nie jest to tryb bez ekranu.
 
