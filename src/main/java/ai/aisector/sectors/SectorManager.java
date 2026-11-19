@@ -30,6 +30,8 @@ public class SectorManager {
     private final SectorPlugin plugin;
     private final RedisManager redisManager;
     private final Map<String, Sector> sectors = new HashMap<>();
+    private SpawnLayout spawnLayout;
+    private SeamChunkWarmer seamChunkWarmer;
 
     public SectorManager(SectorPlugin plugin, RedisManager redisManager) {
         this.plugin = plugin;
@@ -84,8 +86,21 @@ public class SectorManager {
                     + (validationError == null ? "malformed or empty definition" : validationError));
             return;
         }
+        SpawnLayout candidateLayout = null;
+        if (config.contains("locked-spawn")) {
+            try {
+                ConfigurationSection spawn = config.getConfigurationSection("locked-spawn");
+                if (spawn == null) throw new IllegalArgumentException("Expected locked-spawn section");
+                candidateLayout = SpawnLayout.create(candidate, spawn.getString("sector"),
+                        spawn.getString("spawn-world"), spawn.getString("game-world"), spawn.getStringList("game-sectors"));
+            } catch (IllegalArgumentException invalid) {
+                plugin.getLogger().severe("Locked spawn configuration rejected: " + invalid.getMessage());
+                return;
+            }
+        }
         sectors.clear();
         sectors.putAll(candidate);
+        spawnLayout = candidateLayout;
         plugin.getLogger().info("Załadowano sektory: " + sectors.size());
     }
 
@@ -120,9 +135,127 @@ public class SectorManager {
         return key == null ? null : sectors.get(key);
     }
 
+    public boolean isLockedSpawnBackend() {
+        return spawnLayout != null && isLocalSector(spawnLayout.spawn());
+    }
+
+    public void warmGameSeam() {
+        if (spawnLayout == null || spawnLayout.game().stream().noneMatch(this::isLocalSector)) return;
+        World world = Bukkit.getWorld(spawnLayout.gameWorld());
+        if (world == null) {
+            plugin.getLogger().warning("Cannot warm sector seam: game world is not loaded");
+            return;
+        }
+        try {
+            List<SeamChunkPlan> chunks = SeamChunkPlan.between(spawnLayout.game().getFirst(), spawnLayout.game().getLast());
+            stopWarmingGameSeam();
+            seamChunkWarmer = new SeamChunkWarmer(plugin, world, chunks);
+            seamChunkWarmer.start();
+        } catch (IllegalArgumentException invalid) {
+            plugin.getLogger().warning("Cannot warm sector seam: " + invalid.getMessage());
+        }
+    }
+
+    public void stopWarmingGameSeam() {
+        if (seamChunkWarmer != null) {
+            seamChunkWarmer.close();
+            seamChunkWarmer = null;
+        }
+    }
+
+    public boolean owns(Location location) {
+        Sector sector = getSectorAt(location);
+        return sector != null && isLocalSector(sector);
+    }
+
+    public Sector getSectorAt(Location location) {
+        if (spawnLayout != null) {
+            String world = isLockedSpawnBackend() ? spawnLayout.spawnWorld() : spawnLayout.gameWorld();
+            if (!world.equals(location.getWorld().getName())) return null;
+        }
+        return getSector(location.getBlockX(), location.getBlockZ());
+    }
+
+    boolean isLocalSector(Sector sector) {
+        return sector.getName().equalsIgnoreCase(plugin.getConfig().getString("this-sector-name", ""));
+    }
+
+    public boolean insideLockedSpawn(Location location) {
+        return isLockedSpawnBackend() && location.getWorld().getName().equals(spawnLayout.spawnWorld())
+                && spawnLayout.spawn().isInside(location.getBlockX(), location.getBlockZ());
+    }
+
+    public Location lockedSpawnLocation() {
+        World world = Bukkit.getWorld(spawnLayout.spawnWorld());
+        if (world == null) throw new IllegalStateException("Locked spawn world is unavailable");
+        Location spawn = world.getSpawnLocation();
+        if (!insideLockedSpawn(spawn)) throw new IllegalStateException("World spawn must be inside the locked spawn sector");
+        return spawn;
+    }
+
+    private record RandomExit(String sector, String targetJson) { }
+
+    private RandomExit chooseSpawnExit() {
+        var random = java.util.concurrent.ThreadLocalRandom.current();
+        Sector sector = spawnLayout.choose(random);
+        return new RandomExit(sector.getName(), new org.bson.Document("world", spawnLayout.gameWorld())
+                .append("x", SpawnLayout.coordinate(random, sector.getMinX(), sector.getMaxX()) + 0.5)
+                .append("z", SpawnLayout.coordinate(random, sector.getMinZ(), sector.getMaxZ()) + 0.5)
+                .append("surface", true).toJson());
+    }
+
+    public Sector randomArrivalSector(Location location) {
+        if (spawnLayout == null || !location.getWorld().getName().equals(spawnLayout.gameWorld())) return null;
+        Sector local = getSector(location.getBlockX(), location.getBlockZ());
+        return local != null && spawnLayout.game().contains(local) && isLocalSector(local) ? local : null;
+    }
+
+    public Location recoveryLandingSeed(Location location) {
+        if (spawnLayout == null || isLockedSpawnBackend() || randomArrivalSector(location) != null) return null;
+        World world = Bukkit.getWorld(spawnLayout.gameWorld());
+        if (world == null) throw new IllegalStateException("Game world is unavailable");
+        Sector local = spawnLayout.game().stream().filter(this::isLocalSector).findFirst().orElseThrow();
+        var random = java.util.concurrent.ThreadLocalRandom.current();
+        return new Location(world, SpawnLayout.coordinate(random, local.getMinX(), local.getMaxX()) + .5,
+                0, SpawnLayout.coordinate(random, local.getMinZ(), local.getMaxZ()) + .5);
+    }
+
+    CompletableFuture<Void> transferFromSpawnButton(Player player) {
+        if (!insideLockedSpawn(player.getLocation()))
+            return CompletableFuture.failedFuture(new IllegalStateException("Player is not on locked spawn"));
+        var exit = chooseSpawnExit();
+        var snapshot = plugin.getUserManager().serializePlayerDataForTransfer(player, player.getLocation());
+        return transferPlayerAsync(player, exit.sector(), snapshot,
+                Map.of("player:final_teleport_target:" + player.getUniqueId(), exit.targetJson()), 60, true, null);
+    }
+
+    public CompletableFuture<Void> returnAfterFailedRandomArrival(Player player, Sector failedSector) {
+        if (spawnLayout == null || !spawnLayout.game().contains(failedSector) || !isLocalSector(failedSector))
+            return CompletableFuture.failedFuture(new IllegalStateException("Not a locked-spawn game backend"));
+        Location position = player.getLocation();
+        String snapshot = plugin.getUserManager().serializePlayerDataForTransfer(player, position);
+        // Overwrite the old random target atomically with the back-transfer. Spawn resolves
+        // its own configured world spawn, so the source need not load that world's terrain.
+        Sector spawn = spawnLayout.spawn();
+        String target = new org.bson.Document("world", spawnLayout.spawnWorld())
+                .append("x", spawn.getMinX() + .5).append("y", 0).append("z", spawn.getMinZ() + .5).toJson();
+        return transferPlayerAsync(player, spawn.getName(), snapshot,
+                Map.of("player:final_teleport_target:" + player.getUniqueId(), target));
+    }
+
     /** Stores a captured player snapshot off-thread, then requests the proxy transfer. */
     public CompletableFuture<Void> transferPlayerAsync(Player player, String sectorId, String playerData) {
         return transferPlayerAsync(player, sectorId, playerData, Collections.emptyMap());
+    }
+
+    public CompletableFuture<Void> transferAcrossSeam(Player player, Sector destination, Location arrival,
+                                                      String playerData, org.bukkit.event.player.PlayerMoveEvent move) {
+        String target = new org.bson.Document("world", arrival.getWorld().getName())
+                .append("x", arrival.getX()).append("y", arrival.getY()).append("z", arrival.getZ())
+                .append("yaw", arrival.getYaw()).append("pitch", arrival.getPitch())
+                .append("seam", destination.getName()).toJson();
+        return transferPlayerAsync(player, destination.getName(), playerData,
+                Map.of("player:final_teleport_target:" + player.getUniqueId(), target), 60, false, move);
     }
 
     public CompletableFuture<Void> transferPlayerAsync(Player player, String sectorId, String playerData,
@@ -132,7 +265,17 @@ public class SectorManager {
 
     public CompletableFuture<Void> transferPlayerAsync(Player player, String sectorId, String playerData,
                                                        Map<String, String> transferKeys, int ttlSeconds) {
+        return transferPlayerAsync(player, sectorId, playerData, transferKeys, ttlSeconds, false, null);
+    }
+
+    private CompletableFuture<Void> transferPlayerAsync(Player player, String sectorId, String playerData,
+                                                        Map<String, String> transferKeys, int ttlSeconds, boolean spawnButton,
+                                                        org.bukkit.event.player.PlayerMoveEvent initialSeamMove) {
         Objects.requireNonNull(player, "player");
+        if (isLockedSpawnBackend() && !spawnButton) {
+            player.sendMessage("§cZe spawna wyjdziesz przyciskiem na gąbce.");
+            return CompletableFuture.failedFuture(new IllegalStateException("Locked spawn requires the random teleport button"));
+        }
         if (sectorId == null || !sectorId.matches("[A-Za-z0-9_-]{1,64}")) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid sector name"));
         }
@@ -161,7 +304,7 @@ public class SectorManager {
         }
         String playerName = player.getName();
         Map<String, String> keysToWrite = new HashMap<>(transferKeys);
-        CompletableFuture<Void> result = plugin.getUserManager().prepareTransferProfileAsync(player)
+        CompletableFuture<Void> result = plugin.getUserManager().prepareTransferProfileAsync(player, initialSeamMove)
                 .thenCompose(saved -> redisManager.<Void>executeAsync(jedis -> {
             List<String> keys = new ArrayList<>();
             List<String> arguments = new ArrayList<>();
@@ -176,7 +319,7 @@ public class SectorManager {
             arguments.add(0, Integer.toString(keys.size()));
             arguments.add(1, Integer.toString(ttlSeconds));
             arguments.add(RedisChannels.SECTOR_TRANSFER);
-            arguments.add(playerUuid + ":" + sectorId);
+            arguments.add(playerUuid + ":" + sectorId + (spawnButton ? ":spawn-button" : ""));
 
             long proxySubscribers = ((Number) jedis.eval(PUBLISH_TRANSFER_SCRIPT, keys, arguments)).longValue();
             if (proxySubscribers == 0L) {

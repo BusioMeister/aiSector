@@ -74,7 +74,8 @@ public class UserManager {
         data.put("level", player.getLevel());
         data.put("exp", player.getExp());
         data.put("gameMode", player.getGameMode().name());
-        data.put("inventory", itemStackArrayToBase64(player.getInventory().getContents()));
+        // Armor and offhand already have their own fields; do not encode them twice.
+        data.put("inventory", itemStackArrayToBase64(player.getInventory().getStorageContents()));
         data.put("armor", itemStackArrayToBase64(player.getInventory().getArmorContents()));
         data.put("offhand", itemStackToBase64(player.getInventory().getItemInOffHand()));
         data.put("effects", serializePotionEffects(player.getActivePotionEffects()));
@@ -432,6 +433,10 @@ public class UserManager {
 
     /** Seal this source session and persist its profile before a transfer; call on the server thread. */
     public CompletableFuture<Void> prepareTransferProfileAsync(Player player) {
+        return prepareTransferProfileAsync(player, null);
+    }
+
+    public CompletableFuture<Void> prepareTransferProfileAsync(Player player, org.bukkit.event.player.PlayerMoveEvent initialSeamMove) {
         if (closing || !player.isOnline() || Bukkit.getPlayer(player.getUniqueId()) != player) {
             return CompletableFuture.failedFuture(new IllegalStateException("Inactive player session"));
         }
@@ -439,7 +444,7 @@ public class UserManager {
         if (user == null) return CompletableFuture.failedFuture(new IllegalStateException("Profile is not loaded"));
         UUID uuid = player.getUniqueId();
         final TransferSnapshotGuard.Seal seal;
-        try { seal = transferGuard.begin(player); }
+        try { seal = transferGuard.begin(player, initialSeamMove); }
         catch (RuntimeException error) { return CompletableFuture.failedFuture(error); }
         Document update = createUserUpdate(player, user);
         CompletableFuture<Void> write = queueProfileWrite(uuid,

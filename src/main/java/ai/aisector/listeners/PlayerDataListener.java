@@ -6,6 +6,7 @@ import ai.aisector.guilds.Guild;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
+import ai.aisector.sectors.RandomSurfaceLanding;
 import ai.aisector.user.User;
 import ai.aisector.user.UserManager;
 import ai.aisector.utils.HotbarSlotSync;
@@ -30,11 +31,14 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.io.BukkitObjectInputStream;
+import io.papermc.paper.event.player.AsyncPlayerSpawnLocationEvent;
 import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 public class PlayerDataListener implements Listener {
     private record JoinNetworkState(String respawnMarker, String playerData, String finalTargetData,
@@ -70,6 +74,7 @@ public class PlayerDataListener implements Listener {
         player.setInvulnerable(true);
         player.setAllowFlight(false);
         player.setWalkSpeed(0.0f);
+        CompletableFuture<JoinNetworkState> network = loadNetworkState(player.getUniqueId());
         userManager.loadUserAsync(player).whenComplete((user, loadError) ->
                 scheduleMainThread(() -> {
                     if (!isCurrentSession(player)) return;
@@ -79,14 +84,37 @@ public class PlayerDataListener implements Listener {
                         player.kickPlayer("§cWystąpił krytyczny błąd podczas ładowania Twojego profilu.");
                         return;
                     }
-                    reconcileGuildMembershipAndConfigure(player, user);
+                    reconcileGuildMembershipAndConfigure(player, user, network);
                 }));
     }
 
-    private void reconcileGuildMembershipAndConfigure(Player player, User user) {
+    @EventHandler(priority = EventPriority.HIGH)
+    public void chooseSeamSpawn(AsyncPlayerSpawnLocationEvent event) {
+        UUID uuid = event.getConnection().getProfile().getId();
+        if (uuid == null || Bukkit.isPrimaryThread()) return;
+        try {
+            String target = redisManager.executeAsync(jedis -> jedis.get("player:final_teleport_target:" + uuid))
+                    .get(300, TimeUnit.MILLISECONDS);
+            if (target == null || target.length() > 1024) return;
+            var json = gson.fromJson(target, com.google.gson.JsonObject.class);
+            var seam = json == null ? null : json.get("seam");
+            if (seam == null || !seam.isJsonPrimitive() || !seam.getAsJsonPrimitive().isString()) return;
+            String local = plugin.getConfig().getString("this-sector-name", "");
+            if (!local.equalsIgnoreCase(seam.getAsString())) return;
+            Location arrival = locationFromJson(target);
+            if (sectorManager.owns(arrival)) event.setSpawnLocation(arrival);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException | RuntimeException unavailable) {
+            // This is an optimization only. Join will load and validate the complete transfer normally.
+        }
+    }
+
+    private void reconcileGuildMembershipAndConfigure(Player player, User user,
+                                                       CompletableFuture<JoinNetworkState> network) {
         String guildTag = user.getGuildTag();
         if (guildTag == null || guildTag.isBlank()) {
-            configureLoadedPlayer(player, user);
+            configureLoadedPlayer(player, user, network);
             return;
         }
 
@@ -107,11 +135,20 @@ public class PlayerDataListener implements Listener {
                     } else {
                         user.setGuildRole("MEMBER");
                     }
-                    configureLoadedPlayer(player, user);
+                    configureLoadedPlayer(player, user, network);
                 }));
     }
 
-    private void configureLoadedPlayer(Player player, User user) {
+    private CompletableFuture<JoinNetworkState> loadNetworkState(UUID playerUuid) {
+        return redisManager.executeAsync(jedis -> {
+            var values = jedis.mget("player:is_respawning:" + playerUuid,
+                    "player:data:" + playerUuid, "player:final_teleport_target:" + playerUuid,
+                    "player:force_sector_spawn:" + playerUuid, "player:pending_backup:" + playerUuid);
+            return new JoinNetworkState(values.get(0), values.get(1), values.get(2), values.get(3), values.get(4));
+        });
+    }
+
+    private void configureLoadedPlayer(Player player, User user, CompletableFuture<JoinNetworkState> network) {
             // Persistent user settings and transfer state must only be applied after the async profile load.
             // Keep the join hold until network state and the asynchronous destination teleport finish.
 
@@ -136,14 +173,7 @@ public class PlayerDataListener implements Listener {
                 }, 30L);
             }
 
-            UUID playerUuid = player.getUniqueId();
-            redisManager.executeAsync(jedis -> new JoinNetworkState(
-                    jedis.get("player:is_respawning:" + playerUuid),
-                    jedis.get("player:data:" + playerUuid),
-                     jedis.get("player:final_teleport_target:" + playerUuid),
-                     jedis.get("player:force_sector_spawn:" + playerUuid),
-                     jedis.get("player:pending_backup:" + playerUuid)))
-                    .whenComplete((state, error) -> scheduleMainThread(() -> {
+            network.whenComplete((state, error) -> runOnMainThread(() -> {
                         if (!isCurrentSession(player)) return;
                         if (error != null) {
                             plugin.getLogger().severe("Failed to load join/transfer state for " + player.getName()
@@ -164,6 +194,11 @@ public class PlayerDataListener implements Listener {
 
     private void scheduleMainThread(Runnable task) {
         BukkitTaskScheduler.execute(plugin, task);
+    }
+
+    private void runOnMainThread(Runnable task) {
+        if (Bukkit.isPrimaryThread()) task.run();
+        else scheduleMainThread(task);
     }
 
     private boolean isCurrentSession(Player player) {
@@ -193,9 +228,28 @@ public class PlayerDataListener implements Listener {
             player.sendMessage("§aTwój ekwipunek z backupu został przywrócony.");
         }
 
+        if (sectorManager.isLockedSpawnBackend()) {
+            Location spawn = sectorManager.insideLockedSpawn(player.getLocation()) ? null : sectorManager.lockedSpawnLocation();
+            finishJoinAt(player, state, heldSlot, spawn, state.finalTargetData() != null, state.forcedSector() != null);
+            return;
+        }
+
         if (state.finalTargetData() != null) {
+            var target = gson.fromJson(state.finalTargetData(), com.google.gson.JsonObject.class);
+            var surface = target.get("surface");
+            if (surface != null && surface.isJsonPrimitive() && surface.getAsJsonPrimitive().isBoolean()
+                    && surface.getAsBoolean()) {
+                target.addProperty("y", 0);
+                Location seed = locationFromJson(target.toString());
+                finishRandomArrival(player, state, heldSlot, seed, true);
+                return;
+            }
             Location finalTargetLocation = locationFromJson(state.finalTargetData());
-            finishJoinAt(player, state, heldSlot, finalTargetLocation, true, false, 2L);
+            Location current = player.getLocation();
+            boolean alreadyAtSeam = target.has("seam") && current.getWorld().equals(finalTargetLocation.getWorld())
+                    && current.distanceSquared(finalTargetLocation) < 0.000001
+                    && current.getYaw() == finalTargetLocation.getYaw() && current.getPitch() == finalTargetLocation.getPitch();
+            finishJoinAt(player, state, heldSlot, alreadyAtSeam ? null : finalTargetLocation, true, false);
             return;
         }
 
@@ -203,18 +257,49 @@ public class PlayerDataListener implements Listener {
             Sector targetSector = sectorManager.getSectorByName(state.forcedSector());
             Location sectorSpawn = targetSector == null ? null : sectorManager.getSectorSpawnLocation(targetSector);
             if (sectorSpawn == null) throw new IllegalArgumentException("Forced sector spawn is unavailable");
-            finishJoinAt(player, state, heldSlot, sectorSpawn, false, true, 5L);
+            finishJoinAt(player, state, heldSlot, sectorSpawn, false, true);
             return;
         }
 
-        finishJoinAt(player, state, heldSlot,
-                state.playerData() == null ? null : locationFromJson(state.playerData()), false, false, 1L);
+        if (state.playerData() == null) {
+            Location recovery = sectorManager.recoveryLandingSeed(player.getLocation());
+            if (recovery != null) {
+                finishRandomArrival(player, state, heldSlot, recovery, false);
+                return;
+            }
+        }
+        finishJoinAt(player, state, heldSlot, state.playerData() == null ? null : locationFromJson(state.playerData()),
+                false, false);
+    }
+
+    private void finishRandomArrival(Player player, JoinNetworkState state, Integer slot, Location seed,
+                                     boolean consumedFinal) {
+        Sector sector = sectorManager.randomArrivalSector(seed);
+        if (sector == null) throw new IllegalArgumentException("Random arrival is not in the local game sector");
+        new RandomSurfaceLanding(plugin).find(player, seed, sector, destination -> {
+            if (destination != null) {
+                finishJoinAt(player, state, slot, destination, consumedFinal, false);
+                return;
+            }
+            plugin.getLogger().warning("No safe random landing found in " + sector.getName());
+            player.sendMessage("§eNie znaleziono bezpiecznego miejsca. Wracasz na spawn.");
+            if (slot != null) player.getInventory().setHeldItemSlot(slot);
+            try {
+                sectorManager.returnAfterFailedRandomArrival(player, sector).whenComplete((ignored, transferError) -> {
+                    if (transferError != null) scheduleMainThread(() -> {
+                        if (isCurrentSession(player)) player.kickPlayer("§cNie udało się wrócić na spawn. Połącz się ponownie.");
+                    });
+                });
+            } catch (RuntimeException transferError) {
+                plugin.getLogger().warning("Could not prepare safe return for " + player.getUniqueId() + ": " + transferError.getMessage());
+                player.kickPlayer("§cNie udało się przygotować powrotu na spawn. Połącz się ponownie.");
+            }
+        });
     }
 
     private void finishJoinAt(Player player, JoinNetworkState state, Integer heldSlot, Location destination,
-                              boolean consumedFinal, boolean consumedForced, long delay) {
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!isCurrentSession(player)) return;
+                              boolean consumedFinal, boolean consumedForced) {
+        if (!isCurrentSession(player)) return;
             Runnable complete = () -> {
                 if (!isCurrentSession(player)) return;
                 User user = userManager.getUser(player);
@@ -236,8 +321,7 @@ public class PlayerDataListener implements Listener {
                 clearConsumedJoinKeys(player.getUniqueId(), state, consumedFinal, consumedForced);
                 plugin.getGuildTagManager().updateTagsFor(player);
                 if (heldSlot != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, heldSlot);
-                if (state.respawning()) showDeathTitle(player);
-                else sendWelcomePackage(player);
+                sendWelcomePackage(player, state.respawning());
                 if (consumedForced) player.sendMessage("§aZostałeś przeniesiony na sektor §e" + state.forcedSector() + "§a.");
             };
             if (destination == null) { complete.run(); return; }
@@ -247,7 +331,6 @@ public class PlayerDataListener implements Listener {
                         plugin.getLogger().severe("Join teleport failed; Redis state retained for " + player.getUniqueId());
                         player.kickPlayer("§cNie udało się bezpiecznie przywrócić lokalizacji. Połącz się ponownie.");
                     });
-        }, delay);
     }
 
     private void clearConsumedJoinKeys(UUID playerUuid, JoinNetworkState state,
@@ -327,7 +410,7 @@ public class PlayerDataListener implements Listener {
                 || !(data.get("armor") instanceof String armorData)) {
             throw new IllegalArgumentException("Transfer data is missing inventory or armor");
         }
-        locationFromJson(playerData);
+        validateSnapshotLocation(data);
         double health = healthValue.doubleValue();
         if (!Double.isFinite(health) || health < 0.0 || health > 1_000_000.0) {
             throw new IllegalArgumentException("Invalid transfer health value");
@@ -381,12 +464,14 @@ public class PlayerDataListener implements Listener {
 
 
 
-    private void sendWelcomePackage(Player player) {
+    private void sendWelcomePackage(Player player, boolean respawning) {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!isCurrentSession(player)) return;
-            Sector sector = sectorManager.getSector(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-            if (sector != null) {
-                borderManager.sendWorldBorder(player, sector);
+            Location arrival = player.getLocation();
+            Sector sector = sectorManager.getSectorAt(arrival);
+            borderManager.refreshAfterJoin(player, sector, arrival);
+            if (respawning) showDeathTitle(player);
+            else if (sector != null) {
                 MessageUtil.sendTitle(player, "", "§7Połączono z sektorem §9" + sector.getName(), 300, 1000, 300);
             }
         }, 2L);
@@ -405,16 +490,21 @@ public class PlayerDataListener implements Listener {
         );
         player.showTitle(title);
 
-        // Upewniamy się, że border jest poprawny
-        Sector sector = sectorManager.getSector(player.getLocation().getBlockX(), player.getLocation().getBlockZ());
-        if (sector != null) {
-            borderManager.sendWorldBorder(player, sector);
-        }
     }
 
     private Location locationFromJson(String json) {
         Type type = new TypeToken<Map<String, Object>>() {}.getType();
         Map<String, Object> data = gson.fromJson(json, type);
+        validateSnapshotLocation(data);
+        String worldName = (String) data.get("world");
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) throw new IllegalArgumentException("Serialized location references unloaded world " + worldName);
+        return new Location(world, ((Number) data.get("x")).doubleValue(), ((Number) data.get("y")).doubleValue(),
+                ((Number) data.get("z")).doubleValue(), data.get("yaw") instanceof Number yaw ? yaw.floatValue() : 0,
+                data.get("pitch") instanceof Number pitch ? pitch.floatValue() : 0);
+    }
+
+    private void validateSnapshotLocation(Map<String, Object> data) {
         if (data == null || !(data.get("world") instanceof String worldName)
                 || !(data.get("x") instanceof Number x)
                 || !(data.get("y") instanceof Number y)
@@ -424,24 +514,12 @@ public class PlayerDataListener implements Listener {
         if (worldName.isBlank() || worldName.length() > 128) {
             throw new IllegalArgumentException("Invalid serialized world name");
         }
-        World world = Bukkit.getWorld(worldName);
-        if (world == null) {
-            throw new IllegalArgumentException("Serialized location references unloaded world " + worldName);
-        }
         double xValue = x.doubleValue();
         double yValue = y.doubleValue();
         double zValue = z.doubleValue();
         float yaw = data.get("yaw") instanceof Number value ? value.floatValue() : 0.0f;
         float pitch = data.get("pitch") instanceof Number value ? value.floatValue() : 0.0f;
         TransferPayloadValidation.validateLocation(xValue, yValue, zValue, yaw, pitch);
-        return new Location(
-                world,
-                xValue,
-                yValue,
-                zValue,
-                yaw,
-                pitch
-        );
     }
 
     private Set<PotionEffect> deserializePotionEffects(Object serializedValue) {

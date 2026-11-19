@@ -1,5 +1,13 @@
 # aiSector rewrite — status wznowienia
 
+## 2026-11-19 — border, przejścia, opcjonalny Spawn + dwa sektory gry
+
+- Border gracza: jedna ściana, narożnik lub brak, zależnie od odległości od krawędzi. Nie podmieniamy właściwego bordera świata; 2 bloki bufora pozostają dla zgłoszenia przejścia.
+- Join wykonuje odczyty Mongo i Redis równolegle z jednym `MGET`; zredukowano sztuczne opóźnienia teleportu i powielone kodowanie zbroi/offhand. Przejście ukośne zachowuje współrzędną w osi nieprzecinanej granicy.
+- `aiSector/SECTOR_LAYOUT.md` opisuje włączenie opcjonalnego profilu `Spawn`, `GameWest`, `GameEast`, dwie kopie mapy 1000×1000, blokady po stronie Paper/Velocity i losowy teleport przyciskiem na suchej gąbce.
+- `clean verify`: 127 testów (shared 9, Paper 96, Velocity 22). Izolowany klient 26.3 na Paper 26.3-256 + Velocity 4.3.1 przetestował: blokadę teleportu poza Spawn i `/server`, zwykły przycisk, wyjście na bezpieczną powierzchnię, pojedynczą ścianę i przejście przez `X=0` z tym samym inventory/XP. Dowody: `C:\Users\Busio\AppData\Local\Temp\opencode\aisector-layout-smoke-pe1_3i_q`. Redis 6379 bez mutacji. Brak porównania opóźnienia z produkcją.
+- Lokalna instancja zachowuje światy i OP i uruchamia teraz fork 4.3.1 dla zwykłego klienta 26.3. Testy potwierdziły brak ekranów dla przejścia przez granicę, `/spawn`, `/tppos` i wyjścia przyciskiem na suchej gąbce. To nie jest wdrożenie produkcyjne.
+
 Ostatnia aktualizacja: **2026-11-02**
 
 ## Publikacja GitHub — po poleceniu użytkownika

@@ -1,0 +1,25 @@
+# Copy as plugins/aiSECTOR/sectors.yml on all three backends to enable this layout.
+locked-spawn:
+  sector: Spawn
+  spawn-world: world
+  game-world: world
+  game-sectors: [GameWest, GameEast]
+
+sectors:
+  # Separate backend/world save; place its world spawn inside these coordinates.
+  Spawn:
+    minX: 2000
+    maxX: 2099
+    minZ: 2000
+    maxZ: 2099
+  # Both game backends use independent copies of the same map, preserving coordinates.
+  GameWest:
+    minX: -500
+    maxX: -1
+    minZ: -500
+    maxZ: 499
+  GameEast:
+    minX: 0
+    maxX: 499
+    minZ: -500
+    maxZ: 499

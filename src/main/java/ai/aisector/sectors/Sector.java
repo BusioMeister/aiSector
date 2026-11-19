@@ -27,6 +27,11 @@ public class Sector {
         return x >= xMin && x <= xMax && z >= zMin && z <= zMax;
     }
 
+    public double distanceToEdge(double x, double z) {
+        return Math.min(Math.min(x - xMin, (double) xMax + 1 - x),
+                Math.min(z - zMin, (double) zMax + 1 - z));
+    }
+
     public int getMinX() {
         return xMin;
     }

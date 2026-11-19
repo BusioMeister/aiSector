@@ -228,6 +228,7 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
+        getServer().getPluginManager().registerEvents(new ai.aisector.sectors.LockedSpawnListener(this), this);
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
         getServer().getPluginManager().registerEvents(new StoneDropListener(this, miningLevelManager), this);
         getServer().getPluginManager().registerEvents(new DropGuiListener(this), this);
@@ -249,6 +250,7 @@ public class SectorPlugin extends JavaPlugin {
                 new ai.aisector.listeners.GeneratorListener(this, this.generatorManager), this);
         ai.aisector.generators.GeneratorItems.registerRecipes(this);
         getServer().getScheduler().runTask(this, () -> this.generatorManager.loadAll());
+        getServer().getScheduler().runTask(this, sectorManager::warmGameSeam);
         new GlobalChatPlugin(this).register();
         new ActionBarTask().runTaskTimer(this, 0L, 20L);
         startRedisListeners(); // Uruchomienie wszystkich listenerów Redis w osobnych wątkach
@@ -412,6 +414,7 @@ public class SectorPlugin extends JavaPlugin {
         pendingSchematicPastes.forEach(future -> future.completeExceptionally(schematicShutdown));
         shutdownStep("schematic loader", schematicLoader::shutdownNow);
         shutdownStep("teleport warmups", ai.aisector.task.TeleportWarmupRegistry::clearAll);
+        if (sectorManager != null) shutdownStep("seam chunk tickets", sectorManager::stopWarmingGameSeam);
 
         if (this.publisherTask != null && !this.publisherTask.isCancelled()) {
             shutdownStep("online player publisher", this.publisherTask::cancel);

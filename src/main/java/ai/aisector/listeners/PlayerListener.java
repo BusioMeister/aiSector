@@ -2,17 +2,11 @@ package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.Sector;
+import ai.aisector.sectors.SectorArrival;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
 import ai.aisector.user.UserManager;
-import ai.aisector.utils.Direction;
 import ai.aisector.utils.BukkitTaskScheduler;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
-import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.boss.BarColor;
@@ -20,25 +14,26 @@ import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.Plugin;
+import org.bukkit.event.player.PlayerTeleportEvent;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerListener implements Listener {
+    private static final int WARNING_DISTANCE = 20;
     private final SectorPlugin plugin;
-
     private final SectorManager sectorManager;
-
     private final WorldBorderManager borderManager;
-
     private final UserManager userManager;
-
     private final Map<UUID, BossBar> bossBars = new HashMap<>();
     private final Map<UUID, UUID> pendingSectorTransfers = new ConcurrentHashMap<>();
-
-    private final double WARNING_DISTANCE = 20.0D;
 
     public PlayerListener(SectorPlugin plugin) {
         this.plugin = plugin;
@@ -49,116 +44,121 @@ public class PlayerListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        updateBorderAndBossBar(event.getPlayer());
-        Player joiningPlayer = event.getPlayer();
+        Player player = event.getPlayer();
+        updateBorderAndBossBar(player, player.getLocation());
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (isCurrentSession(joiningPlayer)) {
-                plugin.getScoreboardManager().createBoard(joiningPlayer);
-            }
+            if (isCurrentSession(player)) plugin.getScoreboardManager().createBoard(player);
         }, 10L);
     }
 
-
-
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-        Location from = event.getFrom();
-        Location to = event.getTo();
-        if (to == null || (from.getBlockX() == to.getBlockX()
-                && from.getBlockY() == to.getBlockY()
-                && from.getBlockZ() == to.getBlockZ()
-                && from.getWorld().equals(to.getWorld()))) {
-            return;
-        }
-        if (pendingSectorTransfers.containsKey(player.getUniqueId())) {
+        Location from = event.getFrom(), to = event.getTo();
+        if (sectorManager.isLockedSpawnBackend() && to != null && !sectorManager.insideLockedSpawn(to)) {
             event.setCancelled(true);
             return;
         }
-        updateBorderAndBossBar(player);
-        String previousSectorId = this.sectorManager.getSectorForLocation(from.getBlockX(), from.getBlockZ());
-        String newSectorId = this.sectorManager.getSectorForLocation(to.getBlockX(), to.getBlockZ());
-        if (previousSectorId != null && !previousSectorId.equals(newSectorId)) {
-            if (newSectorId == null || newSectorId.isEmpty()) {
-                event.setCancelled(true);
-                player.sendMessage("§cGRANICA SEKTORA!.");
-                return;
-            }
-            UUID transferToken = UUID.randomUUID();
-            UUID playerUuid = player.getUniqueId();
-            if (pendingSectorTransfers.putIfAbsent(playerUuid, transferToken) != null) {
-                event.setCancelled(true);
-                return;
-            }
+        if (to == null || !from.getWorld().equals(to.getWorld())
+                || (from.getBlockX() == to.getBlockX() && from.getBlockZ() == to.getBlockZ())) return;
+        if (pendingSectorTransfers.containsKey(player.getUniqueId()) || userManager.isTransferPending(player)) {
+            event.setCancelled(true);
+            return;
+        }
 
+        Sector previous = sectorManager.getSectorAt(from);
+        if (previous == null || previous.isInside(to.getBlockX(), to.getBlockZ())) return;
+        Sector destination = sectorManager.getSectorAt(to);
+        if (destination == null) {
             event.setCancelled(true);
-            removeBossBar(player);
-            Direction moveDirection = Direction.fromLocations(from, to);
-            Location adjustedLocation = moveDirection.add(to, 2);
-            try {
-                String snapshot = userManager.serializePlayerDataForTransfer(player, adjustedLocation);
-                sectorManager.transferPlayerAsync(player, newSectorId, snapshot).whenComplete((ignored, error) -> {
-                    if (error != null) {
-                        pendingSectorTransfers.remove(playerUuid, transferToken);
-                    } else {
-                        BukkitTaskScheduler.execute(plugin, () -> Bukkit.getScheduler().runTaskLater(plugin,
-                                () -> pendingSectorTransfers.remove(playerUuid, transferToken), 200L));
-                    }
-                });
-            } catch (RuntimeException exception) {
-                pendingSectorTransfers.remove(playerUuid, transferToken);
-                plugin.getLogger().warning("Could not capture transfer state for " + player.getName()
-                        + ": " + exception.getMessage());
-                player.sendMessage("§cNie udało się przygotować transferu. Pozostajesz na obecnym sektorze.");
-            }
+            return;
         }
+        UUID transferToken = UUID.randomUUID();
+        UUID playerUuid = player.getUniqueId();
+        if (pendingSectorTransfers.putIfAbsent(playerUuid, transferToken) != null) {
+            event.setCancelled(true);
+            return;
+        }
+
+        Location arrival = to.clone();
+        arrival.setX(SectorArrival.inside(from.getX(), to.getX(), destination.getMinX(), destination.getMaxX()));
+        arrival.setZ(SectorArrival.inside(from.getZ(), to.getZ(), destination.getMinZ(), destination.getMaxZ()));
+        try {
+            String snapshot = userManager.serializePlayerDataForTransfer(player, arrival);
+            sectorManager.transferAcrossSeam(player, destination, arrival, snapshot, event).whenComplete((ignored, error) -> {
+                if (error != null) BukkitTaskScheduler.execute(plugin, () -> {
+                    if (!pendingSectorTransfers.remove(playerUuid, transferToken) || !isCurrentSession(player)
+                            || userManager.isTransferPending(player)) return;
+                    // Definitive failure before publication: restore the source position.
+                    if (!previous.isInside(player.getLocation().getBlockX(), player.getLocation().getBlockZ()))
+                        player.teleportAsync(from);
+                });
+                else BukkitTaskScheduler.execute(plugin, () -> Bukkit.getScheduler().runTaskLater(plugin,
+                        () -> pendingSectorTransfers.remove(playerUuid, transferToken), 200L));
+            });
+        } catch (RuntimeException exception) {
+            event.setCancelled(true);
+            pendingSectorTransfers.remove(playerUuid, transferToken);
+            plugin.getLogger().warning("Could not capture transfer state for " + player.getName()
+                    + ": " + exception.getMessage());
+            player.sendMessage("§cNie udało się przygotować transferu. Pozostajesz na obecnym sektorze.");
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBorderMove(PlayerMoveEvent event) {
+        if (pendingSectorTransfers.containsKey(event.getPlayer().getUniqueId())) return;
+        Location from = event.getFrom(), to = event.getTo();
+        if (to != null && (from.getX() != to.getX() || from.getZ() != to.getZ()
+                || !from.getWorld().equals(to.getWorld()))) updateBorderAndBossBar(event.getPlayer(), to);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBorderTeleport(PlayerTeleportEvent event) {
+        Player player = event.getPlayer();
+        BukkitTaskScheduler.execute(plugin, () -> {
+            if (isCurrentSession(player)) updateBorderAndBossBar(player, player.getLocation());
+        });
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        plugin.getScoreboardManager().removeBoard(event.getPlayer());
-        borderManager.clear(event.getPlayer());
-        pendingSectorTransfers.remove(event.getPlayer().getUniqueId());
-        removeBossBar(event.getPlayer());
+        Player player = event.getPlayer();
+        plugin.getScoreboardManager().removeBoard(player);
+        borderManager.clear(player);
+        pendingSectorTransfers.remove(player.getUniqueId());
+        removeBossBar(player);
     }
 
-    private void updateBorderAndBossBar(Player player) {
-        Location loc = player.getLocation();
-        Sector currentSector = this.sectorManager.getSector(loc.getBlockX(), loc.getBlockZ());
-        if (currentSector != null) {
-            this.borderManager.sendWorldBorder(player, currentSector);
-            double distance = this.sectorManager.distanceToClosestBorder(loc);
-            if (distance <= 20.0D) {
-                showBossBar(player, distance);
-            } else {
-                removeBossBar(player);
-            }
-        } else {
-            removeBossBar(player);
-        }
+    private void updateBorderAndBossBar(Player player, Location loc) {
+        Sector sector = sectorManager.getSectorAt(loc);
+        borderManager.sendWorldBorder(player, sector, loc);
+        double distance = sector == null ? Double.POSITIVE_INFINITY : sector.distanceToEdge(loc.getX(), loc.getZ());
+        if (distance <= WARNING_DISTANCE) showBossBar(player, (int) Math.max(0, distance));
+        else removeBossBar(player);
     }
 
     private boolean isCurrentSession(Player player) {
         return player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player;
     }
 
-    private void showBossBar(Player player, double distance) {
-        BossBar bar = this.bossBars.get(player.getUniqueId());
-        String title = "§cGranica sektora za " + (int)distance + "§c kratek" ;
-        double progress = Math.max(0.0D, Math.min(1.0D, distance / 20.0D));
+    private void showBossBar(Player player, int distance) {
+        BossBar bar = bossBars.get(player.getUniqueId());
+        String title = "§cGranica sektora za " + distance + "§c kratek";
+        double progress = (double) distance / WARNING_DISTANCE;
         if (bar == null) {
-            bar = Bukkit.createBossBar(title, BarColor.RED, BarStyle.SOLID, new org.bukkit.boss.BarFlag[0]);
-            this.bossBars.put(player.getUniqueId(), bar);
+            bar = Bukkit.createBossBar(title, BarColor.RED, BarStyle.SOLID);
+            bar.setProgress(progress);
+            bossBars.put(player.getUniqueId(), bar);
             bar.addPlayer(player);
+            return;
         }
-        bar.setTitle(title);
-        bar.setProgress(progress);
-        bar.setVisible(true);
+        if (!bar.getTitle().equals(title)) bar.setTitle(title);
+        if (bar.getProgress() != progress) bar.setProgress(progress);
     }
 
     private void removeBossBar(Player player) {
-        BossBar bar = this.bossBars.remove(player.getUniqueId());
-        if (bar != null)
-            bar.removeAll();
+        BossBar bar = bossBars.remove(player.getUniqueId());
+        if (bar != null) bar.removeAll();
     }
 }

@@ -1,5 +1,8 @@
 # aiSector network plugins
 
+Lokalny układ `Spawn` / `GameWest` / `GameEast`: [konfiguracja mapy i sektory](aiSector/SECTOR_LAYOUT.md).
+Opcjonalny [silnik Velocity 4.3.1 z InstantTransfer](VelocityPlugin/SEAMLESS_FORK.md) wymaga osobnego buildu.
+
 The repository contains two separately deployable plugins and a small shared protocol module:
 
 | Maven module | Runtime | Artifact |

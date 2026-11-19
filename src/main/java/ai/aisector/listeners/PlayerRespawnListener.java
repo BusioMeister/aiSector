@@ -39,6 +39,11 @@ public class PlayerRespawnListener implements Listener {
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
+        if (sectorManager.isLockedSpawnBackend()) {
+            plugin.getPlayerDeathSectors().remove(player.getUniqueId());
+            event.setRespawnLocation(sectorManager.lockedSpawnLocation());
+            return;
+        }
 
         String spawnDataJson = cachedGlobalSpawn;
         if (spawnDataJson == null || spawnDataJson.isEmpty()) {

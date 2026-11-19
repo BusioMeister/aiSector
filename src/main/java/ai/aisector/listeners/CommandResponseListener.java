@@ -106,6 +106,10 @@ public class CommandResponseListener extends JedisPubSub {
                 if (playerToSave == null || !playerToSave.isOnline()) {
                     return;
                 }
+                if (sectorManager.isLockedSpawnBackend()) {
+                    publishSaveAcknowledgementAsync(requestId, uuidString, false);
+                    return;
+                }
 
                 final String snapshot;
                 String playerName = playerToSave.getName();

@@ -22,8 +22,12 @@ import java.util.concurrent.ConcurrentHashMap;
 final class TransferSnapshotGuard implements Listener {
     static final class Seal {
         final Player player;
+        PlayerMoveEvent initialSeamMove;
         volatile boolean saved;
-        Seal(Player player) { this.player = player; }
+        Seal(Player player, PlayerMoveEvent initialSeamMove) {
+            this.player = player;
+            this.initialSeamMove = initialSeamMove;
+        }
     }
     private final Map<UUID, Seal> seals = new ConcurrentHashMap<>();
     private final SectorPlugin plugin;
@@ -33,8 +37,8 @@ final class TransferSnapshotGuard implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
-    Seal begin(Player player) {
-        Seal seal = new Seal(player);
+    Seal begin(Player player, PlayerMoveEvent initialSeamMove) {
+        Seal seal = new Seal(player, initialSeamMove);
         if (seals.putIfAbsent(player.getUniqueId(), seal) != null)
             throw new IllegalStateException("A transfer snapshot is already pending");
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -77,5 +81,14 @@ final class TransferSnapshotGuard implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST) public void experience(PlayerExpChangeEvent e) { if (active(e.getPlayer())) e.setAmount(0); }
     @EventHandler(priority = EventPriority.HIGHEST) public void place(BlockPlaceEvent e) { if (active(e.getPlayer())) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST) public void breakBlock(BlockBreakEvent e) { if (active(e.getPlayer())) e.setCancelled(true); }
-    @EventHandler(priority = EventPriority.HIGHEST) public void move(PlayerMoveEvent e) { if (active(e.getPlayer())) e.setTo(e.getFrom()); }
+    @EventHandler(priority = EventPriority.HIGHEST) public void move(PlayerMoveEvent e) {
+        Player player = e.getPlayer();
+        Seal seal = seals.get(player.getUniqueId());
+        if (seal == null || seal.player != player) return;
+        if (seal.initialSeamMove == e) {
+            seal.initialSeamMove = null;
+            return;
+        }
+        e.setTo(e.getFrom());
+    }
 }
