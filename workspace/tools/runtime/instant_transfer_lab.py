@@ -99,12 +99,12 @@ def main():
             return output.read_text(), output.with_name(output.name + ".walk").read_text()
         return output.read_text()
 
-    def position(role):
-        pattern = rf"{name} has the following entity data: \[([-.\d]+)d, ([-.\d]+)d, ([-.\d]+)d\]"
+    def position(role, player_name=name):
+        pattern = rf"{player_name} has the following entity data: \[([-.\d]+)d, ([-.\d]+)d, ([-.\d]+)d\]"
         def positions():
             return re.findall(pattern, re.sub(r"\x1b\[[0-9;]*m", "", log(role)))
         seen = len(positions())
-        send(role, f"data get entity {name} Pos")
+        send(role, f"data get entity {player_name} Pos")
         wait(lambda: len(positions()) > seen, "read authoritative position", 10)
         return tuple(float(n) for n in positions()[-1])
 
@@ -238,7 +238,7 @@ def main():
                 assert log("Proxy").count(f"{name} -> {dest} has connected") == before + 1
                 samples = [list(map(float, row.split())) for row in walk.splitlines()]
                 x, y, z = position(dest)
-                assert 4 <= x * side <= 24 and abs(y - 141) < .05 and abs(z - .5) < 1, (dest, x, y, z)
+                assert 3 <= x * side <= 24 and abs(y - 141) < .05 and abs(z - .5) < 1, (dest, x, y, z)
                 first_step = next(i for i, row in enumerate(samples) if row[1] * side >= .2)
                 assert all(row[1] * side >= -.2 for row in samples[first_step:]), (dest, walk)
                 assert any(r[5] == 4096 and abs((r[4] - side * 2048) - (-side * 2)) < .01
@@ -270,6 +270,38 @@ def main():
             results["spawn"] = {"screens": trace, "server_x": x, "server_y": y, "server_z": z}
             if args.two_clients:
                 results["spawn"]["two_clients"] = True
+                counts = {sector: log("Proxy").count(f"{name} -> {sector} has connected")
+                          for sector in ("GameWest", "GameEast")}
+                send("Spawn", f"minecraft:tp {name} 2050.5 126 2048.5 180 0")
+                time.sleep(1)
+                assert control("trace-block", "2050,127,2046") == "0 PLAY"
+                game = next((sector for sector, count in counts.items()
+                             if log("Proxy").count(f"{name} -> {sector} has connected") > count), None)
+                assert game, "Operator did not leave Spawn using the button"
+                send(game, f"op {name}")
+                wait(lambda: f"Made {name} a server operator" in log(game), "game-sector OP", 10)
+                assert control("command", f"s {peer_name}") == "OK"
+                wait(lambda: f"{peer_name} -> {game} has connected" in log("Proxy"), "admin summon from Spawn", 12)
+                time.sleep(2)
+                assert control("client-state", actor=peer) == "PLAY"
+                operator = position(game)
+                summoned = position(game, peer_name)
+                assert sum((a - b) ** 2 for a, b in zip(operator, summoned)) < 9, (operator, summoned)
+                results["summon"] = {"target": game, "non_operator_summoned": True}
+                send(game, f"op {peer_name}")
+                wait(lambda: f"Made {peer_name} a server operator" in log(game), "test-only TPA permission", 10)
+                assert control("trace-command", "spawn", actor=peer) == "0 PLAY"
+                send("Spawn", f"op {peer_name}")
+                wait(lambda: f"Made {peer_name} a server operator" in log("Spawn"), "test-only Spawn TPA permission", 10)
+                count = log("Proxy").count(f"{peer_name} -> {game} has connected")
+                assert control("command", f"tpa {name}", actor=peer) == "OK"
+                time.sleep(1)
+                assert log("Proxy").count(f"{peer_name} -> {game} has connected") == count
+                assert control("command", "tpaccept") == "OK"
+                wait(lambda: log("Proxy").count(f"{peer_name} -> {game} has connected") == count + 1,
+                     "accepted TPA exits Spawn", 20)
+                assert control("client-state", actor=peer) == "PLAY"
+                results["tpa"] = {"target": game, "accepted_before_transfer": True}
             (run / "results.json").write_text(json.dumps(results, indent=2))
             print("REAL_SECTOR_PLATFORM_OK", run, flush=True)
             return

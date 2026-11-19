@@ -57,6 +57,8 @@ public class SummonCommand implements CommandExecutor {
         JsonObject request = new JsonObject();
         request.addProperty("adminUUID", admin.getUniqueId().toString());
         request.addProperty("targetName", targetName);
+        request.addProperty("operator", admin.isOp());
+        request.addProperty("adminServer", plugin.getConfig().getString("this-sector-name", ""));
 
         // Dodajemy pełną lokalizację admina do prośby
         Location adminLoc = admin.getLocation();

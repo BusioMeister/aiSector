@@ -226,7 +226,7 @@ public class SectorManager {
         var exit = chooseSpawnExit();
         var snapshot = plugin.getUserManager().serializePlayerDataForTransfer(player, player.getLocation());
         return transferPlayerAsync(player, exit.sector(), snapshot,
-                Map.of("player:final_teleport_target:" + player.getUniqueId(), exit.targetJson()), 60, true, null);
+                 Map.of("player:final_teleport_target:" + player.getUniqueId(), exit.targetJson()), 60, "spawn-button", null);
     }
 
     public CompletableFuture<Void> returnAfterFailedRandomArrival(Player player, Sector failedSector) {
@@ -255,7 +255,7 @@ public class SectorManager {
                 .append("yaw", arrival.getYaw()).append("pitch", arrival.getPitch())
                 .append("seam", destination.getName()).toJson();
         return transferPlayerAsync(player, destination.getName(), playerData,
-                Map.of("player:final_teleport_target:" + player.getUniqueId(), target), 60, false, move);
+                 Map.of("player:final_teleport_target:" + player.getUniqueId(), target), 60, null, move);
     }
 
     public CompletableFuture<Void> transferPlayerAsync(Player player, String sectorId, String playerData,
@@ -265,16 +265,42 @@ public class SectorManager {
 
     public CompletableFuture<Void> transferPlayerAsync(Player player, String sectorId, String playerData,
                                                        Map<String, String> transferKeys, int ttlSeconds) {
-        return transferPlayerAsync(player, sectorId, playerData, transferKeys, ttlSeconds, false, null);
+        return transferPlayerAsync(player, sectorId, playerData, transferKeys, ttlSeconds, null, null);
+    }
+
+    /** Called only after a home, guild-home or accepted TPA route completes its warmup. */
+    public CompletableFuture<Void> transferAfterTeleportWarmup(Player player, String sectorId, String playerData,
+                                                               String key, String target, int ttlSeconds) {
+        String spawnExit = null;
+        if (isLockedSpawnBackend()) {
+            var location = org.bson.Document.parse(target);
+            if (!key.equals("player:final_teleport_target:" + player.getUniqueId())
+                    || !isValidSpawnWarmupTarget(sectorId, location)
+                    || !insideLockedSpawn(player.getLocation())) {
+                player.sendMessage("§cCel teleportacji nie należy do sektora gry.");
+                return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid Spawn warmup target"));
+            }
+            spawnExit = "spawn-warmup";
+        }
+        return transferPlayerAsync(player, sectorId, playerData, Map.of(key, target), ttlSeconds, spawnExit, null);
+    }
+
+    private boolean isValidSpawnWarmupTarget(String sectorId, org.bson.Document location) {
+        if (sectorId == null || !spawnLayout.gameWorld().equals(location.get("world"))) return false;
+        if (!(location.get("x") instanceof Number x) || !(location.get("y") instanceof Number y)
+                || !(location.get("z") instanceof Number z) || !Double.isFinite(x.doubleValue())
+                || !Double.isFinite(y.doubleValue()) || !Double.isFinite(z.doubleValue())) return false;
+        return spawnLayout.game().stream().anyMatch(sector -> sector.getName().equalsIgnoreCase(sectorId)
+                && sector.isInside((int) Math.floor(x.doubleValue()), (int) Math.floor(z.doubleValue())));
     }
 
     private CompletableFuture<Void> transferPlayerAsync(Player player, String sectorId, String playerData,
-                                                        Map<String, String> transferKeys, int ttlSeconds, boolean spawnButton,
+                                                         Map<String, String> transferKeys, int ttlSeconds, String spawnExit,
                                                         org.bukkit.event.player.PlayerMoveEvent initialSeamMove) {
         Objects.requireNonNull(player, "player");
-        if (isLockedSpawnBackend() && !spawnButton) {
-            player.sendMessage("§cZe spawna wyjdziesz przyciskiem na gąbce.");
-            return CompletableFuture.failedFuture(new IllegalStateException("Locked spawn requires the random teleport button"));
+        if (isLockedSpawnBackend() && spawnExit == null) {
+            player.sendMessage("§cUżyj przycisku, domu, bazy gildii albo zaakceptowanego /tpa.");
+            return CompletableFuture.failedFuture(new IllegalStateException("Missing authorized Spawn exit route"));
         }
         if (sectorId == null || !sectorId.matches("[A-Za-z0-9_-]{1,64}")) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid sector name"));
@@ -319,7 +345,7 @@ public class SectorManager {
             arguments.add(0, Integer.toString(keys.size()));
             arguments.add(1, Integer.toString(ttlSeconds));
             arguments.add(RedisChannels.SECTOR_TRANSFER);
-            arguments.add(playerUuid + ":" + sectorId + (spawnButton ? ":spawn-button" : ""));
+            arguments.add(playerUuid + ":" + sectorId + (spawnExit == null ? "" : ":" + spawnExit));
 
             long proxySubscribers = ((Number) jedis.eval(PUBLISH_TRANSFER_SCRIPT, keys, arguments)).longValue();
             if (proxySubscribers == 0L) {

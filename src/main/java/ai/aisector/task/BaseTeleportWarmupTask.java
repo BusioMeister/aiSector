@@ -216,8 +216,8 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
                 throw new IllegalArgumentException("Missing target world name");
             }
             String snapshot = userManager.serializePlayerDataForTransfer(player, player.getLocation());
-            sectorManager.transferPlayerAsync(player, targetSector, snapshot,
-                    Map.of(redisKey, locationToJson(targetLocation, targetWorldName)), redisTtlSeconds)
+            sectorManager.transferAfterTeleportWarmup(player, targetSector, snapshot,
+                    redisKey, locationToJson(targetLocation, targetWorldName), redisTtlSeconds)
                     .whenComplete((ignored, error) ->
                             TeleportWarmupRegistry.completePendingOperation(player, operationToken));
         } catch (RuntimeException exception) {

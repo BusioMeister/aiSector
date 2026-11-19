@@ -106,7 +106,7 @@ public class CommandResponseListener extends JedisPubSub {
                 if (playerToSave == null || !playerToSave.isOnline()) {
                     return;
                 }
-                if (sectorManager.isLockedSpawnBackend() && !allowsLockedSpawnAdminTp(data, playerToSave.isOp())) {
+                if (sectorManager.isLockedSpawnBackend() && !allowsLockedSpawnAdminTransfer(data, playerToSave.isOp())) {
                     publishSaveAcknowledgementAsync(requestId, uuidString, false);
                     return;
                 }
@@ -262,8 +262,11 @@ public class CommandResponseListener extends JedisPubSub {
         return data.get(key).getAsString();
     }
 
-    static boolean allowsLockedSpawnAdminTp(JsonObject data, boolean operator) {
-        return operator && "admin-tp".equals(stringField(data, "purpose"));
+    static boolean allowsLockedSpawnAdminTransfer(JsonObject data, boolean operator) {
+        String purpose = stringField(data, "purpose");
+        // admin-summon is set by Velocity only for a request issued by a Paper operator.
+        // Here the player whose snapshot is saved is the summon target, not the operator.
+        return "admin-summon".equals(purpose) || (operator && "admin-tp".equals(purpose));
     }
 
 }

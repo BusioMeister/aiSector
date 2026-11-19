@@ -39,8 +39,12 @@ wolnymi blokami nad nim; woda, lawa i niebezpieczna powierzchnia są odrzucane.
 Jeżeli nie znajdzie miejsca, próbuje bezpiecznego powrotu na Spawn.
 Blokada spawna dotyczy ruchu, portali, teleportacji poza obszar i zmiany backendu
 przez standardowe drogi proxy; publiczna komenda `/spawn` nie dostaje nowego grantu.
-Wyjątek to `/tp <gracz>` operatora: po sprawdzeniu OP na źródłowym Paper i zapisie
-danych proxy wystawia jednorazową zgodę na konkretny backend docelowy.
+Wyjątki to `/tp <gracz>` i `/s <gracz>` operatora. Po sprawdzeniu OP na
+Paper obsługującym komendę i zapisie danych przenoszonej postaci proxy wystawia
+jednorazową zgodę na konkretny backend docelowy. Osoba przywoływana nie musi mieć OP.
+Gracz może też wyjść do swojego `/home`, do domu gildii (`/g dom`, `/g baza`)
+albo przez zaakceptowane `/tpa`. Obowiązują dotychczasowe uprawnienia,
+sprawdzanie celu i odliczanie. Bezpośrednie `/server` pozostaje zablokowane.
 Samo wgranie JAR-a nie nadpisuje istniejącego `sectors.yml` ani mapy.
 
 Na przejściu pomiędzy sektorami gry Paper próbuje wystartować od razu przy

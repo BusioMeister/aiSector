@@ -10,9 +10,18 @@ class LockedSpawnAdminTpTest {
     @Test
     void requiresOperatorAndExplicitAdminTeleport() {
         JsonObject request = new JsonObject();
-        assertFalse(CommandResponseListener.allowsLockedSpawnAdminTp(request, true));
+        assertFalse(CommandResponseListener.allowsLockedSpawnAdminTransfer(request, true));
         request.addProperty("purpose", "admin-tp");
-        assertFalse(CommandResponseListener.allowsLockedSpawnAdminTp(request, false));
-        assertTrue(CommandResponseListener.allowsLockedSpawnAdminTp(request, true));
+        assertFalse(CommandResponseListener.allowsLockedSpawnAdminTransfer(request, false));
+        assertTrue(CommandResponseListener.allowsLockedSpawnAdminTransfer(request, true));
+    }
+
+    @Test
+    void authorizedSummonCanSnapshotANonOperator() {
+        JsonObject request = new JsonObject();
+        request.addProperty("purpose", "admin-summon");
+        assertTrue(CommandResponseListener.allowsLockedSpawnAdminTransfer(request, false));
+        request.addProperty("purpose", "tpa");
+        assertFalse(CommandResponseListener.allowsLockedSpawnAdminTransfer(request, true));
     }
 }

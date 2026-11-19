@@ -269,6 +269,7 @@ public class GuildCommand implements CommandExecutor {
                 handleSetHomeGuild(player, user);
                 break;
             case "dom":
+            case "baza":
                 handleGuildHome(player, user);
                 break;
             case "pvp":
