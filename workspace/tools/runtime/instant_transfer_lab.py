@@ -23,7 +23,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--proxy-plugin", type=Path, help="Override the InstantTransfer proxy plugin for an A/B run")
     parser.add_argument("--sector-platform", action="store_true", help="Walk across the real aiSector border on a 50x50 platform")
+    parser.add_argument("--two-clients", action="store_true", help="Exercise nearby player head updates during arrival")
     args = parser.parse_args()
+    if args.two_clients and not args.sector_platform:
+        parser.error("--two-clients requires --sector-platform")
     starts = {"GameWest": 18, "GameEast": 24, "Spawn": 29}
     ports = {"GameWest": 25576, "GameEast": 25577, "Spawn": 25578, "Proxy": 25575}
     if any(listening(port) for port in ports.values()):
@@ -43,6 +46,8 @@ def main():
     print("INSTANT_LAB_EVIDENCE", run, flush=True)
     name = "RwSInst" + uuid.uuid4().hex[:6]
     ident = uuid.UUID(bytes=hashlib.md5(("OfflinePlayer:" + name).encode()).digest(), version=3)
+    peer_name = "RwSPeer" + uuid.uuid4().hex[:6]
+    peer_ident = uuid.UUID(bytes=hashlib.md5(("OfflinePlayer:" + peer_name).encode()).digest(), version=3)
     prepared = prepare(TEMP / "aisector-official-client-26.3")
     command([JAVA / "javac.exe", "--add-modules", "jdk.attach", "-cp", prepared[1], "-d", run,
              REPO / "tools/runtime/AttachSmoke.java", REPO / "tools/runtime/ClientControlAgent.java"])
@@ -52,6 +57,7 @@ def main():
     command([JAVA / "jar.exe", "cfm", agent, manifest, "-C", run, "ClientControlAgent.class"])
     processes, logs = {}, {}
     client = None
+    peer = None
     mongo = None
     redis_started = False
     env = os.environ.copy()
@@ -83,10 +89,11 @@ def main():
                 "-XX:ActiveProcessorCount=3", *options, "-jar", jar, *args], cwd=directory,
                 stdin=subprocess.PIPE, stdout=output, stderr=subprocess.STDOUT, text=True, env=env)
 
-    def control(action, value=""):
+    def control(action, value="", actor=None):
         output = run / (uuid.uuid4().hex + ".result")
         payload = action + "|" + base64.b64encode(value.encode()).decode() + "|" + str(output)
-        command([JAVA / "java.exe", "--add-modules", "jdk.attach", "-cp", run, "AttachSmoke", client.pid, agent, payload])
+        command([JAVA / "java.exe", "--add-modules", "jdk.attach", "-cp", run, "AttachSmoke",
+                 (actor or client).pid, agent, payload])
         wait(output.exists, "agent result", 15)
         if action in {"trace-command-walk", "trace-border-walk"}:
             return output.read_text(), output.with_name(output.name + ".walk").read_text()
@@ -132,7 +139,10 @@ def main():
                 data.extractall(run, [path for path in data.namelist() if path.startswith(sector + "/world/")])
                 plugins = base / "plugins"
                 plugins.mkdir()
-                (base / "whitelist.json").write_text(json.dumps([{"uuid": str(ident), "name": name}]))
+                players = [{"uuid": str(ident), "name": name}]
+                if args.two_clients:
+                    players.append({"uuid": str(peer_ident), "name": peer_name})
+                (base / "whitelist.json").write_text(json.dumps(players))
                 shutil.copy2(review / "packetevents-spigot-2.14.0.jar", plugins)
                 shutil.copy2(review / "backend-agent/spigot/target/original-instanttransfer-agent-0.1.0.jar",
                              plugins / "InstantTransferAgent-0.1.0.jar")
@@ -236,6 +246,17 @@ def main():
                 results[str(index + 1)] = {"target": dest, "screens": trace, "server_x": x,
                                            "server_y": y, "server_z": z, "border_confirmed": True}
                 role = dest
+            if args.two_clients:
+                peer_opts = arguments(prepared, run / peer_name, peer_name)
+                peer_opts[-1] = "127.0.0.1:25575"
+                logs["peer"] = (run / "peer.log").open("w", encoding="utf-8")
+                peer = subprocess.Popen(peer_opts, cwd=run, stdout=logs["peer"], stderr=subprocess.STDOUT)
+                wait(lambda: f"{peer_name} -> Spawn has connected" in log("Proxy"), "second player joins")
+                time.sleep(3)
+                send("Spawn", f"minecraft:tp {peer_name} 2052.5 126 2052.5 0 0")
+                time.sleep(.5)
+                assert control("client-state", actor=peer) == "PLAY"
+                control("rotate-head", actor=peer)
             trace, walk = control("trace-command-walk", "spawn|2050.5")
             (run / "spawn-walk.txt").write_text(walk)
             assert len(trace.splitlines()) == 1 and trace.endswith(" PLAY"), trace
@@ -244,7 +265,11 @@ def main():
             samples = [list(map(float, row.split())) for row in walk.splitlines()]
             assert samples and samples[0][0] < 2500
             assert all(new[1] >= old[1] - .5 for old, new in zip(samples, samples[1:])), walk
+            if args.two_clients:
+                assert control("client-state", actor=peer) == control("client-state") == "PLAY"
             results["spawn"] = {"screens": trace, "server_x": x, "server_y": y, "server_z": z}
+            if args.two_clients:
+                results["spawn"]["two_clients"] = True
             (run / "results.json").write_text(json.dumps(results, indent=2))
             print("REAL_SECTOR_PLATFORM_OK", run, flush=True)
             return
@@ -269,6 +294,12 @@ def main():
         (run / "results.json").write_text(json.dumps(results, indent=2))
         print("NO_LOADING_SCREENS_OBSERVED", run)
     finally:
+        if peer is not None and peer.poll() is None:
+            try:
+                control("exit", actor=peer)
+                peer.wait(timeout=10)
+            except Exception:
+                if peer.poll() is None: peer.terminate(); peer.wait(timeout=10)
         if client is not None and client.poll() is None:
             try:
                 control("exit")

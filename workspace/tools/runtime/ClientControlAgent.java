@@ -89,6 +89,12 @@ public class ClientControlAgent {
                     sampleBorderWalk(mc, output.resolveSibling(output.getFileName() + ".walk"), started,
                             Float.parseFloat(value), new java.util.ArrayList<>());
                     return;
+                } else if (action.equals("rotate-head")) {
+                    rotateHead(mc, System.nanoTime());
+                } else if (action.equals("client-state")) {
+                    Files.writeString(output, mc.player != null && mc.level != null && mc.gui.screen() == null
+                            ? "PLAY" : "NOT_PLAY");
+                    return;
                 } else if (action.equals("flight-state")) {
                     var abilities = mc.player.getAbilities();
                     Files.writeString(output, (abilities.mayfly ? "true" : "false") + " " + abilities.flying);
@@ -192,5 +198,14 @@ public class ClientControlAgent {
             java.util.concurrent.CompletableFuture.delayedExecutor(25, java.util.concurrent.TimeUnit.MILLISECONDS)
                     .execute(() -> mc.execute(() -> sampleBorderWalk(mc, output, started, yaw, trace)));
         }
+    }
+
+    private static void rotateHead(Minecraft mc, long started) {
+        long elapsed = (System.nanoTime() - started) / 1_000_000;
+        if (elapsed > 50_000 || mc.player == null) return;
+        mc.player.setYRot((elapsed % 1700) * (360f / 1700));
+        mc.player.setXRot((float) (Math.sin(elapsed / 210.0) * 35));
+        java.util.concurrent.CompletableFuture.delayedExecutor(50, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .execute(() -> mc.execute(() -> rotateHead(mc, started)));
     }
 }
