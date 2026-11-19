@@ -1,6 +1,7 @@
 package ai.aisector.commands;
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
+import ai.aisector.user.PlayerFlight;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -24,13 +25,11 @@ public class FlyCommand implements CommandExecutor {
             return true;
         }
         user.setFlying(!user.isFlying());
-        player.setAllowFlight(user.isFlying());
+        PlayerFlight.resolve(player.getGameMode(), user.isFlying(), user.isFlying()).apply(player);
         if (user.isFlying()) {
-            player.setFlying(true);
             player.sendMessage("§aLatanie zostało włączone.");
         } else {
-            player.setFlying(false);
-            player.sendMessage("§cLatanie zostało wyłączone.");
+            player.sendMessage("§cPrzełącznik /fly wyłączony. Tryb gry nadal może zezwalać na latanie.");
         }
         return true;
     }

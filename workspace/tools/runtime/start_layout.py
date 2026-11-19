@@ -1,6 +1,7 @@
 """Run the prepared layout locally until a STOP file appears in its run directory."""
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -21,15 +22,31 @@ def main():
     parser.add_argument("sha256")
     parser.add_argument("--resume", type=Path, help="Restart an existing stopped local layout without replacing worlds or ops")
     parser.add_argument("--instant", action="store_true", help="Opt in to the local 26.3 InstantTransfer prototype")
-    parser.add_argument("--update-instant", action="store_true", help="Back up and replace a changed local InstantTransfer proxy plugin")
+    parser.add_argument("--update-instant", action="store_true", help="Back up and replace changed local InstantTransfer plugins")
+    parser.add_argument("--public-bind", type=ipaddress.IPv4Address,
+                        help="Use the LAN address of an already configured online-mode layout")
     args = parser.parse_args()
     if args.update_instant and not (args.resume and args.instant):
         parser.error("--update-instant requires --resume and --instant")
+    if args.public_bind and (not args.resume or not args.public_bind.is_private or args.public_bind.is_loopback
+                             or args.public_bind.is_unspecified or args.public_bind.is_link_local):
+        parser.error("--public-bind requires a stopped authenticated layout and a private LAN IPv4")
+    join_host = str(args.public_bind or "127.0.0.1")
     with args.archive.open("rb") as stream:
         if hashlib.file_digest(stream, "sha256").hexdigest() != args.sha256:
             raise RuntimeError("World backup checksum mismatch")
     ports = {"Spawn": 25566, "GameWest": 25567, "GameEast": 25568, "Velocity": 25565}
-    if any(listening(port) for port in (*ports.values(), 6380)) or not listening(27017):
+    def port_ready(role):
+        if role != "Velocity" or not args.public_bind:
+            return listening(ports[role])
+        import socket
+        try:
+            with socket.create_connection((join_host, ports[role]), timeout=1):
+                return True
+        except OSError:
+            return False
+
+    if any(port_ready(role) for role in ports) or listening(6380) or not listening(27017):
         raise RuntimeError("Expected free local service ports and running staging Mongo")
     for name, expected in SERVER_HASHES.items():
         with (INPUT / f"{name}.verified.jar").open("rb") as stream:
@@ -110,8 +127,19 @@ def main():
             'GameEast = "127.0.0.1:25568"\ntry = ["Spawn"]\n[forced-hosts]\n"127.0.0.1" = ["Spawn"]\n')
         if not args.resume:
             (proxy / "velocity.toml").write_text(proxy_config)
-        elif 'bind = "127.0.0.1:25565"' not in (proxy / "velocity.toml").read_text():
-            raise RuntimeError("Unexpected resume proxy binding")
+        else:
+            import tomllib
+            settings = tomllib.loads((proxy / "velocity.toml").read_text())
+            if settings.get("bind") != f"{join_host}:25565":
+                raise RuntimeError("Unexpected resume proxy binding")
+            if args.public_bind:
+                if (settings.get("online-mode") is not True
+                        or settings.get("player-info-forwarding-mode") != "modern"
+                        or settings.get("force-key-authentication") is not True):
+                    raise RuntimeError("Public proxy requires authenticated modern forwarding")
+                secret = proxy / str(settings.get("forwarding-secret-file", "forwarding.secret"))
+                if not secret.is_file() or len(secret.read_text().strip()) < 32:
+                    raise RuntimeError("Missing or weak forwarding secret")
         if args.instant:
             if args.resume:
                 backup = run / f"before-instant-{time.time_ns()}"
@@ -142,7 +170,7 @@ def main():
                 for directory in directories.split():
                     dest = run / directory / "plugins" / name
                     if dest.exists() and dest.read_bytes() != extra[name].read_bytes():
-                        if not (args.update_instant and name == "InstantTransfer.local.jar"):
+                        if not (args.update_instant and name in {"InstantTransfer.local.jar", "InstantTransferAgent.local.jar"}):
                             raise RuntimeError("Refusing to replace existing experimental plugin: " + str(dest))
                         dest.rename(run / f"{directory}-before-{time.time_ns()}-{name}")
                     if not dest.exists(): shutil.copy2(extra[name], dest)
@@ -180,7 +208,7 @@ def main():
         while time.monotonic() < deadline:
             if any(p.poll() is not None for p in processes.values()):
                 raise RuntimeError("Server exited at startup; see " + str(run))
-            if all(listening(port) and "Done (" in log_text(name) for name, port in ports.items()):
+            if all(port_ready(name) and "Done (" in log_text(name) for name in ports):
                 if args.instant and any("Error occurred while enabling" in log_text(name)
                                         for name in ("Spawn", "GameWest", "GameEast", "Velocity")):
                     raise RuntimeError("Plugin failed to enable in the InstantTransfer layout")
@@ -188,9 +216,9 @@ def main():
             time.sleep(1)
         else:
             raise RuntimeError("Startup timeout; see " + str(run))
-        (run / "READY.json").write_text(json.dumps({"join": "127.0.0.1:25565", "ports": ports, "instant": args.instant,
+        (run / "READY.json").write_text(json.dumps({"join": f"{join_host}:25565", "ports": ports, "instant": args.instant,
                                              "pids": {name: p.pid for name, p in processes.items()}}, indent=2))
-        print("READY", run, "127.0.0.1:25565", flush=True)
+        print("READY", run, f"{join_host}:25565", flush=True)
         while not (run / "STOP").exists():
             if any(p.poll() is not None for p in processes.values()):
                 raise RuntimeError("Server exited unexpectedly; see " + str(run))

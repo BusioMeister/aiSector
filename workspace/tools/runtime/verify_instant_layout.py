@@ -17,6 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, default=TEMP / "aisector-layout-live-db7j3scu")
     parser.add_argument("--flight", action="store_true", help="Test continuous flight without the transfer suite")
+    parser.add_argument("--transfer-flight", choices=("creative", "fly"), help="Check active flight through each transfer")
     args = parser.parse_args()
     run = args.run
     marker = run / "READY.json"
@@ -91,6 +92,21 @@ def main():
             assert client("command", "god") == "OK"
             baseline = probe("GameEast", "seed")
             assert baseline.split()[1:3] == ["7", "0.42"], baseline
+            if args.transfer_flight == "creative":
+                assert probe("GameEast", "creative-flight") == "OK"
+            elif args.transfer_flight == "fly":
+                assert probe("GameEast", "grant-fly") == "OK"
+                assert client("command", "fly") == "OK"
+
+            def check_flight(role, active=True):
+                if not args.transfer_flight:
+                    return
+                mode = "CREATIVE" if args.transfer_flight == "creative" else "SURVIVAL"
+                backend = probe(role, "flight-state")
+                frontend = client("flight-state")
+                assert backend.startswith(f"{mode} true ") and frontend.startswith("true "), (role, backend, frontend)
+                if active:
+                    assert backend.endswith(" true") and frontend.endswith(" true"), (role, backend, frontend)
             if args.flight:
                 assert probe("GameEast", "grant-fly") == "OK"
                 assert probe("GameEast", "flight-start") == "OK"
@@ -112,6 +128,7 @@ def main():
                 target, pos = await_ready(*targets)
                 arrived = probe(target, "inventory")
                 assert arrived == baseline, (target, baseline, arrived)
+                check_flight(target, active=False)
                 bars = int(client("boundary-bars"))
                 assert bars <= (0 if target == "Spawn" else 1), (target, bars)
                 return {"target": target, "trace": trace, "position": pos, "boundary_bars": bars,
@@ -119,8 +136,11 @@ def main():
 
             directions = (("GameEast", "GameWest", "-0.35"), ("GameWest", "GameEast", "0.35"))
             for index, (source, target, x) in enumerate(directions * 3):
-                assert probe(source, "seam") == "OK"
+                assert probe(source, "air-seam" if args.transfer_flight else "seam") == "OK"
                 time.sleep(.8)
+                if args.transfer_flight:
+                    assert probe(source, "start-flying") == "OK"
+                check_flight(source)
                 trace = client("trace-seam", x)
                 print(source, target, repr(trace), flush=True)
                 assert len(trace.splitlines()) == 1 and trace.endswith(" PLAY"), trace
@@ -129,6 +149,7 @@ def main():
                 _, pos = await_ready(target)
                 arrived_inventory = probe(target, "inventory")
                 assert arrived_inventory == baseline, (target, baseline, arrived_inventory)
+                check_flight(target)
                 center, _, size = map(float, client("border-state").split())
                 assert size == 4096 and (center + size / 2 if target == "GameWest" else center - size / 2) == (
                     2 if target == "GameWest" else -2), target
@@ -144,6 +165,10 @@ def main():
             await_ready("Spawn")
             assert probe("GameWest") == probe("GameEast") == "offline"
             assert probe("Spawn", "spawn-button") == "OK"
+            if args.transfer_flight:
+                time.sleep(.8)
+                assert probe("Spawn", "start-flying") == "OK"
+            check_flight("Spawn", active=False)
             results["sponge"] = check_transfer("trace-block", "2050,127,2046", "GameWest", "GameEast")
             source = results["sponge"]["target"]
             target = "GameEast" if source == "GameWest" else "GameWest"

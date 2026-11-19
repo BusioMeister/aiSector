@@ -74,6 +74,7 @@ public class UserManager {
         data.put("level", player.getLevel());
         data.put("exp", player.getExp());
         data.put("gameMode", player.getGameMode().name());
+        data.put("flying", player.isFlying());
         // Armor and offhand already have their own fields; do not encode them twice.
         data.put("inventory", itemStackArrayToBase64(player.getInventory().getStorageContents()));
         data.put("armor", itemStackArrayToBase64(player.getInventory().getArmorContents()));

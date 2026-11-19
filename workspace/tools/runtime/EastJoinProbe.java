@@ -25,6 +25,23 @@ public final class EastJoinProbe {
                 Object gracz = api.getMethod("getPlayerExact", String.class).invoke(null, fields[0]);
                 if (gracz == null) { Files.writeString(Path.of(fields[1]), "offline"); return; }
                 String action = fields.length == 3 ? fields[2] : "";
+                if (action.equals("creative-flight")) {
+                    var mode = loader.loadClass("org.bukkit.GameMode");
+                    player.getMethod("setGameMode", mode).invoke(gracz, mode.getField("CREATIVE").get(null));
+                    player.getMethod("setFlying", boolean.class).invoke(gracz, true);
+                    Files.writeString(Path.of(fields[1]), "OK");
+                    return;
+                }
+                if (action.equals("start-flying")) {
+                    player.getMethod("setFlying", boolean.class).invoke(gracz, true);
+                    Files.writeString(Path.of(fields[1]), "OK");
+                    return;
+                }
+                if (action.equals("flight-state")) {
+                    Files.writeString(Path.of(fields[1]), player.getMethod("getGameMode").invoke(gracz) + " "
+                            + player.getMethod("getAllowFlight").invoke(gracz) + " " + player.getMethod("isFlying").invoke(gracz));
+                    return;
+                }
                 if (java.util.Set.of("grant-tppos", "grant-god", "grant-fly").contains(action)) {
                     String permission = "aisector.command." + action.substring("grant-".length());
                     loader.loadClass("org.bukkit.permissions.Permissible")
@@ -73,7 +90,7 @@ public final class EastJoinProbe {
                     location.getMethod("setX", double.class).invoke(loc, east ? 32.5 : -32.5);
                     location.getMethod("setY", double.class).invoke(loc, 170.0);
                     location.getMethod("setZ", double.class).invoke(loc, 32.5);
-                } else if (action.equals("seam")) {
+                } else if (action.equals("seam") || action.equals("air-seam")) {
                     boolean east = (int) api.getMethod("getPort").invoke(null) == 25568;
                     Object world = location.getMethod("getWorld").invoke(loc);
                     var worldApi = loader.loadClass("org.bukkit.World");
@@ -96,10 +113,10 @@ public final class EastJoinProbe {
                     }
                     if (ground < 0) throw new IllegalStateException("No flat seam column");
                     location.getMethod("setX", double.class).invoke(loc, east ? .3 : -.3);
-                    location.getMethod("setY", double.class).invoke(loc, ground + 1.0);
+                    location.getMethod("setY", double.class).invoke(loc, action.equals("air-seam") ? 170.0 : ground + 1.0);
                     location.getMethod("setZ", double.class).invoke(loc, z + .5);
                 }
-                if (java.util.Set.of("seam", "spawn-button", "flight-start").contains(action)) {
+                if (java.util.Set.of("seam", "air-seam", "spawn-button", "flight-start").contains(action)) {
                     var applied = (java.util.concurrent.CompletableFuture<?>) entity.getMethod("teleportAsync", location).invoke(gracz, loc);
                     applied.whenComplete((ok, error) -> {
                         try { Files.writeString(Path.of(fields[1]), Boolean.TRUE.equals(ok) ? "OK" : "ERROR " + error); }

@@ -75,6 +75,10 @@ public class ClientControlAgent {
                     mc.player.setXRot(0);
                     sampleFlight(mc, output, System.nanoTime(), new java.util.ArrayList<>());
                     return;
+                } else if (action.equals("flight-state")) {
+                    var abilities = mc.player.getAbilities();
+                    Files.writeString(output, (abilities.mayfly ? "true" : "false") + " " + abilities.flying);
+                    return;
                 } else if (action.equals("click")) {
                     String[] click = value.split(":");
                     mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId, Integer.parseInt(click[0]),

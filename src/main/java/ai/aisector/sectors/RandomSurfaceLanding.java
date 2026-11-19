@@ -10,6 +10,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -22,6 +23,19 @@ public final class RandomSurfaceLanding {
 
     public void find(Player player, Location seed, Sector sector, Consumer<Location> result) {
         check(player, seed.getWorld(), sector, seed.getBlockX(), seed.getBlockZ(), ATTEMPTS, result);
+    }
+
+    /** Try the first candidate chunk before the backend sends its initial player position. */
+    public CompletableFuture<Location> prepare(Location seed, Sector sector) {
+        var result = new CompletableFuture<Location>();
+        World world = seed.getWorld();
+        int x = seed.getBlockX(), z = seed.getBlockZ();
+        world.getChunkAtAsync(x >> 4, z >> 4).whenComplete((chunk, error) -> onMainThread(() -> {
+            if (result.isDone()) return;
+            if (error != null) result.completeExceptionally(error);
+            else result.complete(world.isChunkLoaded(x >> 4, z >> 4) ? findInChunk(world, sector, x, z) : null);
+        }));
+        return result.orTimeout(1200, TimeUnit.MILLISECONDS);
     }
 
     private void check(Player player, World world, Sector sector, int x, int z, int remaining,

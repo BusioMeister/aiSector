@@ -61,7 +61,9 @@ proxy musi najpierw osobno przygotować docelowy backend i porównać stan
 konfiguracji klienta (wersję, registry, tagi, znane pakiety i paczki zasobów).
 Zmianę bez rekonfiguracji można dopuścić tylko na zgodnych parach backendów;
 przy różnicy stanu lub błędzie potrzebna jest standardowa ścieżka Velocity.
-Nie wdrożono jeszcze takiego forka. Akcja `trace-seam` agenta lokalnego smoke
+Lokalna instancja używa opcjonalnego [forka Velocity](https://github.com/BusioMeister/VelocityPlugin/blob/master/SEAMLESS_FORK.md)
+z ręcznie zatwierdzonymi trasami dla tego układu. Nie jest to automatyczne
+porównanie rejestrów. Akcja `trace-seam` agenta lokalnego smoke
 zapisuje faktyczne zmiany ekranów w oficjalnym kliencie do porównania z prototypem.
 
 Pomiar lokalny z przypiętymi chunkami, po jednym przejściu `GameEast → GameWest`:
@@ -72,6 +74,16 @@ załadowania poziomu przez klienta. Pominięcie samej rekonfiguracji nie jest
 wystarczającym kryterium dla trybu bez ekranu. Test prototypu musi potwierdzić
 brak **obu** ekranów oraz poprawną wymianę chunków, bytów, inventory, pozycji i
 bordera; nie wolno uznać trzymania starego obrazu bez synchronizacji stanu za sukces.
+
+## Lot podczas transferu
+
+Wraz z trybem gry przenosimy informację, czy gracz rzeczywiście leciał.
+Docelowy Paper zezwala na lot na podstawie trybu gry albo uprawnienia
+zapisanego przez `/fly`, a nie samej flagi aktywnego lotu. Wyłączenie
+`/fly` nie odbiera graczom w Creative możliwości latania. Przycisk w
+typowym przypadku przygotowuje bezpieczne lądowanie jeszcze przed
+pierwszym pakietem pozycji; gdy nie da się tego zrobić w limicie czasu,
+pozostaje dotychczasowe wyszukiwanie po wejściu.
 
 ## Gotowa mapa od zera
 
