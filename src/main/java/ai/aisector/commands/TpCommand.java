@@ -47,6 +47,10 @@ public class TpCommand implements CommandExecutor {
             admin.sendMessage("§aPrzeteleportowano do gracza " + targetName + ".");
             return true;
         }
+        if (plugin.getSectorManager().isLockedSpawnBackend() && !admin.isOp()) {
+            admin.sendMessage("§cZe spawnu można wyjść przyciskiem na gąbce.");
+            return true;
+        }
 
         // Przypadek 2: Gracz jest na innym serwerze.
         // Velocity coordinates the remote lookup and waits for the source backend save before transfer.

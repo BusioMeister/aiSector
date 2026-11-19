@@ -5,7 +5,7 @@ This inventory reflects the current Paper/Velocity producers and subscribers. Pu
 | Channel / pattern | Producer → consumer | Payload / response |
 |---|---|---|
 | `aisector:packet`, `aisector:packet:<backend>` | Paper/Velocity packet publishers → Paper `CommandResponseListener`, Velocity `NetworkListener` | `PacketEnvelope {version,id,payload}`; version 1; targeted form routes to one backend. Unknown IDs are ignored by the receiver. |
-| `aisector:save_player_data` | Velocity transfer handler → all Paper backends | `{requestId,uuid}`; only the hosting backend seals player actions, flushes the profile to Mongo, then stores snapshot and publishes ACK. |
+| `aisector:save_player_data` | Velocity transfer handler → all Paper backends | `{requestId,uuid}`; only the hosting backend seals player actions, flushes the profile to Mongo, then stores snapshot and publishes ACK. Only `purpose:"admin-tp"` with a local operator permits a snapshot for a proxy-initiated exit from locked Spawn. |
 | `aisector:save_player_data:ack` | Paper → Velocity transfer handler | `{requestId,uuid,success}`; request ID + UUID must match the pending transfer. |
 | `sector-transfer` | Paper `SectorManager` → Velocity `NetworkListener` | `<uuid>:<backend>` after source action seal, acknowledged profile flush and transfer key writes; no response payload. Optional `<uuid>:<backend>:spawn-button` authorizes one proxy connection from the configured locked spawn. On that route `player:final_teleport_target:<uuid>` carries `world,x,z,surface:true`; the destination must validate the sector and choose safe Y. |
 | `aisector:global_playerlist_update` | Velocity publisher → Paper `GlobalPlayerListListener` | JSON player-name collection; ephemeral snapshot. |

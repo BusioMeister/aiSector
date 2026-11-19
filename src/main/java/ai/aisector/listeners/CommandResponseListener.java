@@ -106,7 +106,7 @@ public class CommandResponseListener extends JedisPubSub {
                 if (playerToSave == null || !playerToSave.isOnline()) {
                     return;
                 }
-                if (sectorManager.isLockedSpawnBackend()) {
+                if (sectorManager.isLockedSpawnBackend() && !allowsLockedSpawnAdminTp(data, playerToSave.isOp())) {
                     publishSaveAcknowledgementAsync(requestId, uuidString, false);
                     return;
                 }
@@ -175,7 +175,7 @@ public class CommandResponseListener extends JedisPubSub {
                         CommandRedisPayloads.adminLocationRequest(data).orElse(null);
                 if (request == null) return;
                 String targetName = request.targetName();
-                Player targetPlayer = Bukkit.getPlayer(targetName);
+                Player targetPlayer = Bukkit.getPlayerExact(targetName);
 
                 // Sprawdzamy, czy gracz, którego szuka Velocity, jest na TYM serwerze
                 if (targetPlayer != null && targetPlayer.isOnline()) {
@@ -185,8 +185,9 @@ public class CommandResponseListener extends JedisPubSub {
                     // Tak, gracz jest u nas! Odpowiadamy do Velocity z jego pełną lokalizacją.
                     JsonObject response = new JsonObject();
                     response.addProperty("adminUUID", request.adminUuid().toString());
-                    String targetServerName = sectorManager.getSectorForLocation(loc.getBlockX(), loc.getBlockZ());
-                    if (targetServerName == null || targetServerName.isBlank()) {
+                    response.addProperty("targetUUID", targetPlayer.getUniqueId().toString());
+                    String targetServerName = plugin.getConfig().getString("this-sector-name", "");
+                    if (targetServerName.isBlank() || !sectorManager.owns(loc)) {
                         plugin.getLogger().warning("Could not resolve sector for admin teleport target " + targetName);
                         return;
                     }
@@ -259,6 +260,10 @@ public class CommandResponseListener extends JedisPubSub {
         if (!data.has(key) || !data.get(key).isJsonPrimitive()
                 || !data.getAsJsonPrimitive(key).isString()) return null;
         return data.get(key).getAsString();
+    }
+
+    static boolean allowsLockedSpawnAdminTp(JsonObject data, boolean operator) {
+        return operator && "admin-tp".equals(stringField(data, "purpose"));
     }
 
 }
