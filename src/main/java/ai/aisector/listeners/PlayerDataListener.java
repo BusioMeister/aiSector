@@ -76,10 +76,13 @@ public class PlayerDataListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerConfigure(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        // Hold the joining player until async profile and transfer state are available.
+        // Fast arrivals already have the right position. Do not send zero-speed ability packets
+        // to a client that stayed in PLAY. A fallback arrival still has a teleport pending.
         player.setInvulnerable(true);
-        player.setWalkSpeed(0.0f);
-        if (!preparedLandings.containsKey(player.getUniqueId())) player.setFlySpeed(0.0f);
+        if (!preparedLandings.containsKey(player.getUniqueId())) {
+            player.setWalkSpeed(0.0f);
+            player.setFlySpeed(0.0f);
+        }
         CompletableFuture<JoinNetworkState> network = loadNetworkState(player.getUniqueId());
         userManager.loadUserAsync(player).whenComplete((user, loadError) ->
                 scheduleMainThread(() -> {

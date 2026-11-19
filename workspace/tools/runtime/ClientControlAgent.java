@@ -75,6 +75,20 @@ public class ClientControlAgent {
                     mc.player.setXRot(0);
                     sampleFlight(mc, output, System.nanoTime(), new java.util.ArrayList<>());
                     return;
+                } else if (action.equals("trace-command-walk")) {
+                    String[] parts = value.split("\\|", 2);
+                    long started = System.nanoTime();
+                    sampleScreens(mc, output, started, new java.util.ArrayList<>());
+                    mc.player.connection.sendCommand(parts[0]);
+                    sampleWalk(mc, output.resolveSibling(output.getFileName() + ".walk"), started,
+                            Double.parseDouble(parts[1]), new java.util.ArrayList<>());
+                    return;
+                } else if (action.equals("trace-border-walk")) {
+                    long started = System.nanoTime();
+                    sampleScreens(mc, output, started, new java.util.ArrayList<>());
+                    sampleBorderWalk(mc, output.resolveSibling(output.getFileName() + ".walk"), started,
+                            Float.parseFloat(value), new java.util.ArrayList<>());
+                    return;
                 } else if (action.equals("flight-state")) {
                     var abilities = mc.player.getAbilities();
                     Files.writeString(output, (abilities.mayfly ? "true" : "false") + " " + abilities.flying);
@@ -139,6 +153,44 @@ public class ClientControlAgent {
             mc.options.keyUp.setDown(true);
             java.util.concurrent.CompletableFuture.delayedExecutor(25, java.util.concurrent.TimeUnit.MILLISECONDS)
                     .execute(() -> mc.execute(() -> sampleFlight(mc, output, started, trace)));
+        }
+    }
+
+    private static void sampleWalk(Minecraft mc, Path output, long started, double targetX, java.util.List<String> trace) {
+        long elapsed = (System.nanoTime() - started) / 1_000_000;
+        if (mc.player != null && (Math.abs(mc.player.getX() - targetX) < .75 || !trace.isEmpty())) {
+            mc.player.setYRot(0);
+            mc.player.setXRot(0);
+            mc.options.keyUp.setDown(true);
+            trace.add(elapsed + " " + mc.player.getZ() + " " + mc.player.getAbilities().getWalkingSpeed());
+        }
+        if (elapsed >= 4500 || mc.player == null) {
+            mc.options.keyUp.setDown(false);
+            try { Files.writeString(output, String.join("\n", trace)); }
+            catch (java.io.IOException error) { throw new IllegalStateException(error); }
+        } else {
+            java.util.concurrent.CompletableFuture.delayedExecutor(25, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .execute(() -> mc.execute(() -> sampleWalk(mc, output, started, targetX, trace)));
+        }
+    }
+
+    private static void sampleBorderWalk(Minecraft mc, Path output, long started, float yaw, java.util.List<String> trace) {
+        long elapsed = (System.nanoTime() - started) / 1_000_000;
+        if (mc.player != null && mc.level != null) {
+            mc.player.setYRot(yaw);
+            mc.player.setXRot(0);
+            var border = mc.level.getWorldBorder();
+            trace.add(elapsed + " " + mc.player.getX() + " " + mc.player.getY() + " " + mc.player.getZ()
+                    + " " + border.getCenterX() + " " + border.getSize());
+        }
+        if (elapsed >= 4000 || mc.player == null) {
+            mc.options.keyUp.setDown(false);
+            try { Files.writeString(output, String.join("\n", trace)); }
+            catch (java.io.IOException error) { throw new IllegalStateException(error); }
+        } else {
+            mc.options.keyUp.setDown(true);
+            java.util.concurrent.CompletableFuture.delayedExecutor(25, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .execute(() -> mc.execute(() -> sampleBorderWalk(mc, output, started, yaw, trace)));
         }
     }
 }
