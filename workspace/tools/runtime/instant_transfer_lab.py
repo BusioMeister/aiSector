@@ -233,13 +233,13 @@ def main():
                          if f"{name} -> {sector} has connected" in log("Proxy")), None)
             assert role, "Sponge button did not move the test player"
             results = {"sponge": {"target": role, "screens": trace}}
-            for index in range(0 if args.cooldown_push or args.boat_boundary else 1 if args.network_tab else 4):
+            for index in range(0 if args.cooldown_push or args.boat_boundary or args.network_tab else 4):
                 west = role == "GameWest"
                 dest, yaw, side = ("GameEast", -90, 1) if west else ("GameWest", 90, -1)
                 send(role, f"minecraft:tp {name} {-.85 if west else .85} 141 0.5 {yaw} 0")
                 pos = position(role)
                 assert abs(pos[0] - (-.85 if west else .85)) < .10 and abs(pos[1] - 141) < .05, (role, pos)
-                time.sleep(1.5 if args.network_tab else .5)
+                time.sleep(.5)
                 if index < 2:
                     control("screenshot")
                 if args.map_edge:
@@ -261,7 +261,8 @@ def main():
                                            "server_y": y, "server_z": z, "border_confirmed": True}
                 role = dest
             if args.network_tab:
-                wait(tab_ready, "TAB after transfer", 15)
+                wait(lambda: tab_ready() and "Ranga: Gracz" in control("tab-content"),
+                     "TAB refreshed after Spawn to game transfer", 15)
                 assert log("client").count(f"Witaj, {name}!") == 1
                 assert not any(phrase in log("client") for phrase in (" joined the game", " left the game"))
                 (run / "network-tab.txt").write_text(control("tab-content"), encoding="utf-8")
