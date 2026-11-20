@@ -86,6 +86,12 @@ public class ClientControlAgent {
                     sampleWalk(mc, output.resolveSibling(output.getFileName() + ".walk"), started,
                             Double.parseDouble(parts[1]), new java.util.ArrayList<>());
                     return;
+                } else if (action.equals("trace-cooldown-push")) {
+                    long started = System.nanoTime();
+                    sampleScreens(mc, output, started, new java.util.ArrayList<>());
+                    sampleCooldownPush(mc, output.resolveSibling(output.getFileName() + ".walk"), started,
+                            Float.parseFloat(value), -1, new java.util.ArrayList<>());
+                    return;
                 } else if (action.equals("trace-border-walk") || action.equals("trace-edge-walk")) {
                     long started = System.nanoTime();
                     sampleScreens(mc, output, started, new java.util.ArrayList<>());
@@ -213,6 +219,32 @@ public class ClientControlAgent {
         } catch (ReflectiveOperationException error) {
             throw new IllegalStateException(error);
         }
+    }
+
+    private static void sampleCooldownPush(Minecraft mc, Path output, long started, float yaw, long crossed,
+                                           java.util.List<String> trace) {
+        long elapsed = (System.nanoTime() - started) / 1_000_000;
+        if (mc.player != null) {
+            double side = yaw < 0 ? 1 : -1;
+            double x = mc.player.getX() * side;
+            if (crossed < 0 && x >= .25) crossed = elapsed;
+            boolean reverse = crossed >= 0 && elapsed - crossed >= 450;
+            mc.player.setYRot(reverse ? yaw + 180 : yaw);
+            mc.player.setXRot(0);
+            mc.options.keyUp.setDown(!reverse || x < 4.75);
+            trace.add(elapsed + " " + mc.player.getX() + " " + mc.player.getY());
+            if (!reverse || x < 4.75) {
+                if (elapsed < 3000) {
+                    long firstCross = crossed;
+                    java.util.concurrent.CompletableFuture.delayedExecutor(25, java.util.concurrent.TimeUnit.MILLISECONDS)
+                            .execute(() -> mc.execute(() -> sampleCooldownPush(mc, output, started, yaw, firstCross, trace)));
+                    return;
+                }
+            }
+        }
+        mc.options.keyUp.setDown(false);
+        try { Files.writeString(output, String.join("\n", trace)); }
+        catch (java.io.IOException error) { throw new IllegalStateException(error); }
     }
 
     private static void rotateHead(Minecraft mc, long started) {

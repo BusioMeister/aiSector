@@ -10,7 +10,7 @@ import static ai.aisector.sectors.SeamCrossingCooldown.Crossing.*;
 
 class SeamCrossingCooldownTest {
     @Test
-    void blocksOnlyTheRecentlyArrivedPlayerAndReleasesAtOneSecond() {
+    void blocksOnlyTheRecentlyArrivedPlayerAndReleasesAtTwoSeconds() {
         var now = new AtomicLong(10);
         var cooldown = new SeamCrossingCooldown(now::get);
         var player = UUID.randomUUID();
@@ -19,7 +19,7 @@ class SeamCrossingCooldownTest {
         now.addAndGet(500_000_000);
         assertEquals(BLOCKED_NOTIFY, cooldown.crossingState(player));
         assertEquals(ALLOWED, cooldown.crossingState(UUID.randomUUID()));
-        now.addAndGet(499_999_999);
+        now.addAndGet(1_499_999_999);
         assertEquals(BLOCKED, cooldown.crossingState(player));
         now.incrementAndGet();
         assertEquals(ALLOWED, cooldown.crossingState(player));
@@ -31,7 +31,7 @@ class SeamCrossingCooldownTest {
         var cooldown = new SeamCrossingCooldown(now::get);
         var player = UUID.randomUUID();
         cooldown.arrived(player);
-        now.addAndGet(900_000_000);
+        now.addAndGet(1_900_000_000);
         cooldown.arrived(player);
         now.addAndGet(150_000_000);
         assertEquals(BLOCKED_NOTIFY, cooldown.crossingState(player));

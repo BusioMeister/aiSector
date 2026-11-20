@@ -26,8 +26,9 @@ def main():
     parser.add_argument("--two-clients", action="store_true", help="Exercise nearby player head updates during arrival")
     parser.add_argument("--guild-create", action="store_true", help="Verify creation feedback without WorldEdit")
     parser.add_argument("--map-edge", action="store_true", help="Verify shared and outer bossbars plus map edge repulsion")
+    parser.add_argument("--cooldown-push", action="store_true", help="Try to turn back immediately after a physical transfer")
     args = parser.parse_args()
-    if (args.two_clients or args.guild_create or args.map_edge) and not args.sector_platform:
+    if (args.two_clients or args.guild_create or args.map_edge or args.cooldown_push) and not args.sector_platform:
         parser.error("These checks require --sector-platform")
     starts = {"GameWest": 18, "GameEast": 24, "Spawn": 29}
     ports = {"GameWest": 25576, "GameEast": 25577, "Spawn": 25578, "Proxy": 25575}
@@ -97,7 +98,7 @@ def main():
         command([JAVA / "java.exe", "--add-modules", "jdk.attach", "-cp", run, "AttachSmoke",
                  (actor or client).pid, agent, payload])
         wait(output.exists, "agent result", 15)
-        if action in {"trace-command-walk", "trace-border-walk", "trace-edge-walk"}:
+        if action in {"trace-command-walk", "trace-border-walk", "trace-edge-walk", "trace-cooldown-push"}:
             return output.read_text(), output.with_name(output.name + ".walk").read_text()
         return output.read_text()
 
@@ -223,7 +224,7 @@ def main():
                          if f"{name} -> {sector} has connected" in log("Proxy")), None)
             assert role, "Sponge button did not move the test player"
             results = {"sponge": {"target": role, "screens": trace}}
-            for index in range(4):
+            for index in range(0 if args.cooldown_push else 4):
                 west = role == "GameWest"
                 dest, yaw, side = ("GameEast", -90, 1) if west else ("GameWest", 90, -1)
                 send(role, f"minecraft:tp {name} {-.85 if west else .85} 141 0.5 {yaw} 0")
@@ -250,6 +251,21 @@ def main():
                 results[str(index + 1)] = {"target": dest, "screens": trace, "server_x": x,
                                            "server_y": y, "server_z": z, "border_confirmed": True}
                 role = dest
+            if args.cooldown_push:
+                west = role == "GameWest"
+                dest, yaw, side = ("GameEast", -90, 1) if west else ("GameWest", 90, -1)
+                send(role, f"minecraft:tp {name} {-.85 if west else .85} 141 0.5 {yaw} 0")
+                assert abs(position(role)[0] - (-.85 if west else .85)) < .05
+                back = log("Proxy").count(f"{name} -> {role} has connected")
+                trace, walk = control("trace-cooldown-push", str(yaw))
+                (run / "cooldown-push.txt").write_text(walk)
+                assert trace == "0 PLAY" and log("Proxy").count(f"{name} -> {role} has connected") == back
+                x, y, z = position(dest)
+                assert 4.75 <= x * side <= 6 and abs(y - 141) < .05 and abs(z - .5) < .1, (dest, x, y, z)
+                results["cooldown_push"] = {"screens": trace, "target": dest, "server_x": x}
+                (run / "results.json").write_text(json.dumps(results, indent=2))
+                print("COOLDOWN_PUSH_OK", run, flush=True)
+                return
             if args.map_edge:
                 edge_x = -8 if role == "GameWest" else 8
                 send(role, f"forceload add {edge_x} -502 {edge_x + 2} -480")

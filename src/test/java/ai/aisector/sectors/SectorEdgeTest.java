@@ -42,4 +42,12 @@ class SectorEdgeTest {
         assertEquals(new SectorEdge.Push(1, 0), SectorEdge.backInside(east, -1, 0));
         assertEquals(new SectorEdge.Push(1, -1), SectorEdge.backInside(east, -1, 500));
     }
+
+    @Test
+    void cooldownTargetIsFiveBlocksFromTheCrossedEdge() {
+        assertEquals(-5.0, SectorEdge.inset(-.2, -1, -500, -1));
+        assertEquals(5.0, SectorEdge.inset(.2, 1, 0, 499));
+        assertEquals(9.0, SectorEdge.inset(9.0, 1, 0, 499));
+        assertEquals(1.0, SectorEdge.inset(.2, 1, 0, 1));
+    }
 }

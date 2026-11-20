@@ -96,9 +96,9 @@ public class PlayerListener implements Listener {
         var cooldown = seamCooldown.crossingState(playerUuid);
         if (cooldown != SeamCrossingCooldown.Crossing.ALLOWED) {
             event.setCancelled(true);
-            queueBoundaryPush(player, SectorEdge.backInside(previous, to.getBlockX(), to.getBlockZ()));
+            queueBoundaryPush(player, SectorEdge.backInside(previous, to.getBlockX(), to.getBlockZ()), previous);
             if (cooldown == SeamCrossingCooldown.Crossing.BLOCKED_NOTIFY) {
-                player.sendActionBar(Component.text("Poczekaj chwilę przed kolejnym przejściem.", NamedTextColor.YELLOW));
+                player.sendActionBar(Component.text("Odczekaj 2 sekundy przed kolejnym przejściem.", NamedTextColor.YELLOW));
             }
             return;
         }
@@ -175,7 +175,7 @@ public class PlayerListener implements Listener {
     }
 
     private void repelAtMapEdge(Player player, SectorEdge.Push push) {
-        queueBoundaryPush(player, push);
+        queueBoundaryPush(player, push, null);
         UUID id = player.getUniqueId();
         long now = System.nanoTime();
         Long previous = lastMapEdgeAlert.get(id);
@@ -185,18 +185,56 @@ public class PlayerListener implements Listener {
         }
     }
 
-    private void queueBoundaryPush(Player player, SectorEdge.Push push) {
+    private void queueBoundaryPush(Player player, SectorEdge.Push push, Sector cooldownSector) {
         UUID id = player.getUniqueId();
         if (queuedEdgePushes.add(id)) {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 queuedEdgePushes.remove(id);
                 if (!isCurrentSession(player) || userManager.isTransferPending(player)
                         || pendingSectorTransfers.containsKey(id)) return;
+                if (cooldownSector != null) {
+                    moveInsideSector(player, cooldownSector, push);
+                    return;
+                }
                 Vector inward = new Vector(push.x(), 0, push.z()).normalize().multiply(0.65);
                 inward.setY(player.getVelocity().getY());
                 player.setVelocity(inward);
             });
         }
+    }
+
+    private void moveInsideSector(Player player, Sector sector, SectorEdge.Push push) {
+        Location from = player.getLocation();
+        if (sectorManager.getSectorAt(from) != sector) return;
+        double x = SectorEdge.inset(from.getX(), push.x(), sector.getMinX(), sector.getMaxX());
+        double z = SectorEdge.inset(from.getZ(), push.z(), sector.getMinZ(), sector.getMaxZ());
+        int steps = (int) Math.ceil(Math.max(Math.abs(x - from.getX()), Math.abs(z - from.getZ())) * 4);
+        Location safest = from;
+        boolean needsFloor = player.isOnGround() && !player.isFlying();
+        for (int step = 1; step <= steps; step++) {
+            double fraction = (double) step / steps;
+            Location point = from.clone().add((x - from.getX()) * fraction, 0, (z - from.getZ()) * fraction);
+            if (!safePushPosition(point, needsFloor)) break;
+            safest = point;
+        }
+        if (safest != from) player.teleport(safest, PlayerTeleportEvent.TeleportCause.PLUGIN);
+    }
+
+    private boolean safePushPosition(Location point, boolean needsFloor) {
+        var world = point.getWorld();
+        int minX = (int) Math.floor(point.getX() - .3), maxX = (int) Math.floor(point.getX() + .3);
+        int minZ = (int) Math.floor(point.getZ() - .3), maxZ = (int) Math.floor(point.getZ() + .3);
+        int minY = point.getBlockY(), maxY = (int) Math.floor(point.getY() + 1.8);
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
+                for (int y = minY; y <= maxY; y++) {
+                    var block = world.getBlockAt(x, y, z);
+                    if (!block.isPassable() || block.isLiquid()) return false;
+                }
+            }
+        }
+        return !needsFloor || world.getBlockAt(point.getBlockX(), minY - 1, point.getBlockZ()).getType().isSolid();
     }
 
     private boolean isCurrentSession(Player player) {

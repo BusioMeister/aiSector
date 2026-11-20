@@ -63,6 +63,13 @@ public enum SectorEdge {
         return new Push(x, z);
     }
 
+    public static double inset(double coordinate, int inward, int min, int max) {
+        double depth = Math.min(5, (max + 1.0 - min) / 2);
+        if (inward > 0) return Math.max(coordinate, min + depth);
+        if (inward < 0) return Math.min(coordinate, max + 1.0 - depth);
+        return coordinate;
+    }
+
     private static final SectorEdge[] EDGES = values();
 
     public record Push(int x, int z) {

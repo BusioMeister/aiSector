@@ -8,7 +8,7 @@ import java.util.function.LongSupplier;
 
 /** Local to the receiving backend; used only to gate movement across a shared seam. */
 public final class SeamCrossingCooldown {
-    private static final long COOLDOWN_NANOS = TimeUnit.SECONDS.toNanos(1);
+    private static final long COOLDOWN_NANOS = TimeUnit.SECONDS.toNanos(2);
     public enum Crossing { ALLOWED, BLOCKED_NOTIFY, BLOCKED }
     private record Arrival(long at, boolean notified) {}
     private final Map<UUID, Arrival> arrivals = new HashMap<>();
