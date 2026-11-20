@@ -35,4 +35,11 @@ class SectorEdgeTest {
         assertNull(SectorEdge.EAST.neighbor(west, -1, 10,
                 (x, z) -> partial.isInside(x, z) ? partial : null));
     }
+
+    @Test
+    void pushesBackTowardTheCurrentSectorWhenTheSharedCrossingIsBlocked() {
+        assertEquals(new SectorEdge.Push(-1, 0), SectorEdge.backInside(west, 0, 0));
+        assertEquals(new SectorEdge.Push(1, 0), SectorEdge.backInside(east, -1, 0));
+        assertEquals(new SectorEdge.Push(1, -1), SectorEdge.backInside(east, -1, 500));
+    }
 }

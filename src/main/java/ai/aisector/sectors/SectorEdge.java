@@ -56,6 +56,13 @@ public enum SectorEdge {
         return new Push(x, z);
     }
 
+    /** Pushes away from the crossed face, or both faces on a diagonal crossing. */
+    public static Push backInside(Sector sector, int targetX, int targetZ) {
+        int x = targetX < sector.getMinX() ? 1 : targetX > sector.getMaxX() ? -1 : 0;
+        int z = targetZ < sector.getMinZ() ? 1 : targetZ > sector.getMaxZ() ? -1 : 0;
+        return new Push(x, z);
+    }
+
     private static final SectorEdge[] EDGES = values();
 
     public record Push(int x, int z) {

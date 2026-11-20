@@ -96,6 +96,7 @@ public class PlayerListener implements Listener {
         var cooldown = seamCooldown.crossingState(playerUuid);
         if (cooldown != SeamCrossingCooldown.Crossing.ALLOWED) {
             event.setCancelled(true);
+            queueBoundaryPush(player, SectorEdge.backInside(previous, to.getBlockX(), to.getBlockZ()));
             if (cooldown == SeamCrossingCooldown.Crossing.BLOCKED_NOTIFY) {
                 player.sendActionBar(Component.text("Poczekaj chwilę przed kolejnym przejściem.", NamedTextColor.YELLOW));
             }
@@ -174,6 +175,17 @@ public class PlayerListener implements Listener {
     }
 
     private void repelAtMapEdge(Player player, SectorEdge.Push push) {
+        queueBoundaryPush(player, push);
+        UUID id = player.getUniqueId();
+        long now = System.nanoTime();
+        Long previous = lastMapEdgeAlert.get(id);
+        if (previous == null || now - previous >= 1_000_000_000L) {
+            lastMapEdgeAlert.put(id, now);
+            player.sendActionBar(Component.text("Jesteś na granicy mapy!", NamedTextColor.RED));
+        }
+    }
+
+    private void queueBoundaryPush(Player player, SectorEdge.Push push) {
         UUID id = player.getUniqueId();
         if (queuedEdgePushes.add(id)) {
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -184,12 +196,6 @@ public class PlayerListener implements Listener {
                 inward.setY(player.getVelocity().getY());
                 player.setVelocity(inward);
             });
-        }
-        long now = System.nanoTime();
-        Long previous = lastMapEdgeAlert.get(id);
-        if (previous == null || now - previous >= 1_000_000_000L) {
-            lastMapEdgeAlert.put(id, now);
-            player.sendActionBar(Component.text("Jesteś na granicy mapy!", NamedTextColor.RED));
         }
     }
 
