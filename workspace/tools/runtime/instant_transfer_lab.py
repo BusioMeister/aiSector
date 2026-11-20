@@ -233,13 +233,13 @@ def main():
                          if f"{name} -> {sector} has connected" in log("Proxy")), None)
             assert role, "Sponge button did not move the test player"
             results = {"sponge": {"target": role, "screens": trace}}
-            for index in range(0 if args.cooldown_push or args.boat_boundary else 4):
+            for index in range(0 if args.cooldown_push or args.boat_boundary else 1 if args.network_tab else 4):
                 west = role == "GameWest"
                 dest, yaw, side = ("GameEast", -90, 1) if west else ("GameWest", 90, -1)
                 send(role, f"minecraft:tp {name} {-.85 if west else .85} 141 0.5 {yaw} 0")
                 pos = position(role)
                 assert abs(pos[0] - (-.85 if west else .85)) < .10 and abs(pos[1] - 141) < .05, (role, pos)
-                time.sleep(.5)
+                time.sleep(1.5 if args.network_tab else .5)
                 if index < 2:
                     control("screenshot")
                 if args.map_edge:
