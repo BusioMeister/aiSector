@@ -40,6 +40,7 @@ public class PlayerListener implements Listener {
     private final Map<UUID, BossBar> bossBars = new HashMap<>();
     private final Map<UUID, Long> lastMapEdgeAlert = new HashMap<>();
     private final java.util.Set<UUID> queuedEdgePushes = new java.util.HashSet<>();
+    private final Map<UUID, org.bukkit.scheduler.BukkitTask> activeSeamPushes = new HashMap<>();
     private final Map<UUID, UUID> pendingSectorTransfers = new ConcurrentHashMap<>();
     private final SeamCrossingCooldown seamCooldown = new SeamCrossingCooldown();
 
@@ -158,6 +159,7 @@ public class PlayerListener implements Listener {
         seamCooldown.clear(player.getUniqueId());
         lastMapEdgeAlert.remove(player.getUniqueId());
         queuedEdgePushes.remove(player.getUniqueId());
+        stopSeamPush(player.getUniqueId());
         removeBossBar(player);
     }
 
@@ -193,7 +195,7 @@ public class PlayerListener implements Listener {
                 if (!isCurrentSession(player) || userManager.isTransferPending(player)
                         || pendingSectorTransfers.containsKey(id)) return;
                 if (cooldownSector != null) {
-                    moveInsideSector(player, cooldownSector, push);
+                    pushInsideSector(player, cooldownSector, push);
                     return;
                 }
                 Vector inward = new Vector(push.x(), 0, push.z()).normalize().multiply(0.65);
@@ -203,21 +205,58 @@ public class PlayerListener implements Listener {
         }
     }
 
-    private void moveInsideSector(Player player, Sector sector, SectorEdge.Push push) {
-        Location from = player.getLocation();
-        if (sectorManager.getSectorAt(from) != sector) return;
-        double x = SectorEdge.inset(from.getX(), push.x(), sector.getMinX(), sector.getMaxX());
-        double z = SectorEdge.inset(from.getZ(), push.z(), sector.getMinZ(), sector.getMaxZ());
-        int steps = (int) Math.ceil(Math.max(Math.abs(x - from.getX()), Math.abs(z - from.getZ())) * 4);
-        Location safest = from;
+    private void pushInsideSector(Player player, Sector sector, SectorEdge.Push push) {
+        UUID id = player.getUniqueId();
+        if (activeSeamPushes.containsKey(id) || player.isInsideVehicle()) return;
+        Location start = player.getLocation();
+        if (sectorManager.getSectorAt(start) != sector) return;
+        double x = SectorEdge.inset(start.getX(), push.x(), sector.getMinX(), sector.getMaxX());
+        double z = SectorEdge.inset(start.getZ(), push.z(), sector.getMinZ(), sector.getMaxZ());
         boolean needsFloor = player.isOnGround() && !player.isFlying();
-        for (int step = 1; step <= steps; step++) {
-            double fraction = (double) step / steps;
-            Location point = from.clone().add((x - from.getX()) * fraction, 0, (z - from.getZ()) * fraction);
-            if (!safePushPosition(point, needsFloor)) break;
-            safest = point;
-        }
-        if (safest != from) player.teleport(safest, PlayerTeleportEvent.TeleportCause.PLUGIN);
+        var task = new org.bukkit.scheduler.BukkitRunnable() {
+            private int ticks;
+            @Override
+            public void run() {
+                if (!isCurrentSession(player) || pendingSectorTransfers.containsKey(id)
+                        || userManager.isTransferPending(player) || player.isInsideVehicle()) {
+                    stopSeamPush(id);
+                    return;
+                }
+                Location at = player.getLocation();
+                if (at.getWorld() != start.getWorld() || sectorManager.getSectorAt(at) != sector
+                        || at.distanceSquared(start) > 100) {
+                    stopSeamPush(id);
+                    return;
+                }
+                double dx = Math.max(0, (x - at.getX()) * push.x()) * push.x();
+                double dz = Math.max(0, (z - at.getZ()) * push.z()) * push.z();
+                double remaining = Math.hypot(dx, dz);
+                double y = player.getVelocity().getY();
+                if (++ticks > 24 || remaining <= .22) {
+                    player.setVelocity(new Vector(0, y, 0));
+                    stopSeamPush(id);
+                    return;
+                }
+                // Accelerate, then ease off near the target. Every impulse uses collision-checked
+                // space ahead; the client walks the intervening positions, without any teleport.
+                double speed = Math.min(Math.min(.50, .22 + ticks * .07), remaining * .65);
+                double vx = dx / remaining * speed;
+                double vz = dz / remaining * speed;
+                if (!safePushPosition(at.clone().add(vx * .75, 0, vz * .75), needsFloor)
+                        || !safePushPosition(at.clone().add(vx * 1.5, 0, vz * 1.5), needsFloor)) {
+                    player.setVelocity(new Vector(0, y, 0));
+                    stopSeamPush(id);
+                    return;
+                }
+                player.setVelocity(new Vector(vx, y, vz));
+            }
+        };
+        activeSeamPushes.put(id, task.runTaskTimer(plugin, 0L, 1L));
+    }
+
+    private void stopSeamPush(UUID id) {
+        var task = activeSeamPushes.remove(id);
+        if (task != null) task.cancel();
     }
 
     private boolean safePushPosition(Location point, boolean needsFloor) {

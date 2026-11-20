@@ -62,8 +62,9 @@ sektora albo „Granica mapy”. Przy próbie podejścia do zewnętrznej ściany
 na mniej niż 0,65 bloku gracz jest odpychany do środka i dostaje komunikat
 na action barze. Wspólne krawędzie sektorów nie odpychają.
 Przez pierwsze 2 sekundy po wejściu na backend nie można przekroczyć kolejnej
-wspólnej krawędzi. Próba przejścia odsuwa gracza na 5 bloków od granicy lub
-bliżej, jeśli przeszkoda blokuje drogę. Limit nie dotyczy ruchu wewnątrz sektora ani komend.
+wspólnej krawędzi. Próba przejścia uruchamia serię impulsów ruchu
+bez teleportu, z wyhamowaniem około 5 bloków od granicy lub bliżej, jeśli
+przeszkoda blokuje drogę. Limit nie dotyczy ruchu wewnątrz sektora ani komend.
 
 Na każdym backendzie gry Paper utrzymuje po jednym rzędzie chunków po obu
 stronach wspólnej granicy (128 na backend w tym układzie). Ładuje je

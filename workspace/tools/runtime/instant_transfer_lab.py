@@ -262,7 +262,12 @@ def main():
                 assert trace == "0 PLAY" and log("Proxy").count(f"{name} -> {role} has connected") == back
                 x, y, z = position(dest)
                 assert 4.75 <= x * side <= 6 and abs(y - 141) < .05 and abs(z - .5) < .1, (dest, x, y, z)
-                results["cooldown_push"] = {"screens": trace, "target": dest, "server_x": x}
+                samples = [list(map(float, row.split())) for row in walk.splitlines()]
+                closest = next(i for i, row in enumerate(samples) if row[1] * side >= .25)
+                landing = samples[closest:]
+                increments = [abs(b[1] - a[1]) for a, b in zip(landing, landing[1:])]
+                assert max(increments) < 1.5 and sum(step > .1 for step in increments) >= 5, landing
+                results["cooldown_push"] = {"screens": trace, "target": dest, "server_x": x, "smooth": True}
                 (run / "results.json").write_text(json.dumps(results, indent=2))
                 print("COOLDOWN_PUSH_OK", run, flush=True)
                 return
