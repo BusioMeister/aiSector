@@ -5,6 +5,7 @@ import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorEdge;
 import ai.aisector.sectors.SectorArrival;
 import ai.aisector.sectors.SectorManager;
+import ai.aisector.sectors.SeamCrossingCooldown;
 import ai.aisector.sectors.WorldBorderManager;
 import ai.aisector.user.UserManager;
 import ai.aisector.utils.BukkitTaskScheduler;
@@ -40,6 +41,7 @@ public class PlayerListener implements Listener {
     private final Map<UUID, Long> lastMapEdgeAlert = new HashMap<>();
     private final java.util.Set<UUID> queuedEdgePushes = new java.util.HashSet<>();
     private final Map<UUID, UUID> pendingSectorTransfers = new ConcurrentHashMap<>();
+    private final SeamCrossingCooldown seamCooldown = new SeamCrossingCooldown();
 
     public PlayerListener(SectorPlugin plugin) {
         this.plugin = plugin;
@@ -51,6 +53,7 @@ public class PlayerListener implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        seamCooldown.arrived(player.getUniqueId());
         updateBorderAndBossBar(player, player.getLocation());
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (isCurrentSession(player)) plugin.getScoreboardManager().createBoard(player);
@@ -89,8 +92,16 @@ public class PlayerListener implements Listener {
             event.setCancelled(true);
             return;
         }
-        UUID transferToken = UUID.randomUUID();
         UUID playerUuid = player.getUniqueId();
+        var cooldown = seamCooldown.crossingState(playerUuid);
+        if (cooldown != SeamCrossingCooldown.Crossing.ALLOWED) {
+            event.setCancelled(true);
+            if (cooldown == SeamCrossingCooldown.Crossing.BLOCKED_NOTIFY) {
+                player.sendActionBar(Component.text("Poczekaj chwilę przed kolejnym przejściem.", NamedTextColor.YELLOW));
+            }
+            return;
+        }
+        UUID transferToken = UUID.randomUUID();
         if (pendingSectorTransfers.putIfAbsent(playerUuid, transferToken) != null) {
             event.setCancelled(true);
             return;
@@ -143,6 +154,7 @@ public class PlayerListener implements Listener {
         plugin.getScoreboardManager().removeBoard(player);
         borderManager.clear(player);
         pendingSectorTransfers.remove(player.getUniqueId());
+        seamCooldown.clear(player.getUniqueId());
         lastMapEdgeAlert.remove(player.getUniqueId());
         queuedEdgePushes.remove(player.getUniqueId());
         removeBossBar(player);
