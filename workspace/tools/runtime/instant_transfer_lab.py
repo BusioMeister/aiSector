@@ -221,8 +221,9 @@ def main():
                 def tab_ready():
                     text = control("tab-content")
                     return all(word in text for word in (name, "★ Ranga:", "⚔ Zabójstwa:", "☠ Śmierci:",
-                                                          "Ranking gildii:", "TOP 20 GRACZY", "TOP 20 GILDII", "SLOTS=80",
-                                                          "#20  —"))
+                                                          "Ranking gildii:", "TOP 20 GRACZY", "TOP 20 GILDII", "LISTED=0",
+                                                          "#20  —")) and len([line for line in text.splitlines() if line.startswith("│")]) == 21 \
+                        and re.search(r"aiSector \S+  •  Build [0-9A-F]{12}\n\nLISTED=0$", text) is not None
                 wait(tab_ready, "TAB on Spawn", 15)
                 assert log("client").count(f"Witaj, {name}!") == 1
             control("command", "god")

@@ -80,6 +80,8 @@ Publiczne wiadomości wejścia i wyjścia z backendów są wyłączone. Prywatne
 powitanie LastPlay.net jest wysyłane tylko przy pierwszym połączeniu z siecią.
 
 Na 26.3 TAB ma stały układ 4 × 20, podobny do [TAB Layout](https://github.com/NEZNAMY/TAB/wiki/Feature-guide:-Layout).
+Panel jest rysowany w nagłówku TAB-u, bez natywnych wierszy z główkami
+i pingiem. Logowanie oraz profile graczy pozostają bez zmian.
 Kolumny pokazują statystyki gracza i sektora, Top 20 graczy, Top 20 gildii
 oraz informacje o gildii. Puste miejsca zachowują rozmiar panelu.
 Ranga serwerowa pochodzi z głównej grupy LuckPerms (lub Operator/Gracz),

@@ -7,15 +7,13 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,13 +25,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class NetworkTabList implements Listener {
-    private static final String LAYOUT_CHANNEL = "aisector:tab_layout";
-    private static final Component EMPTY = Component.text("\u00a0");
-    private static final Component WIDE = Component.text("\u00a0".repeat(30));
+    private static final String LAYOUT_CHANNEL = "aisector:tab_panel";
+    private static final byte[] HIDE_LISTED_ROWS = {1};
+    private static final Component EMPTY = Component.empty();
     private static final Component BRAND = MiniMessage.miniMessage()
             .deserialize("<gradient:#ff3838:#ffca55:#ff3838><bold>✦ LASTPLAY.NET ✦</bold></gradient>");
-    private static final Component GRID_HEADER = BRAND.append(Component.newline())
-            .append(Component.text("TOP 20 GRACZY   ◆   TOP 20 GILDII", NamedTextColor.GRAY));
     private static final Component GRID_FOOTER = Component.text("LastPlay.net  •  Ranking według zabójstw",
             NamedTextColor.GRAY);
     private static final TextColor GOLD = TextColor.color(0xffca55);
@@ -44,14 +40,28 @@ public final class NetworkTabList implements Listener {
 
     private final SectorPlugin plugin;
     private final MiningLevelManager ranks;
+    private final Component buildLine;
     private final Map<UUID, Sent> sent = new HashMap<>();
-    private final Map<UUID, List<Component>> sentSlots = new HashMap<>();
     private final AtomicBoolean refreshing = new AtomicBoolean();
     private volatile Snapshot snapshot;
 
     public NetworkTabList(SectorPlugin plugin, MiningLevelManager ranks) {
         this.plugin = plugin;
         this.ranks = ranks;
+        this.buildLine = Component.text("aiSector " + plugin.getPluginMeta().getVersion() + "  •  Build ",
+                NamedTextColor.GRAY).append(Component.text(readBuildId(plugin), GOLD));
+    }
+
+    private static String readBuildId(SectorPlugin plugin) {
+        try (var stream = plugin.getResource("aisector-build.properties")) {
+            var properties = new java.util.Properties();
+            if (stream != null) properties.load(stream);
+            String id = properties.getProperty("id", "");
+            if (id.matches("[0-9A-F]{12}")) return id;
+        } catch (IOException error) {
+            plugin.getLogger().warning("Could not read build identifier: " + error.getMessage());
+        }
+        return "nieznany";
     }
 
     public void start() {
@@ -87,17 +97,13 @@ public final class NetworkTabList implements Listener {
             if (plugin.getUserManager().isTransferPending(player)) continue;
             NetworkRanking ranking = current == null ? null : current.ranking();
             boolean fixed = player.getListeningPluginChannels().contains(LAYOUT_CHANNEL);
-            Sent next = fixed ? new Sent(GRID_HEADER, GRID_FOOTER) : new Sent(header(player, ranking), footer);
+            Sent next = fixed ? new Sent(renderPanel(slots(player, ranking), buildLine), Component.empty())
+                    : new Sent(header(player, ranking), footer.append(Component.newline()).append(buildLine));
             if (!next.equals(sent.get(player.getUniqueId()))) {
                 player.sendPlayerListHeaderAndFooter(next.header(), next.footer());
                 sent.put(player.getUniqueId(), next);
             }
-            if (fixed) {
-                List<Component> rows = slots(player, ranking);
-                if (!rows.equals(sentSlots.get(player.getUniqueId())) && sendRows(player, rows)) {
-                    sentSlots.put(player.getUniqueId(), rows);
-                }
-            }
+            if (fixed) player.sendPluginMessage(plugin, LAYOUT_CHANNEL, HIDE_LISTED_ROWS);
         }
     }
 
@@ -148,7 +154,6 @@ public final class NetworkTabList implements Listener {
         result.set(8, title("TWÓJ SEKTOR"));
         result.set(10, icon("⌖", GOLD, field("Sektor: ", plugin.getConfig().getString("this-sector-name", "—"))));
         result.set(11, field("Gracze na sektorze: ", Bukkit.getOnlinePlayers().stream().filter(player::canSee).count()));
-        result.set(17, WIDE);
         result.set(60, title("INFORMACJE O GILDII"));
         result.set(62, icon("⚑", GOLD, field("Gildia: ", stats.tag() == null ? "Brak" : clip(stats.tag()))));
         result.set(63, field("Rola: ", stats.role()));
@@ -164,17 +169,38 @@ public final class NetworkTabList implements Listener {
         return result;
     }
 
-    private boolean sendRows(Player player, List<Component> rows) {
-        var buffer = new ByteArrayOutputStream();
-        try (var output = new DataOutputStream(buffer)) {
-            output.writeByte(1);
-            for (Component row : rows) output.writeUTF(GsonComponentSerializer.gson().serialize(row));
-        } catch (IOException error) {
-            plugin.getLogger().warning("Could not encode TAB layout: " + error.getMessage());
-            return false;
+    static Component renderPanel(List<Component> slots, Component buildLine) {
+        var panel = Component.text().append(BRAND).append(Component.newline());
+        appendPanelRow(panel, List.of(title("GRACZ I SEKTOR"), title("TOP 20 GRACZY"),
+                title("TOP 20 GILDII"), title("TWOJA GILDIA")));
+        for (int row = 0; row < 20; row++) {
+            panel.append(Component.newline());
+            appendPanelRow(panel, List.of(slots.get(row), slots.get(20 + row), slots.get(40 + row), slots.get(60 + row)));
         }
-        player.sendPluginMessage(plugin, LAYOUT_CHANNEL, buffer.toByteArray());
-        return true;
+        return panel.append(Component.newline()).append(GRID_FOOTER)
+                .append(Component.newline()).append(buildLine).build();
+    }
+
+    private static void appendPanelRow(net.kyori.adventure.text.TextComponent.Builder panel, List<Component> columns) {
+        var plain = PlainTextComponentSerializer.plainText();
+        for (Component column : columns) {
+            int remaining = Math.max(4, 125 - panelTextWidth(plain.serialize(column)));
+            panel.append(Component.text("│ ", NamedTextColor.DARK_GRAY)).append(column)
+                    .append(Component.text(" ".repeat((remaining + 2) / 4)));
+        }
+        panel.append(Component.text("│", NamedTextColor.DARK_GRAY));
+    }
+
+    private static int panelTextWidth(String text) {
+        String asciiAdvances = "42466662444626266666666666225656766666666466666666666666666464663666665662653666666646666664247";
+        return text.codePoints().map(c -> {
+            if (c >= 32 && c <= 126) return asciiAdvances.charAt(c - 32) - '0';
+            String unaccented = java.text.Normalizer.normalize(Character.toString(c), java.text.Normalizer.Form.NFD);
+            char base = unaccented.charAt(0);
+            if (base >= 'A' && base <= 'z') return asciiAdvances.charAt(base - 32) - '0';
+            if (c == 'ł') return 3;
+            return c == '⚔' || c == '☠' || c == '★' ? 9 : 7;
+        }).sum();
     }
 
     private static Component rankingRow(List<NetworkRanking.Entry> entries, int index) {
@@ -237,6 +263,5 @@ public final class NetworkTabList implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         sent.remove(event.getPlayer().getUniqueId());
-        sentSlots.remove(event.getPlayer().getUniqueId());
     }
 }

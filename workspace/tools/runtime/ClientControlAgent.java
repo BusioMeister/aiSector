@@ -109,13 +109,9 @@ public class ClientControlAgent {
                     footer.setAccessible(true);
                     var top = (net.minecraft.network.chat.Component) header.get(overlay);
                     var bottom = (net.minecraft.network.chat.Component) footer.get(overlay);
-                    var rows = mc.player.connection.getListedOnlinePlayers().stream()
-                            .filter(info -> info.getTabListOrder() >= Integer.MAX_VALUE - 79)
-                            .sorted(java.util.Comparator.comparingInt(net.minecraft.client.multiplayer.PlayerInfo::getTabListOrder).reversed())
-                            .map(info -> info.getTabListDisplayName().getString()).toList();
                     Files.writeString(output, (top == null ? "" : top.getString()) + "\n"
-                            + (bottom == null ? "" : bottom.getString()) + "\nSLOTS=" + rows.size()
-                            + "\n" + String.join("\n", rows));
+                            + (bottom == null ? "" : bottom.getString()) + "\nLISTED="
+                            + mc.player.connection.getListedOnlinePlayers().size());
                     return;
                 } else if (action.equals("actionbar")) {
                     Files.writeString(output, actionBarText(mc));
