@@ -40,6 +40,19 @@ class WorldBorderManagerTest {
         assertEquals(0.25, sector.distanceToEdge(499.75, 0));
     }
 
+    @Test void gameWallAppearsAtOneHundredBlocksButSpawnKeepsItsShorterRange() {
+        var west = new Sector("GameWest", -500, -1, -500, 499);
+        var east = new Sector("GameEast", 0, 499, -500, 499);
+        assertEquals(BorderType.AWAY, BorderView.at(west, -100.01, 0).type());
+        assertEquals(BorderType.EAST, BorderView.at(west, -100, 0).type());
+        assertEquals(BorderType.WEST, BorderView.at(east, 100, 0).type());
+        assertEquals(BorderType.AWAY, BorderView.at(east, 100.01, 0).type());
+        assertEquals(BorderType.CORNER, BorderView.at(east, 100, -400).type());
+        var spawn = new Sector("Spawn", 2000, 2099, 2000, 2099);
+        assertEquals(BorderType.AWAY, BorderView.at(spawn, 2050, 2050, BorderView.SPAWN_SHOW_DISTANCE).type());
+        assertEquals(BorderType.WEST, BorderView.at(spawn, 2032, 2050, BorderView.SPAWN_SHOW_DISTANCE).type());
+    }
+
     @Test void diagonalCrossingOnlyAdjustsTheCrossedAxisAndRespectsNarrowSectors() {
         assertEquals(.35, SectorArrival.inside(-0.1, 0.25, 0, 499));
         assertEquals(16.75, SectorArrival.inside(16.2, 16.75, -500, 499));

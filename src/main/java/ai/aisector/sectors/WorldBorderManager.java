@@ -12,6 +12,11 @@ import java.util.HashMap;
 /** Applies a client-local border; does not mutate the world's actual border. */
 public final class WorldBorderManager {
     private final Map<UUID, BorderState> lastBorders = new HashMap<>();
+    private final java.util.function.BooleanSupplier lockedSpawn;
+
+    public WorldBorderManager(java.util.function.BooleanSupplier lockedSpawn) {
+        this.lockedSpawn = lockedSpawn;
+    }
 
     private record BorderState(Player player, UUID worldId, BorderView view, WorldBorder border) { }
 
@@ -32,7 +37,8 @@ public final class WorldBorderManager {
         if (!player.isOnline()) return;
         UUID uuid = player.getUniqueId();
         UUID worldId = position.getWorld().getUID();
-        BorderView view = BorderView.at(sector, position.getX(), position.getZ());
+        double showDistance = lockedSpawn.getAsBoolean() ? BorderView.SPAWN_SHOW_DISTANCE : BorderView.GAME_SHOW_DISTANCE;
+        BorderView view = BorderView.at(sector, position.getX(), position.getZ(), showDistance);
         BorderState previous = lastBorders.get(uuid);
         if (view.type() == BorderType.AWAY) {
             clear(player);

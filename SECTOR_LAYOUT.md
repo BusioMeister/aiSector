@@ -57,6 +57,10 @@ stan protokołu klienta przy przełączeniu — nie jest to tryb bez ekranu.
 
 ## Chunks na granicy i dalsze prace nad Velocity
 
+Na sektorach gry klient dostaje wirtualną ścianę od 100 bloków od krawędzi;
+Spawn zachowuje próg 32 bloków. Odległość renderowania w kliencie może
+ograniczyć widoczność ściany, ale nie zmienia progu wysyłania.
+
 Do 20 bloków przed najbliższą ścianą bossbar pokazuje nazwę sąsiedniego
 sektora albo „Granica mapy”. Przy próbie podejścia do zewnętrznej ściany
 na mniej niż 0,65 bloku gracz jest odpychany do środka i dostaje komunikat

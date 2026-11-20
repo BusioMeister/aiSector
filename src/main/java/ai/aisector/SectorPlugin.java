@@ -129,7 +129,7 @@ public class SectorPlugin extends JavaPlugin {
                 message -> getLogger().warning(message)
         );
         sectorManager = new SectorManager(this, redisManager);
-        worldBorderManager = new WorldBorderManager();
+        worldBorderManager = new WorldBorderManager(sectorManager::isLockedSpawnBackend);
 
         userManager = new UserManager(this);
         scoreboardManager = new ScoreboardManager(this);
