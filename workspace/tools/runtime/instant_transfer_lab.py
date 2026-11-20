@@ -268,6 +268,8 @@ def main():
                 assert log("client").count(f"Witaj, {name}!") == 1
                 assert not any(phrase in log("client") for phrase in (" joined the game", " left the game"))
                 (run / "network-tab.txt").write_text(control("tab-content"), encoding="utf-8")
+                alignment = [tuple(map(int, line.split())) for line in control("tab-alignment").splitlines() if line.strip()]
+                assert alignment == [(0, 138, 276, 414, 552)] * 21, alignment
                 results["network_tab"] = {"private_welcome": True, "top_20": True}
                 (run / "results.json").write_text(json.dumps(results, indent=2))
                 print("NETWORK_TAB_OK", run, flush=True)

@@ -101,7 +101,7 @@ public class ClientControlAgent {
                     return;
                 } else if (action.equals("rotate-head")) {
                     rotateHead(mc, System.nanoTime());
-                } else if (action.equals("tab-content")) {
+                } else if (action.equals("tab-content") || action.equals("tab-alignment")) {
                     var overlay = mc.gui.hud.getTabList();
                     var header = overlay.getClass().getDeclaredField("header");
                     var footer = overlay.getClass().getDeclaredField("footer");
@@ -109,6 +109,26 @@ public class ClientControlAgent {
                     footer.setAccessible(true);
                     var top = (net.minecraft.network.chat.Component) header.get(overlay);
                     var bottom = (net.minecraft.network.chat.Component) footer.get(overlay);
+                    if (action.equals("tab-alignment")) {
+                        var result = new StringBuilder();
+                        if (top != null) {
+                            int[] x = {0};
+                            top.visit((style, text) -> {
+                                for (String part : text.split("(?<=\\n)|(?=│)", -1)) {
+                                    if (part.startsWith("│")) result.append(x[0]).append(' ');
+                                    var printable = part.replace("\n", "");
+                                    x[0] += mc.font.width(net.minecraft.network.chat.Component.literal(printable).setStyle(style));
+                                    if (part.endsWith("\n")) {
+                                        result.append('\n');
+                                        x[0] = 0;
+                                    }
+                                }
+                                return java.util.Optional.empty();
+                            }, net.minecraft.network.chat.Style.EMPTY);
+                        }
+                        Files.writeString(output, result.toString());
+                        return;
+                    }
                     Files.writeString(output, (top == null ? "" : top.getString()) + "\n"
                             + (bottom == null ? "" : bottom.getString()) + "\nLISTED="
                             + mc.player.connection.getListedOnlinePlayers().size());

@@ -6,6 +6,7 @@ import com.mongodb.client.model.Projections;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -25,6 +26,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class NetworkTabList implements Listener {
+    private static final int COLUMN_WIDTH = 128;
+    private static final String ASCII_ADVANCES = "42466662444626266666666666225656766666666466666666666666666464663666665662653666666646666664247";
     private static final String LAYOUT_CHANNEL = "aisector:tab_panel";
     private static final byte[] HIDE_LISTED_ROWS = {1};
     private static final Component EMPTY = Component.empty();
@@ -145,16 +148,14 @@ public final class NetworkTabList implements Listener {
     private List<Component> slots(Player player, NetworkRanking ranking) {
         Stats stats = stats(player, ranking);
         var result = new ArrayList<>(java.util.Collections.nCopies(80, EMPTY));
-        result.set(0, title("INFORMACJE O TOBIE"));
         result.set(2, field("Nick: ", player.getName()));
         result.set(3, icon("★", GOLD, field("Ranga: ", clip(stats.rank()))));
         result.set(4, icon("⚔", TextColor.color(0xff5555), field("Zabójstwa: ", value(stats.kills()))));
         result.set(5, icon("☠", NamedTextColor.WHITE, field("Śmierci: ", value(stats.deaths()))));
         result.set(6, icon("▲", GOLD, field("Ranking: ", position(stats.playerRank()))));
         result.set(8, title("TWÓJ SEKTOR"));
-        result.set(10, icon("⌖", GOLD, field("Sektor: ", plugin.getConfig().getString("this-sector-name", "—"))));
+        result.set(10, icon("▲", GOLD, field("Sektor: ", plugin.getConfig().getString("this-sector-name", "—"))));
         result.set(11, field("Gracze na sektorze: ", Bukkit.getOnlinePlayers().stream().filter(player::canSee).count()));
-        result.set(60, title("INFORMACJE O GILDII"));
         result.set(62, icon("⚑", GOLD, field("Gildia: ", stats.tag() == null ? "Brak" : clip(stats.tag()))));
         result.set(63, field("Rola: ", stats.role()));
         result.set(64, field("Członkowie: ", stats.members()));
@@ -184,22 +185,37 @@ public final class NetworkTabList implements Listener {
     private static void appendPanelRow(net.kyori.adventure.text.TextComponent.Builder panel, List<Component> columns) {
         var plain = PlainTextComponentSerializer.plainText();
         for (Component column : columns) {
-            int remaining = Math.max(4, 125 - panelTextWidth(plain.serialize(column)));
-            panel.append(Component.text("│ ", NamedTextColor.DARK_GRAY)).append(column)
-                    .append(Component.text(" ".repeat((remaining + 2) / 4)));
+            int remaining = COLUMN_WIDTH - panelTextWidth(plain.serialize(column));
+            panel.append(Component.text("│ ", NamedTextColor.DARK_GRAY)).append(column);
+            // In the vanilla font a normal space advances 4 px and a bold space 5 px.
+            // Use the latter for the remainder, instead of rounding each column to 4 px.
+            int fineSpaces = Math.floorMod(remaining, 4);
+            int normalSpaces = (remaining - 5 * fineSpaces) / 4;
+            if (normalSpaces < 0) {
+                panel.append(Component.space());
+            } else {
+                if (normalSpaces > 0) panel.append(Component.text(" ".repeat(normalSpaces)));
+                if (fineSpaces > 0) panel.append(Component.text(" ".repeat(fineSpaces)).decorate(TextDecoration.BOLD));
+            }
         }
         panel.append(Component.text("│", NamedTextColor.DARK_GRAY));
     }
 
     private static int panelTextWidth(String text) {
-        String asciiAdvances = "42466662444626266666666666225656766666666466666666666666666464663666665662653666666646666664247";
         return text.codePoints().map(c -> {
-            if (c >= 32 && c <= 126) return asciiAdvances.charAt(c - 32) - '0';
+            if (c >= 32 && c <= 126) return ASCII_ADVANCES.charAt(c - 32) - '0';
+            switch (c) {
+                case '—': return 9;
+                case '…', '★', '⚔', '☠', '⚑': return 8;
+                case '▲', '│': return 6;
+                case 'ł': return 5;
+                case 'Ł': return 7;
+                default: break;
+            }
             String unaccented = java.text.Normalizer.normalize(Character.toString(c), java.text.Normalizer.Form.NFD);
             char base = unaccented.charAt(0);
-            if (base >= 'A' && base <= 'z') return asciiAdvances.charAt(base - 32) - '0';
-            if (c == 'ł') return 3;
-            return c == '⚔' || c == '☠' || c == '★' ? 9 : 7;
+            if (base >= 'A' && base <= 'z') return ASCII_ADVANCES.charAt(base - 32) - '0';
+            return 6;
         }).sum();
     }
 
@@ -207,11 +223,24 @@ public final class NetworkTabList implements Listener {
         var row = Component.text("#" + (index + 1) + "  ", index == 0 ? GOLD : NamedTextColor.GRAY);
         if (index >= entries.size()) return row.append(Component.text("—", NamedTextColor.DARK_GRAY));
         var entry = entries.get(index);
-        return row.append(Component.text(clip(entry.label()), NamedTextColor.WHITE))
-                .append(Component.text("  " + entry.kills(), GOLD));
+        String kills = entry.kills() < 1000 ? Long.toString(entry.kills())
+                : entry.kills() < 1_000_000 ? entry.kills() / 1_000 + "k"
+                : entry.kills() < 1_000_000_000 ? entry.kills() / 1_000_000 + "M" : entry.kills() / 1_000_000_000 + "G";
+        String label = fit(entry.label(), COLUMN_WIDTH - 14
+                - panelTextWidth("#" + (index + 1) + "    " + kills));
+        return row.append(Component.text(label, NamedTextColor.WHITE))
+                .append(Component.text("  " + kills, GOLD));
     }
 
-    private static String clip(String text) { return text.length() <= 16 ? text : text.substring(0, 15) + "…"; }
+    private static String fit(String text, int width) {
+        if (panelTextWidth(text) <= width) return text;
+        int end = text.length();
+        do { end = text.offsetByCodePoints(end, -1); }
+        while (end > 0 && panelTextWidth(text.substring(0, end) + "…") > width);
+        return text.substring(0, end) + "…";
+    }
+
+    private static String clip(String text) { return fit(text, 68); }
     private static Component icon(String text, TextColor color, Component field) {
         return Component.text(text + " ", color).append(field);
     }
