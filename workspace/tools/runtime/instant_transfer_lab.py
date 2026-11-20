@@ -24,9 +24,10 @@ def main():
     parser.add_argument("--proxy-plugin", type=Path, help="Override the InstantTransfer proxy plugin for an A/B run")
     parser.add_argument("--sector-platform", action="store_true", help="Walk across the real aiSector border on a 50x50 platform")
     parser.add_argument("--two-clients", action="store_true", help="Exercise nearby player head updates during arrival")
+    parser.add_argument("--guild-create", action="store_true", help="Verify creation feedback without WorldEdit")
     args = parser.parse_args()
-    if args.two_clients and not args.sector_platform:
-        parser.error("--two-clients requires --sector-platform")
+    if (args.two_clients or args.guild_create) and not args.sector_platform:
+        parser.error("--two-clients and --guild-create require --sector-platform")
     starts = {"GameWest": 18, "GameEast": 24, "Spawn": 29}
     ports = {"GameWest": 25576, "GameEast": 25577, "Spawn": 25578, "Proxy": 25575}
     if any(listening(port) for port in ports.values()):
@@ -246,6 +247,19 @@ def main():
                 results[str(index + 1)] = {"target": dest, "screens": trace, "server_x": x,
                                            "server_y": y, "server_z": z, "border_confirmed": True}
                 role = dest
+            if args.guild_create:
+                send(role, f"op {name}")
+                wait(lambda: f"Made {name} a server operator" in log(role), "guild test-only OP", 10)
+                assert control("command", "g zaloz LAB Platform Guild") == "OK"
+                wait(lambda: "Stworzy" in log("client") and "[LAB] Platform Guild" in log("client"),
+                     "local guild creation confirmation", 12)
+                wait(lambda: "[GILDIA]" in log("client") and "wklejono" in log("client"),
+                     "global guild announcement and optional schematic warning", 12)
+                assert "NoClassDefFoundError" not in log(role)
+                results["guild_creation"] = {"confirmation": True, "without_worldedit": True}
+                (run / "results.json").write_text(json.dumps(results, indent=2))
+                print("GUILD_CREATION_WITHOUT_WORLDEDIT_OK", run, flush=True)
+                return
             if args.two_clients:
                 peer_opts = arguments(prepared, run / peer_name, peer_name)
                 peer_opts[-1] = "127.0.0.1:25575"

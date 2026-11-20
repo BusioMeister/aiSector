@@ -1133,11 +1133,12 @@ public class GuildCommand implements CommandExecutor {
                             .whenComplete((ignored, profileError) -> BukkitTaskScheduler.execute(plugin, () -> {
                                 Player currentOwner = Bukkit.getPlayer(ownerUuid);
                                 if (currentOwner == null || !currentOwner.isOnline()) return;
-                                if (profileError != null) {
-                                    currentOwner.sendMessage(ChatColor.RED + "Gildia powstała, ale profil wymaga synchronizacji.");
-                                    plugin.getLogger().severe("Could not update guild owner profile " + ownerUuid
-                                            + ": " + profileError.getMessage());
-                                }
+                                 if (profileError != null) {
+                                     currentOwner.sendMessage(ChatColor.RED + "Gildia powstała, ale profil wymaga synchronizacji.");
+                                     plugin.getLogger().severe("Could not update guild owner profile " + ownerUuid
+                                             + ": " + profileError.getMessage());
+                                     return;
+                                 }
                                 finishGuildCreation(currentOwner, createdGuild);
                             }));
             });
@@ -1156,6 +1157,12 @@ public class GuildCommand implements CommandExecutor {
     }
 
     private void finishGuildCreation(Player owner, Guild guild) {
+        owner.sendMessage(ChatColor.GREEN + "Stworzyłeś gildię [" + guild.getTag() + "] " + guild.getName() + ".");
+        sendGlobal("§6[GILDIA] §eGracz §f" + owner.getName()
+                + " §estworzył gildię §f[" + guild.getTag() + "] §e" + guild.getName() + ".");
+        plugin.getScoreboardManager().updateBoard(owner);
+        plugin.getGuildTagManager().refreshAllOnline();
+
         Location center = new Location(
                 Bukkit.getWorld(guild.getHomeWorld()),
                 guild.getHomeX(),
@@ -1163,7 +1170,7 @@ public class GuildCommand implements CommandExecutor {
                 guild.getHomeZ()
         );
         if (center.getWorld() == null) {
-            owner.sendMessage(ChatColor.RED + "Nie można utworzyć gildii: świat docelowy jest niedostępny.");
+            owner.sendMessage(ChatColor.YELLOW + "Gildia powstała, ale jej świat jest niedostępny.");
             return;
         }
         UUID ownerUuid = owner.getUniqueId();
@@ -1174,7 +1181,8 @@ public class GuildCommand implements CommandExecutor {
                     if (error != null) {
                         plugin.getLogger().warning("Could not paste guild schematic for " + guild.getTag() + ": "
                                 + error.getMessage());
-                        currentOwner.sendMessage(ChatColor.RED + "Nie udało się wkleić schem gildii.");
+                        currentOwner.sendMessage(ChatColor.YELLOW + "Gildia powstała, ale nie wklejono jej schematu.");
+                        return;
                     }
 
                     currentOwner.teleportAsync(center.clone().add(0.5, 1, 0.5))
@@ -1184,13 +1192,6 @@ public class GuildCommand implements CommandExecutor {
                                     owner.sendMessage(ChatColor.RED + "Gildia powstała, ale teleportacja nie powiodła się.");
                                 }
                             }));
-                    String message = "§6[GILDIA] §eGracz §f" + currentOwner.getName()
-                            + " §estworzył§x gildie §f[" + guild.getTag() + "] §e" + guild.getName() + ".";
-                    sendGlobal(message);
-                    plugin.getScoreboardManager().updateBoard(currentOwner);
-                    plugin.getGuildTagManager().refreshAllOnline();
-                    currentOwner.sendMessage(ChatColor.GREEN + "Stworzyłeś gildię [" + guild.getTag() + "] "
-                            + guild.getName() + ".");
                 }));
     }
 

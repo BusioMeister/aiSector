@@ -470,6 +470,9 @@ public class SectorPlugin extends JavaPlugin {
         if (location == null || location.getWorld() == null) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Schematic target must have a world"));
         }
+        if (!getServer().getPluginManager().isPluginEnabled("WorldEdit")) {
+            return CompletableFuture.failedFuture(new IllegalStateException("WorldEdit is not enabled"));
+        }
 
         final Class<?> pasterClass;
         final Object paster;
@@ -487,7 +490,7 @@ public class SectorPlugin extends JavaPlugin {
                             && method.getParameterTypes()[0] == Location.class)
                     .findFirst()
                     .orElseThrow(() -> new NoSuchMethodException("pasteClipboard(Location, Clipboard)"));
-        } catch (ReflectiveOperationException exception) {
+        } catch (ReflectiveOperationException | LinkageError exception) {
             return CompletableFuture.failedFuture(new IllegalStateException(
                     "Schematic support is unavailable. Install a compatible WorldEdit build.", exception));
         }
