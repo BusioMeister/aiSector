@@ -49,7 +49,7 @@
     "tools/runtime/RedisLifecycleSmoke.java": "c565c6a723789754208193607adb07b493be6843cb8d89ad1bcf055d6f23a80d",
     "tools/runtime/StagingSmokeAgent.java": "0bf12dcf81a4b1a1458ef0f8af5700cc43093bbef060fb4008e07e363c42b790",
     "tools/runtime/UserIdentityMongoSmoke.java": "a2cd9c9e76c333811b344866551464ab8a80ff586ff9948aa6921b0aab029fb4",
-    "tools/runtime/instant_transfer_lab.py": "858fc10c48d793994651a31381e31c3c4be06c0069632c0ec7fe2c46e488f04f",
+    "tools/runtime/instant_transfer_lab.py": "a7e22fa1ec31702238e939d875ee16fa989a1ef2cf33b728cb12a670fe1a996f",
     "tools/runtime/layout_smoke.py": "7c4d08261981063aca96eb6bc50158202ae9e8177ac3cbd1ce7802c7da1a1ca0",
     "tools/runtime/official_client.py": "0b36bb9080ded6057d5b2418c18c43c65221046cad997298b5d89455919a858c",
     "tools/runtime/package_layout_worlds.py": "6e1e80a9c93a7c7339522dcce9b91b8f97c83d14db7f341c6ded2de3ff052b87",

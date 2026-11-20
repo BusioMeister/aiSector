@@ -210,7 +210,7 @@ def main():
         logs["client"] = (run / "client.log").open("w", encoding="utf-8")
         client = subprocess.Popen(opts, cwd=run, stdout=logs["client"], stderr=subprocess.STDOUT)
         wait(lambda: name + " -> " + first + " has connected" in log("Proxy"), "first join")
-        time.sleep(4)
+        wait(lambda: control("client-state") == "PLAY", "client ready after initial loading", 30)
         if args.sector_platform:
             lab_redis("SET", "aisector:global_spawn", json.dumps(
                 dict(sector="Spawn", x=2050.5, y=126, z=2050.5, yaw=180, pitch=0)))
