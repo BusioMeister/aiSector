@@ -84,10 +84,25 @@ Panel jest rysowany w nagłówku TAB-u, bez natywnych wierszy z główkami
 i pingiem. Logowanie oraz profile graczy pozostają bez zmian.
 Kolumny pokazują statystyki gracza i sektora, Top 20 graczy, Top 20 gildii
 oraz informacje o gildii. Puste miejsca zachowują rozmiar panelu.
-Ranga serwerowa pochodzi z głównej grupy LuckPerms (lub Operator/Gracz),
-a top graczy jest liczony według liczby zabójstw
-(przy remisie mniej śmierci), a Top 20 gildii według sumy zabójstw aktualnych
-członków. Ranking odświeża się w tle co około 30 sekund.
+Ranga serwerowa pochodzi z głównej grupy LuckPerms (lub Operator/Gracz).
+Rankingi odświeżają się w tle co około 30 sekund.
+
+## Punkty PvP
+
+Każdy profil zaczyna od 1000 pkt. Wygrana daje 5–70 pkt (30 przy równym
+rankingu); porażka odbiera 5–50 pkt (20 przy równym rankingu, maksymalnie
+50 przy przewadze ofiary o co najmniej 900 pkt). Wynik nie spada poniżej zera.
+Zabójstwo członka innej gildii dodaje do rankingu gildii zabójcy tyle, ile
+otrzymał zabójca. Śmierć od środowiska zeruje serię, ale nie odbiera punktów.
+
+`/astats <nick>` pokazuje statystyki. Operator może użyć np.
+`/astats <nick> add ranking 30` lub `/astats <nick> set killstreak 5`.
+Edycja wymaga wczytanego profilu na tym samym sektorze.
+
+W `/backup <nick>` zwykły LPM oddaje tylko ekwipunek. Shift + LPM
+zwraca również stratę punktów zapisaną dla tego zgonu i odejmuje jedną śmierć.
+Gracz musi być na sektorze administratora; stare backupy nie mają danych
+do zwrotu. Nie cofamy punktów zabójcy ani jego gildii.
 
 
 Na każdym backendzie gry Paper utrzymuje po jednym rzędzie chunków po obu

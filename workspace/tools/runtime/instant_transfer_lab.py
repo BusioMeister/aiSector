@@ -29,7 +29,10 @@ def main():
     parser.add_argument("--cooldown-push", action="store_true", help="Try to turn back immediately after a physical transfer")
     parser.add_argument("--boat-boundary", action="store_true", help="Verify mounting and destroying boats at the seam")
     parser.add_argument("--network-tab", action="store_true", help="Verify TAB content and private welcome across sectors")
+    parser.add_argument("--combat-ranking", action="store_true", help="Verify PvP score and shift-click backup refund")
     args = parser.parse_args()
+    if args.combat_ranking:
+        args.two_clients = True
     if (args.two_clients or args.guild_create or args.map_edge or args.cooldown_push or args.boat_boundary or args.network_tab) and not args.sector_platform:
         parser.error("These checks require --sector-platform")
     starts = {"GameWest": 18, "GameEast": 24, "Spawn": 29}
@@ -235,7 +238,7 @@ def main():
                          if f"{name} -> {sector} has connected" in log("Proxy")), None)
             assert role, "Sponge button did not move the test player"
             results = {"sponge": {"target": role, "screens": trace}}
-            for index in range(0 if args.cooldown_push or args.boat_boundary or args.network_tab else 4):
+            for index in range(0 if args.cooldown_push or args.boat_boundary or args.network_tab or args.combat_ranking else 4):
                 west = role == "GameWest"
                 dest, yaw, side = ("GameEast", -90, 1) if west else ("GameWest", 90, -1)
                 send(role, f"minecraft:tp {name} {-.85 if west else .85} 141 0.5 {yaw} 0")
@@ -406,6 +409,34 @@ def main():
                 summoned = position(game, peer_name)
                 assert sum((a - b) ** 2 for a, b in zip(operator, summoned)) < 9, (operator, summoned)
                 results["summon"] = {"target": game, "non_operator_summoned": True}
+                if args.combat_ranking:
+                    send(game, f"gamemode survival {peer_name}")
+                    send(game, f"gamemode survival {name}")
+                    send(game, f"astats {peer_name} set ranking 1250")
+                    wait(lambda: "RANKING: 1000 -> 1250" in log(game), "admin set ranking", 12)
+                    send(game, f"minecraft:damage {peer_name} 1000 minecraft:generic_kill by {name}")
+                    wait(lambda: f"{name} zabił {peer_name}" in log("client")
+                         and f"{name} zabił {peer_name}" in log("peer"), "global kill announcement", 12)
+                    wait(lambda: f"{peer_name}\n+55 pkt" in control("title"), "killer title", 8)
+                    game_connections = log("Proxy").count(f"{peer_name} -> {game} has connected")
+                    control("respawn", actor=peer)
+                    wait(lambda: log("Proxy").count(f"{peer_name} -> Spawn has connected") >= 2, "victim returns to Spawn", 15)
+                    wait(lambda: control("client-state", actor=peer) == "PLAY", "victim respawn", 15)
+                    wait(lambda: name + "\nZabił Cię  •  −28 pkt" in control("title", actor=peer), "victim title", 8)
+                    control("command", f"s {peer_name}")
+                    wait(lambda: log("Proxy").count(f"{peer_name} -> {game} has connected") > game_connections,
+                         "bring victim back to administrator sector", 15)
+                    time.sleep(2)
+                    control("command", f"backup {peer_name}")
+                    time.sleep(1)
+                    assert control("backup-shift-click") == "OK"
+                    wait(lambda: "Zwrócono 28 pkt" in log("client"), "shift backup stat refund", 12)
+                    send(game, f"astats {peer_name}")
+                    wait(lambda: re.search(r"ranking: .*1250.*killstreak:", log(game)) is not None, "restored ranking", 10)
+                    results["combat_ranking"] = {"gain": 55, "loss": 28, "refund": 28}
+                    (run / "results.json").write_text(json.dumps(results, indent=2))
+                    print("COMBAT_RANKING_OK", run, flush=True)
+                    return
                 send(game, f"op {peer_name}")
                 wait(lambda: f"Made {peer_name} a server operator" in log(game), "test-only TPA permission", 10)
                 assert control("trace-command", "spawn", actor=peer) == "0 PLAY"

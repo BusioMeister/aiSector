@@ -24,6 +24,13 @@ public class User {
 
     private int kills = 0;
     private int deaths = 0;
+    private int rating = ai.aisector.ranking.Rating.INITIAL;
+    private int killstreak;
+
+    public int getRating() { return rating; }
+    public void setRating(int rating) { this.rating = rating; }
+    public int getKillstreak() { return killstreak; }
+    public void setKillstreak(int killstreak) { this.killstreak = killstreak; }
     /** czas gry w sekundach, sumarycznie po wszystkich sesjach */
     private long playTimeSeconds = 0L;
     /** czas startu bieżącej sesji (nie zapisujemy do bazy) */

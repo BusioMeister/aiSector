@@ -4,9 +4,8 @@ import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
 import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.SectorManager;
-import ai.aisector.user.UserManager;
+import ai.aisector.ranking.CombatRanking;
 import ai.aisector.utils.InventorySerializer;
-import ai.aisector.user.User;
 import org.bson.Document;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -23,14 +22,14 @@ public class PlayerDeathListener implements Listener {
     private final MongoDBManager mongoDBManager;
     private final SectorManager sectorManager;
     private final RedisManager redisManager; // <-- DODAJEMY POLE
-    private final UserManager userManager; // NOWE
+    private final CombatRanking ranking;
 
     public PlayerDeathListener(SectorPlugin plugin, MongoDBManager mongoDBManager, SectorManager sectorManager) {
         this.plugin = plugin;
         this.mongoDBManager = mongoDBManager;
         this.sectorManager = sectorManager;
         this.redisManager = plugin.getRedisManager(); // <-- INICJALIZUJEMY POLE
-        this.userManager = plugin.getUserManager(); // NOWE
+        this.ranking = new CombatRanking(plugin);
     }
 
     @EventHandler
@@ -38,6 +37,19 @@ public class PlayerDeathListener implements Listener {
         Player victim = event.getEntity();
         UUID victimUuid = victim.getUniqueId();
         Location location = victim.getLocation();
+        Player killer = victim.getKiller();
+        Integer refundableLoss = ranking.refundableLoss(victim, killer);
+        if (killer != null && !killer.equals(victim)) {
+            var notice = ranking.deathNotice(killer, refundableLoss);
+            plugin.getDeathNotices().put(victimUuid, notice);
+            notice.show(victim);
+            org.bukkit.Bukkit.getScheduler().runTaskLater(plugin,
+                    () -> plugin.getDeathNotices().remove(victimUuid, notice), 12_000L);
+        } else {
+            plugin.getDeathNotices().remove(victimUuid);
+        }
+        location.getWorld().strikeLightningEffect(location);
+        var savedStats = ranking.onDeath(victim, killer);
         String sectorName = sectorManager.getSectorForLocation(location.getBlockX(), location.getBlockZ());
 
         // 🔥 TWOJA ORYGINALNA LOGIKA: Zapisujemy sektor śmierci do celów respawnu 🔥
@@ -77,7 +89,10 @@ public class PlayerDeathListener implements Listener {
             deathRecord.append("restored_by", "Nikt");
             deathRecord.append("restored_at", null);
 
-            mongoDBManager.insertOneAsync("death_backups", deathRecord).exceptionally(error -> {
+            savedStats.handle((ignored, error) -> {
+                if (error == null && refundableLoss != null) deathRecord.append("refundableRating", refundableLoss);
+                return deathRecord;
+            }).thenCompose(record -> mongoDBManager.insertOneAsync("death_backups", record)).exceptionally(error -> {
                 plugin.getLogger().severe("Could not save death backup for " + victimUuid + ": " + error.getMessage());
                 return null;
             });
@@ -85,21 +100,15 @@ public class PlayerDeathListener implements Listener {
             plugin.getLogger().severe("Could not capture death backup for " + victimUuid
                     + "; no usable backup record was created: " + invalidInventory.getMessage());
         }
-        // === STATYSTYKI PVP ===
-        // Ofiara
-        User victimUser = userManager.getUser(victim);
-        if (victimUser != null) {
-            victimUser.addDeath();
-            userManager.saveCombatStats(victim, victimUser);
-        }
-
-        // Zabójca (może być null, jeśli środowisko)
-        Player killer = victim.getKiller();
-        if (killer != null) {
-            User killerUser = userManager.getUser(killer);
-            if (killerUser != null) {
-                killerUser.addKill();
-                userManager.saveCombatStats(killer, killerUser);
+        if (killer != null && !killer.equals(victim)) {
+            String announcement = ranking.announcement(killer, victim);
+            event.deathMessage(null);
+            if (victim.getListeningPluginChannels().contains("global:chat")) {
+                var output = com.google.common.io.ByteStreams.newDataOutput();
+                output.writeUTF(announcement);
+                victim.sendPluginMessage(plugin, "global:chat", output.toByteArray());
+            } else {
+                org.bukkit.Bukkit.broadcastMessage(announcement);
             }
         }
     }

@@ -137,6 +137,9 @@ commands:
     permission: aisector.command.tppos
   backup:
     permission: aisector.command.backup
+  astats:
+    description: Podgląd i edycja statystyk gracza.
+    permission: aisector.astats
   sethome:
     description: Ustawia lokalizację domu.
     permission: aisector.command.sethome
@@ -145,6 +148,9 @@ commands:
     permission: aisector.command.home
 
 permissions:
+  aisector.astats:
+    description: Allows editing combat and ranking statistics.
+    default: op
   aisector.command.pastetest:
     description: Allows testing schematic pastes.
     default: op

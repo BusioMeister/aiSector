@@ -66,6 +66,7 @@ public class SectorPlugin extends JavaPlugin {
     private VanishManager vanishManager;
     private BukkitTask publisherTask;
     private final Map<UUID, String> playerDeathSectors = new HashMap<>();
+    private final Map<UUID, ai.aisector.ranking.DeathNotice> deathNotices = new HashMap<>();
     private MongoDBManager mongoDBManager;
     private UserManager userManager;
     private volatile MySQLManager mySQLManager;
@@ -170,6 +171,9 @@ public class SectorPlugin extends JavaPlugin {
         getCommand("time").setExecutor(new TimeCommand(this));
         getCommand("tppos").setExecutor(new TpposCommand(this));
         getCommand("backup").setExecutor(new BackupCommand(this, mongoDBManager));
+        var statsCommand = new ai.aisector.ranking.AdminStatsCommand(this);
+        getCommand("astats").setExecutor(statsCommand);
+        getCommand("astats").setTabCompleter(statsCommand);
         getCommand("sethome").setExecutor(new SetHomeCommand(this, mongoDBManager));
         getCommand("home").setExecutor(new HomeCommand(this, mongoDBManager));
         getCommand("lvl").setExecutor(new LevelCommand(this,miningLevelManager));
@@ -548,6 +552,7 @@ public class SectorPlugin extends JavaPlugin {
         return current;
     }
     public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
+    public Map<UUID, ai.aisector.ranking.DeathNotice> getDeathNotices() { return deathNotices; }
     public RedisManager getRedisManager() { return redisManager; }
     public SectorManager getSectorManager() { return sectorManager; }
     public MySQLManager getMySQLManager() {

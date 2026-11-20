@@ -240,6 +240,8 @@ public class UserManager {
             // ====== NOWE POLA PVP / CZAS GRY ======
             user.setKills(userDoc.getInteger("kills", 0));
             user.setDeaths(userDoc.getInteger("deaths", 0));
+            user.setRating(ai.aisector.ranking.Rating.read(userDoc.get("rating"), ai.aisector.ranking.Rating.INITIAL));
+            user.setKillstreak(ai.aisector.ranking.Rating.read(userDoc.get("killstreak"), 0));
 
             Object playTimeObj = userDoc.get("playTimeSeconds");
             if (playTimeObj instanceof Number) {
@@ -461,11 +463,13 @@ public class UserManager {
 
     public boolean isTransferPending(Player player) { return transferGuard.active(player); }
 
-    public void saveCombatStats(Player player, User user) {
-        if (closing || onlineUsers.get(player.getUniqueId()) != user || isTransferPending(player)) return;
+    public CompletableFuture<Void> saveCombatStats(Player player, User user) {
+        if (closing || onlineUsers.get(player.getUniqueId()) != user || isTransferPending(player))
+            return CompletableFuture.failedFuture(new IllegalStateException("Profile unavailable or transfer pending"));
         UUID uuid = player.getUniqueId();
         Document update = new Document("$set", new Document("name", player.getName())
-                .append("kills", user.getKills()).append("deaths", user.getDeaths()));
+                .append("kills", user.getKills()).append("deaths", user.getDeaths())
+                .append("rating", user.getRating()).append("killstreak", user.getKillstreak()));
         CompletableFuture<Void> write = queueProfileWrite(uuid, () -> persistUserUpdateWithGuildLock(uuid, update));
         pendingWrites.add(write);
         write.whenComplete((ignored, error) -> {
@@ -473,6 +477,7 @@ public class UserManager {
             if (error != null) plugin.getLogger().warning("Could not persist combat statistics for " + uuid
                     + ": " + error.getMessage());
         });
+        return write.copy();
     }
 
     private CompletableFuture<Void> queueProfileWrite(UUID uuid, Runnable operation) {
@@ -506,6 +511,8 @@ public class UserManager {
                         .append("miningExperience", user.getMiningExperience())
                         .append("kills", user.getKills())
                         .append("deaths", user.getDeaths())
+                        .append("rating", user.getRating())
+                        .append("killstreak", user.getKillstreak())
                         .append("playTimeSeconds", user.getPlayTimeSeconds()));
         // Guild fields belong to explicit membership writes, not a stale quit snapshot.
     }

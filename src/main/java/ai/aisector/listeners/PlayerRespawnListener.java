@@ -2,6 +2,7 @@ package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
+import ai.aisector.ranking.DeathNotice;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.sectors.SectorManager;
 import com.google.gson.JsonObject;
@@ -39,14 +40,17 @@ public class PlayerRespawnListener implements Listener {
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
+        DeathNotice notice = plugin.getDeathNotices().remove(player.getUniqueId());
         if (sectorManager.isLockedSpawnBackend()) {
             plugin.getPlayerDeathSectors().remove(player.getUniqueId());
             event.setRespawnLocation(sectorManager.lockedSpawnLocation());
+            showLocalNotice(player, notice);
             return;
         }
 
         String spawnDataJson = cachedGlobalSpawn;
         if (spawnDataJson == null || spawnDataJson.isEmpty()) {
+            showLocalNotice(player, notice);
             return;
         }
 
@@ -75,6 +79,7 @@ public class PlayerRespawnListener implements Listener {
             if (targetSector.equals(deathSector)) {
                 // Respawn lokalny - bez zmian
                 event.setRespawnLocation(respawnLocation);
+                showLocalNotice(player, notice);
                 UUID playerUuid = player.getUniqueId();
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (player.isOnline() && Bukkit.getPlayer(playerUuid) == player) {
@@ -92,13 +97,21 @@ public class PlayerRespawnListener implements Listener {
                 locationJson.addProperty("pitch", pitch);
                 Map<String, String> transferKeys = Map.of(
                         "player:final_teleport_target:" + player.getUniqueId(), locationJson.toString(),
-                        "player:is_respawning:" + player.getUniqueId(), "true");
+                        "player:is_respawning:" + player.getUniqueId(), notice == null ? "true" : notice.marker());
                 sectorManager.transferPlayerAsync(player, targetSector, null, transferKeys);
             }
         } catch (RuntimeException exception) {
+            showLocalNotice(player, notice);
             plugin.getLogger().warning("Could not prepare the global respawn for " + player.getName()
                     + ": " + exception.getMessage());
         }
+    }
+
+    private void showLocalNotice(Player player, DeathNotice notice) {
+        if (notice == null) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (Bukkit.getPlayer(player.getUniqueId()) == player && !player.isDead()) notice.show(player);
+        }, 8L);
     }
 
     private void refreshGlobalSpawn() {

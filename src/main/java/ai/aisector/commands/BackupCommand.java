@@ -107,7 +107,10 @@ public final class BackupCommand implements CommandExecutor {
             if (restoredBy == null || restoredBy.equals("Nikt")) {
                 lore.add("§aPrzywrócono przez: §fNikt");
                 lore.add(" ");
-                lore.add("§eLPM - Przywróć ekwipunek");
+                 lore.add("§eLPM - Przywróć ekwipunek");
+                 if (record.get("refundableRating") instanceof Integer refund) {
+                     lore.add("§6Shift + LPM - Ekwipunek, +" + refund + " pkt i −1 śmierć");
+                 }
                 lore.add("§ePPM - Pokaż ekwipunek");
             } else {
                 lore.add("§cPrzywrócono przez: §f" + restoredBy);

@@ -25,6 +25,24 @@ public class ClientControlAgent {
                 if (action.equals("command")) {
                     if (mc.player == null) throw new IllegalStateException("Not connected");
                     mc.player.connection.sendCommand(value);
+                } else if (action.equals("title")) {
+                    var hud = mc.gui.hud;
+                    var lines = new java.util.ArrayList<String>();
+                    for (String key : new String[] {"title", "subtitle"}) {
+                        var field = hud.getClass().getDeclaredField(key);
+                        field.setAccessible(true);
+                        var text = (net.minecraft.network.chat.Component) field.get(hud);
+                        lines.add(text == null ? "" : text.getString());
+                    }
+                    Files.writeString(output, String.join("\n", lines));
+                    return;
+                } else if (action.equals("respawn")) {
+                    mc.player.respawn();
+                } else if (action.equals("backup-shift-click")) {
+                    if (!(mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>))
+                        throw new IllegalStateException("No backup inventory open");
+                    mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId, 0, 0,
+                            net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, mc.player);
                 } else if (action.equals("chat")) {
                     mc.player.connection.sendChat(value);
                 } else if (action.equals("screenshot")) {

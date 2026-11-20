@@ -85,6 +85,7 @@ public final class BackupGuiListener implements Listener {
 
         boolean viewOnly = event.isRightClick();
         boolean restoreClick = event.isLeftClick();
+        boolean restoreStats = event.getClick() == org.bukkit.event.inventory.ClickType.SHIFT_LEFT;
         UUID adminUuid = admin.getUniqueId();
         mongoDBManager.findOneAsync("death_backups", Filters.eq("_id", recordId))
                 .whenComplete((record, error) -> BukkitTaskScheduler.execute(plugin, () -> {
@@ -97,7 +98,7 @@ public final class BackupGuiListener implements Listener {
                     } else if (viewOnly) {
                         openBackupView(currentAdmin, record);
                     } else if (restoreClick) {
-                        restoreBackup(currentAdmin, recordId, record);
+                        restoreBackup(currentAdmin, recordId, record, restoreStats);
                     }
                 }));
     }
@@ -131,7 +132,7 @@ public final class BackupGuiListener implements Listener {
         }
     }
 
-    private void restoreBackup(Player admin, ObjectId recordId, Document record) {
+    private void restoreBackup(Player admin, ObjectId recordId, Document record, boolean restoreStats) {
         String restoredBy = record.getString("restored_by");
         if (restoredBy != null && !restoredBy.equals("Nikt")) {
             admin.sendMessage("§cTen ekwipunek został już przywrócony przez §e" + restoredBy + "§c.");
@@ -165,6 +166,14 @@ public final class BackupGuiListener implements Listener {
         String adminName = admin.getName();
         String claimToken = UUID.randomUUID().toString();
         Player victim = Bukkit.getPlayer(victimId);
+        Integer refund = record.get("refundableRating") instanceof Integer points && points >= 0 && points <= 50
+                ? points : null;
+        if (restoreStats && (refund == null || victim == null || plugin.getUserManager().getUser(victim) == null
+                || plugin.getUserManager().isTransferPending(victim))) {
+            admin.sendMessage(refund == null ? "§cTen backup nie ma zapisanych statystyk do zwrotu."
+                    : "§cAby zwrócić statystyki, gracz musi być na Twoim sektorze z wczytanym profilem.");
+            return;
+        }
 
         if (victim == null || !victim.isOnline()) {
             saveOfflineBackup(adminUuid, adminName, claimToken, recordId, targetName, victimId, inventoryData);
@@ -184,6 +193,12 @@ public final class BackupGuiListener implements Listener {
                     }
 
                     Player currentVictim = Bukkit.getPlayer(victimId);
+                    if (restoreStats && (currentVictim != victim || !victim.isOnline()
+                            || plugin.getUserManager().getUser(victim) == null)) {
+                        rollbackRestoreMarker(recordId, adminName, claimToken);
+                        messageIfOnline(currentAdmin, "§cGracz zmienił sektor lub wyszedł. Backup pozostaje dostępny.");
+                        return;
+                    }
                     if (currentVictim == null || !currentVictim.isOnline()) {
                         savePendingAfterRestore(adminUuid, adminName, claimToken, recordId, targetName, victimId, inventoryData);
                         return;
@@ -202,10 +217,30 @@ public final class BackupGuiListener implements Listener {
                         return;
                     }
                     currentVictim.sendMessage("§aTwój ekwipunek ze śmierci został przywrócony przez administratora.");
+                    if (restoreStats) {
+                        var users = plugin.getUserManager();
+                        var profile = users.getUser(currentVictim);
+                        int previous = profile.getRating();
+                        profile.setRating((int) Math.min(ai.aisector.ranking.Rating.MAX, (long) previous + refund));
+                        profile.setDeaths(Math.max(0, profile.getDeaths() - 1));
+                        int returned = profile.getRating() - previous;
+                        users.saveCombatStats(currentVictim, profile).whenComplete((ignored, statsError) ->
+                                BukkitTaskScheduler.execute(plugin, () -> {
+                                    Player operator = Bukkit.getPlayer(adminUuid);
+                                    if (statsError != null) {
+                                        messageIfOnline(operator, "§eOddano ekwipunek, ale zapis statystyk nie został potwierdzony.");
+                                    } else {
+                                        messageIfOnline(operator, "§aZwrócono " + returned + " pkt i skorygowano śmierć.");
+                                        if (Bukkit.getPlayer(victimId) == currentVictim)
+                                            currentVictim.sendMessage("§aPrzywrócono statystyki z backupu: +" + returned + " pkt, −1 śmierć.");
+                                    }
+                                }));
+                    }
                     finishRestore(currentAdmin, targetName);
                 });
                 if (!scheduled && error == null && result != null && result.getModifiedCount() > 0) {
-                    savePendingAfterRestore(adminUuid, adminName, claimToken, recordId, targetName, victimId, inventoryData);
+                    if (restoreStats) rollbackRestoreMarker(recordId, adminName, claimToken);
+                    else savePendingAfterRestore(adminUuid, adminName, claimToken, recordId, targetName, victimId, inventoryData);
                 }
         });
     }

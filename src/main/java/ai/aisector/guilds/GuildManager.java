@@ -146,6 +146,32 @@ public class GuildManager {
         return getGuild(tag); // alias - czytelność
     }
 
+    /** Rank points are independent of editable guild snapshots. Never credit a recreated guild. */
+    public CompletableFuture<Boolean> creditPvpRating(Guild winner, UUID killer, Guild loser, UUID victim, int points) {
+        if (points <= 0 || winner == null || loser == null || winner.equals(loser)
+                || winner.roleOf(killer) == null || loser.roleOf(victim) == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+        Bson winnerIdentity = ratingIdentity(winner, killer);
+        Bson loserIdentity = ratingIdentity(loser, victim);
+        if (winnerIdentity == null || loserIdentity == null) return CompletableFuture.completedFuture(false);
+        return mongo.executeAsync(() -> {
+            if (col().find(loserIdentity).projection(new Document("_id", 1)).first() == null) return false;
+            return col().updateOne(winnerIdentity, new Document("$inc", new Document("ratingPoints", (long) points)))
+                    .getModifiedCount() == 1;
+        });
+    }
+
+    private static Bson ratingIdentity(Guild guild, UUID member) {
+        String generation = guild.getPersistenceGeneration();
+        if (generation == null) return null;
+        Bson identity = generation.startsWith("legacy:")
+                ? (ObjectId.isValid(generation.substring(7)) ? Filters.eq("_id", new ObjectId(generation.substring(7))) : null)
+                : Filters.eq("_generation", generation);
+        return identity == null ? null : Filters.and(identity, Filters.eq("tag", guild.getTag()),
+                Filters.eq("members", member.toString()));
+    }
+
     public boolean isPersistencePending(String tag) {
         String key = normalizeTag(tag);
         return key != null && cacheVersions.getOrDefault(key, 0L) > persistedVersions.getOrDefault(key, 0L);

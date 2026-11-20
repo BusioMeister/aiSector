@@ -359,7 +359,7 @@ public class PlayerDataListener implements Listener {
                 clearConsumedJoinKeys(player.getUniqueId(), state, consumedFinal, consumedForced);
                 plugin.getGuildTagManager().updateTagsFor(player);
                  if (restored != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, restored.heldSlot());
-                sendWelcomePackage(player, state.respawning());
+                sendWelcomePackage(player, state.respawnMarker());
                 if (consumedForced) player.sendMessage("§aZostałeś przeniesiony na sektor §e" + state.forcedSector() + "§a.");
             };
             if (destination == null) { complete.run(); return; }
@@ -503,13 +503,17 @@ public class PlayerDataListener implements Listener {
 
 
 
-    private void sendWelcomePackage(Player player, boolean respawning) {
+    private void sendWelcomePackage(Player player, String respawnMarker) {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!isCurrentSession(player)) return;
             Location arrival = player.getLocation();
             Sector sector = sectorManager.getSectorAt(arrival);
             borderManager.refreshAfterJoin(player, sector, arrival);
-            if (respawning) showDeathTitle(player);
+            if (respawnMarker != null) {
+                var notice = ai.aisector.ranking.DeathNotice.parse(respawnMarker);
+                if (notice == null) showDeathTitle(player);
+                else notice.show(player);
+            }
             else if (sector != null) {
                 MessageUtil.sendTitle(player, "", "§7Połączono z sektorem §9" + sector.getName(), 300, 1000, 300);
             }
