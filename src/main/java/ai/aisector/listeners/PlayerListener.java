@@ -2,6 +2,7 @@ package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.Sector;
+import ai.aisector.sectors.SectorBoatBoundary;
 import ai.aisector.sectors.SectorEdge;
 import ai.aisector.sectors.SectorArrival;
 import ai.aisector.sectors.SectorManager;
@@ -11,23 +12,31 @@ import ai.aisector.user.UserManager;
 import ai.aisector.utils.BukkitTaskScheduler;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Boat;
+import org.bukkit.entity.ChestBoat;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.vehicle.VehicleEnterEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.util.Vector;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,6 +50,7 @@ public class PlayerListener implements Listener {
     private final Map<UUID, Long> lastMapEdgeAlert = new HashMap<>();
     private final java.util.Set<UUID> queuedEdgePushes = new java.util.HashSet<>();
     private final Map<UUID, org.bukkit.scheduler.BukkitTask> activeSeamPushes = new HashMap<>();
+    private final Set<UUID> boatRecoveries = new HashSet<>();
     private final Map<UUID, UUID> pendingSectorTransfers = new ConcurrentHashMap<>();
     private final SeamCrossingCooldown seamCooldown = new SeamCrossingCooldown();
 
@@ -67,6 +77,14 @@ public class PlayerListener implements Listener {
         Location from = event.getFrom(), to = event.getTo();
         if (to == null || !from.getWorld().equals(to.getWorld())
                 || (from.getX() == to.getX() && from.getZ() == to.getZ())) return;
+        if (boatRecoveries.contains(player.getUniqueId())) {
+            if (!sectorManager.owns(to)) event.setCancelled(true);
+            return;
+        }
+        if (player.getVehicle() instanceof Boat boat && stopBoatCrossing(boat, from, to)) {
+            event.setCancelled(true);
+            return;
+        }
         if (pendingSectorTransfers.containsKey(player.getUniqueId()) || userManager.isTransferPending(player)) {
             if (from.getBlockX() != to.getBlockX() || from.getBlockZ() != to.getBlockZ()) event.setCancelled(true);
             return;
@@ -134,6 +152,85 @@ public class PlayerListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBoatPlace(EntityPlaceEvent event) {
+        if (!(event.getEntity() instanceof Boat boat)) return;
+        if (nearBoatBoundary(boat.getLocation())) {
+            event.setCancelled(true);
+            if (event.getPlayer() != null) event.getPlayer().sendActionBar(
+                    Component.text("Nie możesz postawić łódki przy granicy sektora.", NamedTextColor.RED));
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBoatEnter(VehicleEnterEvent event) {
+        if (!(event.getVehicle() instanceof Boat boat) || !(event.getEntered() instanceof Player player)) return;
+        if (nearBoatBoundary(boat.getLocation()) || nearBoatBoundary(player.getLocation())) {
+            event.setCancelled(true);
+            player.sendActionBar(Component.text("Nie możesz wsiąść do łódki przy granicy sektora.", NamedTextColor.RED));
+        }
+    }
+
+    @EventHandler
+    public void onBoatMove(VehicleMoveEvent event) {
+        if (event.getVehicle() instanceof Boat boat) stopBoatCrossing(boat, event.getFrom(), event.getTo());
+    }
+
+    private boolean nearBoatBoundary(Location position) {
+        Sector local = sectorManager.localSectorAtWorld(position);
+        return local != null && SectorBoatBoundary.blocksInteraction(local, position.getX(), position.getZ());
+    }
+
+    private boolean stopBoatCrossing(Boat boat, Location from, Location to) {
+        if (!from.getWorld().equals(to.getWorld())) return false;
+        Sector local = sectorManager.localSectorAtWorld(from);
+        if (local == null) return false;
+        SectorEdge.Push inward = SectorBoatBoundary.crossing(local, to.getX(), to.getZ());
+        if (!inward.active()) return false;
+        // The player and vehicle events can report the same movement. Never process its drops twice.
+        if (!boat.isValid()) return true;
+        var riders = boat.getPassengers().stream().filter(Player.class::isInstance).map(Player.class::cast).toList();
+        if (riders.isEmpty()) return false;
+        for (Player rider : riders) boatRecoveries.add(rider.getUniqueId());
+
+        Location safeSide = from.clone();
+        safeSide.setX(Math.clamp(from.getX(), local.getMinX() + .35, local.getMaxX() + .65));
+        safeSide.setZ(Math.clamp(from.getZ(), local.getMinZ() + .35, local.getMaxZ() + .65));
+        if (boat instanceof ChestBoat chest) {
+            var inventory = chest.getInventory();
+            for (var item : inventory.getContents()) {
+                if (item != null && !item.getType().isAir()) {
+                    from.getWorld().dropItem(safeSide, item.clone())
+                            .setVelocity(new Vector(inward.x() * .08, .15, inward.z() * .08));
+                }
+            }
+            inventory.clear();
+        }
+        boat.eject();
+        boat.remove();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            for (Player rider : riders) {
+                UUID id = rider.getUniqueId();
+                boatRecoveries.remove(id);
+                if (!isCurrentSession(rider) || !rider.getWorld().equals(from.getWorld())
+                        || pendingSectorTransfers.containsKey(id) || userManager.isTransferPending(rider)) continue;
+                seamCooldown.arrived(id);
+                Location at = rider.getLocation();
+                // VehicleMoveEvent is not cancellable. Correct only riders already reported outside.
+                if (!local.isInside(at.getBlockX(), at.getBlockZ())) {
+                    Location returnTo = safeSide.clone();
+                    returnTo.setY(Math.max(at.getY(), safeSide.getY()));
+                    returnTo.setYaw(at.getYaw());
+                    returnTo.setPitch(at.getPitch());
+                    if (!rider.teleport(returnTo, PlayerTeleportEvent.TeleportCause.PLUGIN)) continue;
+                }
+                rider.sendActionBar(Component.text("Łódka rozbiła się na granicy sektora!", NamedTextColor.RED));
+                pushInsideSector(rider, local, inward, true);
+            }
+        });
+        return true;
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBorderMove(PlayerMoveEvent event) {
         if (pendingSectorTransfers.containsKey(event.getPlayer().getUniqueId())) return;
@@ -156,6 +253,7 @@ public class PlayerListener implements Listener {
         plugin.getScoreboardManager().removeBoard(player);
         borderManager.clear(player);
         pendingSectorTransfers.remove(player.getUniqueId());
+        boatRecoveries.remove(player.getUniqueId());
         seamCooldown.clear(player.getUniqueId());
         lastMapEdgeAlert.remove(player.getUniqueId());
         queuedEdgePushes.remove(player.getUniqueId());
@@ -195,7 +293,7 @@ public class PlayerListener implements Listener {
                 if (!isCurrentSession(player) || userManager.isTransferPending(player)
                         || pendingSectorTransfers.containsKey(id)) return;
                 if (cooldownSector != null) {
-                    pushInsideSector(player, cooldownSector, push);
+                    pushInsideSector(player, cooldownSector, push, false);
                     return;
                 }
                 Vector inward = new Vector(push.x(), 0, push.z()).normalize().multiply(0.65);
@@ -205,14 +303,14 @@ public class PlayerListener implements Listener {
         }
     }
 
-    private void pushInsideSector(Player player, Sector sector, SectorEdge.Push push) {
+    private void pushInsideSector(Player player, Sector sector, SectorEdge.Push push, boolean allowWater) {
         UUID id = player.getUniqueId();
         if (activeSeamPushes.containsKey(id) || player.isInsideVehicle()) return;
         Location start = player.getLocation();
         if (sectorManager.getSectorAt(start) != sector) return;
         double x = SectorEdge.inset(start.getX(), push.x(), sector.getMinX(), sector.getMaxX());
         double z = SectorEdge.inset(start.getZ(), push.z(), sector.getMinZ(), sector.getMaxZ());
-        boolean needsFloor = player.isOnGround() && !player.isFlying();
+        boolean needsFloor = !allowWater && player.isOnGround() && !player.isFlying();
         var task = new org.bukkit.scheduler.BukkitRunnable() {
             private int ticks;
             @Override
@@ -242,8 +340,8 @@ public class PlayerListener implements Listener {
                 double speed = Math.min(Math.min(.50, .22 + ticks * .07), remaining * .65);
                 double vx = dx / remaining * speed;
                 double vz = dz / remaining * speed;
-                if (!safePushPosition(at.clone().add(vx * .75, 0, vz * .75), needsFloor)
-                        || !safePushPosition(at.clone().add(vx * 1.5, 0, vz * 1.5), needsFloor)) {
+                if (!safePushPosition(at.clone().add(vx * .75, 0, vz * .75), needsFloor, allowWater)
+                        || !safePushPosition(at.clone().add(vx * 1.5, 0, vz * 1.5), needsFloor, allowWater)) {
                     player.setVelocity(new Vector(0, y, 0));
                     stopSeamPush(id);
                     return;
@@ -259,7 +357,7 @@ public class PlayerListener implements Listener {
         if (task != null) task.cancel();
     }
 
-    private boolean safePushPosition(Location point, boolean needsFloor) {
+    private boolean safePushPosition(Location point, boolean needsFloor, boolean allowWater) {
         var world = point.getWorld();
         int minX = (int) Math.floor(point.getX() - .3), maxX = (int) Math.floor(point.getX() + .3);
         int minZ = (int) Math.floor(point.getZ() - .3), maxZ = (int) Math.floor(point.getZ() + .3);
@@ -269,6 +367,7 @@ public class PlayerListener implements Listener {
                 if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
                 for (int y = minY; y <= maxY; y++) {
                     var block = world.getBlockAt(x, y, z);
+                    if (allowWater && block.getType() == Material.WATER) continue;
                     if (!block.isPassable() || block.isLiquid()) return false;
                 }
             }

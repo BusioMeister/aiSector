@@ -70,6 +70,10 @@ wspólnej krawędzi. Próba przejścia uruchamia serię impulsów ruchu
 bez teleportu, z wyhamowaniem około 5 bloków od granicy lub bliżej, jeśli
 przeszkoda blokuje drogę. Limit nie dotyczy ruchu wewnątrz sektora ani komend.
 
+Do 5 bloków od krawędzi nie można postawić łódki ani do niej wsiąść.
+Przekroczenie granicy łódką z graczem rozbija łódkę i odpycha graczy w głąb
+bieżącego sektora. Zawartość łódki ze skrzynią wypada po stronie sektora.
+
 Na każdym backendzie gry Paper utrzymuje po jednym rzędzie chunków po obu
 stronach wspólnej granicy (128 na backend w tym układzie). Ładuje je
 asynchronicznie po starcie i zwalnia własne bilety przy wyłączeniu. Spawn nie

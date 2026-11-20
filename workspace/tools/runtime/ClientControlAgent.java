@@ -92,14 +92,18 @@ public class ClientControlAgent {
                     sampleCooldownPush(mc, output.resolveSibling(output.getFileName() + ".walk"), started,
                             Float.parseFloat(value), -1, new java.util.ArrayList<>());
                     return;
-                } else if (action.equals("trace-border-walk") || action.equals("trace-edge-walk")) {
+                } else if (action.equals("trace-border-walk") || action.equals("trace-edge-walk") || action.equals("trace-boat-walk")) {
                     long started = System.nanoTime();
                     sampleScreens(mc, output, started, new java.util.ArrayList<>());
                     sampleBorderWalk(mc, output.resolveSibling(output.getFileName() + ".walk"), started,
-                            Float.parseFloat(value), action.equals("trace-edge-walk"), new java.util.ArrayList<>());
+                            Float.parseFloat(value), action.equals("trace-edge-walk"), action.equals("trace-boat-walk"),
+                            new java.util.ArrayList<>());
                     return;
                 } else if (action.equals("rotate-head")) {
                     rotateHead(mc, System.nanoTime());
+                } else if (action.equals("actionbar")) {
+                    Files.writeString(output, actionBarText(mc));
+                    return;
                 } else if (action.equals("client-state")) {
                     Files.writeString(output, mc.player != null && mc.level != null && mc.gui.screen() == null
                             ? "PLAY" : "NOT_PLAY");
@@ -189,7 +193,7 @@ public class ClientControlAgent {
         }
     }
 
-    private static void sampleBorderWalk(Minecraft mc, Path output, long started, float yaw, boolean edge,
+    private static void sampleBorderWalk(Minecraft mc, Path output, long started, float yaw, boolean edge, boolean boat,
                                          java.util.List<String> trace) {
         long elapsed = (System.nanoTime() - started) / 1_000_000;
         if (mc.player != null && mc.level != null) {
@@ -199,23 +203,27 @@ public class ClientControlAgent {
             trace.add(elapsed + " " + mc.player.getX() + " " + mc.player.getY() + " " + mc.player.getZ()
                     + " " + border.getCenterX() + " " + border.getSize() + (edge ? " " + mapEdgeAlert(mc) : ""));
         }
-        if (elapsed >= 4000 || mc.player == null) {
+        if (elapsed >= (boat ? 1500 : 4000) || mc.player == null) {
             mc.options.keyUp.setDown(false);
             try { Files.writeString(output, String.join("\n", trace)); }
             catch (java.io.IOException error) { throw new IllegalStateException(error); }
         } else {
-            mc.options.keyUp.setDown(true);
+            mc.options.keyUp.setDown(!boat || mc.player.isPassenger());
             java.util.concurrent.CompletableFuture.delayedExecutor(25, java.util.concurrent.TimeUnit.MILLISECONDS)
-                    .execute(() -> mc.execute(() -> sampleBorderWalk(mc, output, started, yaw, edge, trace)));
+                    .execute(() -> mc.execute(() -> sampleBorderWalk(mc, output, started, yaw, edge, boat, trace)));
         }
     }
 
     private static boolean mapEdgeAlert(Minecraft mc) {
+        return actionBarText(mc).equals("Jesteś na granicy mapy!");
+    }
+
+    private static String actionBarText(Minecraft mc) {
         try {
             var field = net.minecraft.client.gui.Hud.class.getDeclaredField("overlayMessageString");
             field.setAccessible(true);
             var message = (net.minecraft.network.chat.Component) field.get(mc.gui.hud);
-            return message != null && message.getString().equals("Jesteś na granicy mapy!");
+            return message == null ? "" : message.getString();
         } catch (ReflectiveOperationException error) {
             throw new IllegalStateException(error);
         }

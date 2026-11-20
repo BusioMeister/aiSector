@@ -169,11 +169,21 @@ public class SectorManager {
     }
 
     public Sector getSectorAt(Location location) {
+        if (!isSectorWorld(location)) return null;
+        return getSector(location.getBlockX(), location.getBlockZ());
+    }
+
+    public Sector localSectorAtWorld(Location location) {
+        if (!isSectorWorld(location)) return null;
+        return getSectorByName(plugin.getConfig().getString("this-sector-name", ""));
+    }
+
+    private boolean isSectorWorld(Location location) {
         if (spawnLayout != null) {
             String world = isLockedSpawnBackend() ? spawnLayout.spawnWorld() : spawnLayout.gameWorld();
-            if (!world.equals(location.getWorld().getName())) return null;
+            return world.equals(location.getWorld().getName());
         }
-        return getSector(location.getBlockX(), location.getBlockZ());
+        return true;
     }
 
     boolean isLocalSector(Sector sector) {

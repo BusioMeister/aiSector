@@ -27,8 +27,9 @@ def main():
     parser.add_argument("--guild-create", action="store_true", help="Verify creation feedback without WorldEdit")
     parser.add_argument("--map-edge", action="store_true", help="Verify shared and outer bossbars plus map edge repulsion")
     parser.add_argument("--cooldown-push", action="store_true", help="Try to turn back immediately after a physical transfer")
+    parser.add_argument("--boat-boundary", action="store_true", help="Verify mounting and destroying boats at the seam")
     args = parser.parse_args()
-    if (args.two_clients or args.guild_create or args.map_edge or args.cooldown_push) and not args.sector_platform:
+    if (args.two_clients or args.guild_create or args.map_edge or args.cooldown_push or args.boat_boundary) and not args.sector_platform:
         parser.error("These checks require --sector-platform")
     starts = {"GameWest": 18, "GameEast": 24, "Spawn": 29}
     ports = {"GameWest": 25576, "GameEast": 25577, "Spawn": 25578, "Proxy": 25575}
@@ -98,9 +99,9 @@ def main():
         command([JAVA / "java.exe", "--add-modules", "jdk.attach", "-cp", run, "AttachSmoke",
                  (actor or client).pid, agent, payload])
         wait(output.exists, "agent result", 15)
-        if action in {"trace-command-walk", "trace-border-walk", "trace-edge-walk", "trace-cooldown-push"}:
+        if action in {"trace-command-walk", "trace-border-walk", "trace-edge-walk", "trace-cooldown-push", "trace-boat-walk"}:
             return output.read_text(), output.with_name(output.name + ".walk").read_text()
-        return output.read_text()
+        return output.read_text(encoding="utf-8")
 
     def position(role, player_name=name):
         pattern = rf"{player_name} has the following entity data: \[([-.\d]+)d, ([-.\d]+)d, ([-.\d]+)d\]"
@@ -224,7 +225,7 @@ def main():
                          if f"{name} -> {sector} has connected" in log("Proxy")), None)
             assert role, "Sponge button did not move the test player"
             results = {"sponge": {"target": role, "screens": trace}}
-            for index in range(0 if args.cooldown_push else 4):
+            for index in range(0 if args.cooldown_push or args.boat_boundary else 4):
                 west = role == "GameWest"
                 dest, yaw, side = ("GameEast", -90, 1) if west else ("GameWest", 90, -1)
                 send(role, f"minecraft:tp {name} {-.85 if west else .85} 141 0.5 {yaw} 0")
@@ -251,6 +252,42 @@ def main():
                 results[str(index + 1)] = {"target": dest, "screens": trace, "server_x": x,
                                            "server_y": y, "server_z": z, "border_confirmed": True}
                 role = dest
+            if args.boat_boundary:
+                time.sleep(1)
+                side = -1 if role == "GameWest" else 1
+                yaw = -90 if side < 0 else 90
+                other = "GameEast" if side < 0 else "GameWest"
+                send(role, "fill -12 140 -2 12 140 2 minecraft:blue_ice")
+                send(role, f"minecraft:tp {name} {2.0 * side} 141 0.5 {yaw} 0")
+                wait(lambda: abs(position(role)[0] - 2 * side) < .1, "boat test position at seam", 10)
+                send(role, f'summon minecraft:oak_chest_boat {2.0 * side} 141 0.5 {{Tags:["boundary_lab"]}}')
+                send(role, f'ride {name} mount @e[tag=boundary_lab,limit=1]')
+                wait(lambda: "couldn't start riding" in log(role), "mounting blocked at seam", 10)
+                send(role, 'kill @e[tag=boundary_lab]')
+                send(role, f"minecraft:tp {name} {6.0 * side} 141 0.5 {yaw} 0")
+                wait(lambda: abs(position(role)[0] - 6 * side) < .1, "boat test position outside restricted band", 10)
+                send(role, f'summon minecraft:oak_chest_boat {6.0 * side} 141 0.5 {{Tags:["boundary_lab"],Rotation:[{yaw}f,0f]}}')
+                send(role, 'item replace entity @e[tag=boundary_lab,limit=1] container.0 with minecraft:diamond')
+                send(role, f'ride {name} mount @e[tag=boundary_lab,limit=1]')
+                wait(lambda: "started riding" in log(role), "mounting allowed away from seam", 10)
+                before = log("Proxy").count(f"{name} -> {other} has connected")
+                send(role, f'data merge entity @e[tag=boundary_lab,limit=1] {{Motion:[{-2.0 * side}d,0d,0d]}}')
+                trace, walk = control("trace-boat-walk", str(yaw))
+                (run / "boat-boundary.txt").write_text(walk)
+                assert trace == "0 PLAY" and log("Proxy").count(f"{name} -> {other} has connected") == before
+                samples = [list(map(float, row.split())) for row in walk.splitlines()]
+                approach = next(i for i, row in enumerate(samples) if abs(row[1]) < 1)
+                assert any(row[1] * side >= 3 for row in samples[approach:]), walk
+                send(role, 'execute unless entity @e[tag=boundary_lab] run say BOAT_BOUNDARY_DESTROYED')
+                wait(lambda: "BOAT_BOUNDARY_DESTROYED" in log(role), "verify boat removed", 10)
+                send(role, 'execute if entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:diamond"}}] run say BOAT_BOUNDARY_CARGO')
+                wait(lambda: "BOAT_BOUNDARY_CARGO" in log(role), "verify dropped cargo", 10)
+                x, _, _ = position(role)
+                assert x * side > .5, x
+                results["boat_boundary"] = {"screens": trace, "sector": role, "server_x": x}
+                (run / "results.json").write_text(json.dumps(results, indent=2))
+                print("BOAT_BOUNDARY_OK", run, flush=True)
+                return
             if args.cooldown_push:
                 west = role == "GameWest"
                 dest, yaw, side = ("GameEast", -90, 1) if west else ("GameWest", 90, -1)
