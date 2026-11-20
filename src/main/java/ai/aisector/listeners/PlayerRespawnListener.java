@@ -7,12 +7,14 @@ import ai.aisector.shared.RedisChannels;
 import ai.aisector.sectors.SectorManager;
 import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
+import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,11 +33,19 @@ public class PlayerRespawnListener implements Listener {
         this.plugin = plugin;
         this.redisManager = redisManager;
         this.sectorManager = sectorManager;
+        Bukkit.getWorlds().forEach(this::enableImmediateRespawn);
         refreshGlobalSpawn();
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshGlobalSpawn, 20L, 20L);
     }
 
-    // W pliku PlayerRespawnListener.java
+    @EventHandler
+    public void onWorldLoad(WorldLoadEvent event) {
+        enableImmediateRespawn(event.getWorld());
+    }
+
+    private void enableImmediateRespawn(World world) {
+        world.setGameRule(GameRules.IMMEDIATE_RESPAWN, true);
+    }
 
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent event) {
@@ -59,6 +69,7 @@ public class PlayerRespawnListener implements Listener {
             String targetSector = spawnData.sector();
             if (sectorManager.getSectorByName(targetSector) == null) {
                 plugin.getLogger().warning("Ignoring global respawn for unknown sector " + targetSector);
+                showLocalNotice(player, notice);
                 return;
             }
             String deathSector = plugin.getPlayerDeathSectors().remove(player.getUniqueId());
@@ -98,7 +109,11 @@ public class PlayerRespawnListener implements Listener {
                 Map<String, String> transferKeys = Map.of(
                         "player:final_teleport_target:" + player.getUniqueId(), locationJson.toString(),
                         "player:is_respawning:" + player.getUniqueId(), notice == null ? "true" : notice.marker());
-                sectorManager.transferPlayerAsync(player, targetSector, null, transferKeys);
+                sectorManager.transferPlayerAsync(player, targetSector, null, transferKeys).whenComplete((ignored, error) -> {
+                    if (error != null) ai.aisector.utils.BukkitTaskScheduler.execute(plugin, () -> {
+                        if (Bukkit.getPlayer(player.getUniqueId()) == player) showLocalNotice(player, notice);
+                    });
+                });
             }
         } catch (RuntimeException exception) {
             showLocalNotice(player, notice);

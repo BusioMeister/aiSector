@@ -419,10 +419,9 @@ def main():
                          and f"{name} zabił {peer_name}" in log("peer"), "global kill announcement", 12)
                     wait(lambda: f"{peer_name}\n+55 pkt" in control("title"), "killer title", 8)
                     game_connections = log("Proxy").count(f"{peer_name} -> {game} has connected")
-                    control("respawn", actor=peer)
                     wait(lambda: log("Proxy").count(f"{peer_name} -> Spawn has connected") >= 2, "victim returns to Spawn", 15)
                     wait(lambda: control("client-state", actor=peer) == "PLAY", "victim respawn", 15)
-                    wait(lambda: name + "\nZabił Cię  •  −28 pkt" in control("title", actor=peer), "victim title", 8)
+                    wait(lambda: name + "\n−28 pkt" in control("title", actor=peer), "victim title", 8)
                     control("command", f"s {peer_name}")
                     wait(lambda: log("Proxy").count(f"{peer_name} -> {game} has connected") > game_connections,
                          "bring victim back to administrator sector", 15)

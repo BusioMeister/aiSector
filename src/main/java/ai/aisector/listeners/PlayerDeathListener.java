@@ -40,9 +40,8 @@ public class PlayerDeathListener implements Listener {
         Player killer = victim.getKiller();
         Integer refundableLoss = ranking.refundableLoss(victim, killer);
         if (killer != null && !killer.equals(victim)) {
-            var notice = ranking.deathNotice(killer, refundableLoss);
+            var notice = ranking.deathNotice(victim, killer, refundableLoss);
             plugin.getDeathNotices().put(victimUuid, notice);
-            notice.show(victim);
             org.bukkit.Bukkit.getScheduler().runTaskLater(plugin,
                     () -> plugin.getDeathNotices().remove(victimUuid, notice), 12_000L);
         } else {

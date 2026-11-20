@@ -12,7 +12,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 public record NetworkRanking(List<Entry> players, List<Entry> guilds, Map<String, Integer> playerPositions,
-                      Map<String, Integer> guildPositions) {
+                      Map<String, Integer> guildPositions, List<Entry> standings) {
     static final int LIMIT = 20;
     public record Entry(String id, String label, long points, long deaths) {}
     private static final Comparator<Entry> ORDER = Comparator.comparingLong(Entry::points).reversed()
@@ -37,10 +37,21 @@ public record NetworkRanking(List<Entry> players, List<Entry> guilds, Map<String
         }
         List<Entry> guildList = guildByTag.values().stream().sorted(ORDER).toList();
         return new NetworkRanking(playerList.stream().limit(LIMIT).toList(), guildList.stream().limit(LIMIT).toList(),
-                ranks(playerList), ranks(guildList));
+                ranks(playerList), ranks(guildList), playerList);
     }
 
     public record Movement(int before, int after) {}
+
+    public Movement estimateMovement(Entry before, Entry opponentBefore, Entry after, Entry opponentAfter) {
+        int previous = 1 + (ORDER.compare(opponentBefore, before) < 0 ? 1 : 0);
+        int current = 1 + (ORDER.compare(opponentAfter, after) < 0 ? 1 : 0);
+        for (Entry entry : standings) {
+            if (entry.id().equals(before.id()) || entry.id().equals(opponentBefore.id())) continue;
+            if (ORDER.compare(entry, before) < 0) previous++;
+            if (ORDER.compare(entry, after) < 0) current++;
+        }
+        return new Movement(previous, current);
+    }
 
     public static Movement comparePositions(Iterable<Document> documents, Entry before, Entry oldVictim,
                                             Entry after, Entry newVictim) {

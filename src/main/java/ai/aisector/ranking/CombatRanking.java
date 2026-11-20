@@ -12,7 +12,6 @@ import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
-import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -111,15 +110,28 @@ public final class CombatRanking {
 
     private void animate(Player killer, String tag, String victim, int gain, NetworkRanking.Movement position) {
         int delta = position == null ? 0 : position.before() - position.after();
-        String rank = position == null ? "" : delta > 0 ? "  ↑+" + delta : delta < 0 ? "  ↓−" + -delta : "  ↔0";
-        Component subtitle = Component.text("+" + gain + " pkt", NamedTextColor.GOLD)
-                .append(Component.text(rank, delta > 0 ? NamedTextColor.GREEN : NamedTextColor.GRAY));
-        killer.showTitle(Title.title(DeathNotice.name(tag, victim, NamedTextColor.YELLOW), subtitle,
-                Title.Times.times(Duration.ofMillis(150), Duration.ofSeconds(3), Duration.ofMillis(400))));
+        String rank = delta > 0 ? "  ↑+" + delta : "";
+        Component subtitle = Component.text("+" + gain + " pkt" + rank, NamedTextColor.GREEN);
+        killer.showTitle(Title.title(DeathNotice.name(tag, victim, NamedTextColor.GREEN), subtitle, DeathNotice.TIMES));
     }
 
-    public DeathNotice deathNotice(Player killer, Integer loss) {
-        return new DeathNotice(displayTag(guild(killer, plugin.getUserManager().getUser(killer))), killer.getName(), loss);
+    public DeathNotice deathNotice(Player victim, Player killer, Integer loss) {
+        var users = plugin.getUserManager();
+        var attacker = users.getUser(killer);
+        var dead = users.getUser(victim);
+        int dropped = 0;
+        var standings = plugin.getCachedRanking();
+        if (loss != null && attacker != null && dead != null && standings != null && !users.isTransferPending(killer)) {
+            var before = new Standing(victim, dead).entry();
+            var opponent = new Standing(killer, attacker).entry();
+            var after = new NetworkRanking.Entry(before.id(), before.label(), before.points() - loss,
+                    Rating.increment(dead.getDeaths()));
+            var opponentAfter = new NetworkRanking.Entry(opponent.id(), opponent.label(),
+                    opponent.points() + Rating.award(attacker.getRating(), dead.getRating()), opponent.deaths());
+            var movement = standings.estimateMovement(before, opponent, after, opponentAfter);
+            dropped = Math.max(0, movement.after() - movement.before());
+        }
+        return new DeathNotice(displayTag(guild(killer, attacker)), killer.getName(), loss, dropped);
     }
 
     public String announcement(Player killer, Player victim) {

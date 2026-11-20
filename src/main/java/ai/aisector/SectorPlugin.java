@@ -67,6 +67,7 @@ public class SectorPlugin extends JavaPlugin {
     private BukkitTask publisherTask;
     private final Map<UUID, String> playerDeathSectors = new HashMap<>();
     private final Map<UUID, ai.aisector.ranking.DeathNotice> deathNotices = new HashMap<>();
+    private ai.aisector.tab.NetworkTabList tabList;
     private MongoDBManager mongoDBManager;
     private UserManager userManager;
     private volatile MySQLManager mySQLManager;
@@ -232,7 +233,7 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
-        var tabList = new ai.aisector.tab.NetworkTabList(this, miningLevelManager);
+        tabList = new ai.aisector.tab.NetworkTabList(this, miningLevelManager);
         getServer().getPluginManager().registerEvents(tabList, this);
         tabList.start();
         getServer().getPluginManager().registerEvents(new ai.aisector.sectors.LockedSpawnListener(this), this);
@@ -553,6 +554,7 @@ public class SectorPlugin extends JavaPlugin {
     }
     public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
     public Map<UUID, ai.aisector.ranking.DeathNotice> getDeathNotices() { return deathNotices; }
+    public ai.aisector.tab.NetworkRanking getCachedRanking() { return tabList.currentRanking(); }
     public RedisManager getRedisManager() { return redisManager; }
     public SectorManager getSectorManager() { return sectorManager; }
     public MySQLManager getMySQLManager() {

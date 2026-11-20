@@ -74,6 +74,11 @@ public final class NetworkTabList implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::updatePlayers, 20L, 40L);
     }
 
+    public NetworkRanking currentRanking() {
+        Snapshot current = snapshot;
+        return current == null ? null : current.ranking();
+    }
+
     private void refresh() {
         if (Bukkit.getOnlinePlayers().isEmpty() || !refreshing.compareAndSet(false, true)) return;
         var mongo = plugin.getMongoDBManager();
