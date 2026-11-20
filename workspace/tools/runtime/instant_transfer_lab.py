@@ -221,7 +221,8 @@ def main():
                 def tab_ready():
                     text = control("tab-content")
                     return all(word in text for word in (name, "Ranga:", "Zabójstwa:", "Śmierci:",
-                                                          "Ranking gildii:", "TOP 20 GRACZY", "TOP 20 GILDII"))
+                                                          "Ranking gildii:", "TOP 20 GRACZY", "TOP 20 GILDII", "SLOTS=80",
+                                                          "#20  —"))
                 wait(tab_ready, "TAB on Spawn", 15)
                 assert log("client").count(f"Witaj, {name}!") == 1
             control("command", "god")

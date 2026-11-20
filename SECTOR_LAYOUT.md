@@ -79,9 +79,11 @@ bieżącego sektora. Zawartość łódki ze skrzynią wypada po stronie sektora.
 Publiczne wiadomości wejścia i wyjścia z backendów są wyłączone. Prywatne
 powitanie LastPlay.net jest wysyłane tylko przy pierwszym połączeniu z siecią.
 
-TAB zachowuje zwykłą listę graczy, dodaje statystyki, rangę serwerową
-(główna grupa LuckPerms lub Operator/Gracz), informacje o gildii oraz dwa
-rankingi całej sieci. Top 20 graczy jest liczone według liczby zabójstw
+Na 26.3 TAB ma stały układ 4 × 20, podobny do [TAB Layout](https://github.com/NEZNAMY/TAB/wiki/Feature-guide:-Layout).
+Kolumny pokazują statystyki gracza i sektora, Top 20 graczy, Top 20 gildii
+oraz informacje o gildii. Puste miejsca zachowują rozmiar panelu.
+Ranga serwerowa pochodzi z głównej grupy LuckPerms (lub Operator/Gracz),
+a top graczy jest liczony według liczby zabójstw
 (przy remisie mniej śmierci), a Top 20 gildii według sumy zabójstw aktualnych
 członków. Ranking odświeża się w tle co około 30 sekund.
 
