@@ -61,6 +61,16 @@ public class PlayerListener implements Listener {
         this.userManager = plugin.getUserManager();
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void suppressJoinBroadcast(PlayerJoinEvent event) {
+        event.joinMessage(null);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void suppressQuitBroadcast(PlayerQuitEvent event) {
+        event.quitMessage(null);
+    }
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
