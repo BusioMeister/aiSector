@@ -101,6 +101,17 @@ public class ClientControlAgent {
                     return;
                 } else if (action.equals("rotate-head")) {
                     rotateHead(mc, System.nanoTime());
+                } else if (action.equals("tab-content")) {
+                    var overlay = mc.gui.hud.getTabList();
+                    var header = overlay.getClass().getDeclaredField("header");
+                    var footer = overlay.getClass().getDeclaredField("footer");
+                    header.setAccessible(true);
+                    footer.setAccessible(true);
+                    var top = (net.minecraft.network.chat.Component) header.get(overlay);
+                    var bottom = (net.minecraft.network.chat.Component) footer.get(overlay);
+                    Files.writeString(output, (top == null ? "" : top.getString()) + "\n"
+                            + (bottom == null ? "" : bottom.getString()));
+                    return;
                 } else if (action.equals("actionbar")) {
                     Files.writeString(output, actionBarText(mc));
                     return;

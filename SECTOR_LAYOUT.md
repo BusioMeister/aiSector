@@ -74,6 +74,18 @@ Do 5 bloków od krawędzi nie można postawić łódki ani do niej wsiąść.
 Przekroczenie granicy łódką z graczem rozbija łódkę i odpycha graczy w głąb
 bieżącego sektora. Zawartość łódki ze skrzynią wypada po stronie sektora.
 
+## TAB i czat wejścia
+
+Publiczne wiadomości wejścia i wyjścia z backendów są wyłączone. Prywatne
+powitanie LastPlay.net jest wysyłane tylko przy pierwszym połączeniu z siecią.
+
+TAB zachowuje zwykłą listę graczy, dodaje statystyki, rangę serwerową
+(główna grupa LuckPerms lub Operator/Gracz), informacje o gildii oraz dwa
+rankingi całej sieci. Top 20 graczy jest liczone według liczby zabójstw
+(przy remisie mniej śmierci), a Top 20 gildii według sumy zabójstw aktualnych
+członków. Ranking odświeża się w tle co około 30 sekund.
+
+
 Na każdym backendzie gry Paper utrzymuje po jednym rzędzie chunków po obu
 stronach wspólnej granicy (128 na backend w tym układzie). Ładuje je
 asynchronicznie po starcie i zwalnia własne bilety przy wyłączeniu. Spawn nie

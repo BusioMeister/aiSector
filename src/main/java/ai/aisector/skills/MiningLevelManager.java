@@ -143,7 +143,7 @@ public class MiningLevelManager {
         }
     }
 
-    private String getPrimaryGroup(Player player) {
+    public String getPrimaryGroup(Player player) {
         if (luckPerms == null) return null;
         try {
             Object user = luckPerms.getUser().invoke(luckPerms.playerAdapter(), player);

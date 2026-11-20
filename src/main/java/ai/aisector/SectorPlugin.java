@@ -228,6 +228,9 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new UserDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
+        var tabList = new ai.aisector.tab.NetworkTabList(this, miningLevelManager);
+        getServer().getPluginManager().registerEvents(tabList, this);
+        tabList.start();
         getServer().getPluginManager().registerEvents(new ai.aisector.sectors.LockedSpawnListener(this), this);
         getServer().getPluginManager().registerEvents(new GuiClickListener(), this);
         getServer().getPluginManager().registerEvents(new StoneDropListener(this, miningLevelManager), this);

@@ -461,6 +461,20 @@ public class UserManager {
 
     public boolean isTransferPending(Player player) { return transferGuard.active(player); }
 
+    public void saveCombatStats(Player player, User user) {
+        if (closing || onlineUsers.get(player.getUniqueId()) != user || isTransferPending(player)) return;
+        UUID uuid = player.getUniqueId();
+        Document update = new Document("$set", new Document("name", player.getName())
+                .append("kills", user.getKills()).append("deaths", user.getDeaths()));
+        CompletableFuture<Void> write = queueProfileWrite(uuid, () -> persistUserUpdateWithGuildLock(uuid, update));
+        pendingWrites.add(write);
+        write.whenComplete((ignored, error) -> {
+            pendingWrites.remove(write);
+            if (error != null) plugin.getLogger().warning("Could not persist combat statistics for " + uuid
+                    + ": " + error.getMessage());
+        });
+    }
+
     private CompletableFuture<Void> queueProfileWrite(UUID uuid, Runnable operation) {
         return profileOperations.submit(uuid, () -> CompletableFuture.runAsync(operation, profileLoader));
     }

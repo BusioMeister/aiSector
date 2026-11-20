@@ -28,8 +28,9 @@ def main():
     parser.add_argument("--map-edge", action="store_true", help="Verify shared and outer bossbars plus map edge repulsion")
     parser.add_argument("--cooldown-push", action="store_true", help="Try to turn back immediately after a physical transfer")
     parser.add_argument("--boat-boundary", action="store_true", help="Verify mounting and destroying boats at the seam")
+    parser.add_argument("--network-tab", action="store_true", help="Verify TAB content and private welcome across sectors")
     args = parser.parse_args()
-    if (args.two_clients or args.guild_create or args.map_edge or args.cooldown_push or args.boat_boundary) and not args.sector_platform:
+    if (args.two_clients or args.guild_create or args.map_edge or args.cooldown_push or args.boat_boundary or args.network_tab) and not args.sector_platform:
         parser.error("These checks require --sector-platform")
     starts = {"GameWest": 18, "GameEast": 24, "Spawn": 29}
     ports = {"GameWest": 25576, "GameEast": 25577, "Spawn": 25578, "Proxy": 25575}
@@ -216,6 +217,13 @@ def main():
                 dict(sector="Spawn", x=2050.5, y=126, z=2050.5, yaw=180, pitch=0)))
             send("Spawn", f"op {name}")
             wait(lambda: f"Made {name} a server operator" in log("Spawn"), "grant test-only OP", 10)
+            if args.network_tab:
+                def tab_ready():
+                    text = control("tab-content")
+                    return all(word in text for word in (name, "Ranga:", "Zabójstwa:", "Śmierci:",
+                                                          "Ranking gildii:", "TOP 20 GRACZY", "TOP 20 GILDII"))
+                wait(tab_ready, "TAB on Spawn", 15)
+                assert log("client").count(f"Witaj, {name}!") == 1
             control("command", "god")
             send("Spawn", f"minecraft:tp {name} 2050.5 126 2048.5 180 0")
             time.sleep(1)
@@ -252,6 +260,15 @@ def main():
                 results[str(index + 1)] = {"target": dest, "screens": trace, "server_x": x,
                                            "server_y": y, "server_z": z, "border_confirmed": True}
                 role = dest
+            if args.network_tab:
+                wait(tab_ready, "TAB after transfer", 15)
+                assert log("client").count(f"Witaj, {name}!") == 1
+                assert not any(phrase in log("client") for phrase in (" joined the game", " left the game"))
+                (run / "network-tab.txt").write_text(control("tab-content"), encoding="utf-8")
+                results["network_tab"] = {"private_welcome": True, "top_20": True}
+                (run / "results.json").write_text(json.dumps(results, indent=2))
+                print("NETWORK_TAB_OK", run, flush=True)
+                return
             if args.boat_boundary:
                 time.sleep(1)
                 side = -1 if role == "GameWest" else 1

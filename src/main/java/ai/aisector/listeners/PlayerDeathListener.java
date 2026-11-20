@@ -90,6 +90,7 @@ public class PlayerDeathListener implements Listener {
         User victimUser = userManager.getUser(victim);
         if (victimUser != null) {
             victimUser.addDeath();
+            userManager.saveCombatStats(victim, victimUser);
         }
 
         // Zabójca (może być null, jeśli środowisko)
@@ -98,6 +99,7 @@ public class PlayerDeathListener implements Listener {
             User killerUser = userManager.getUser(killer);
             if (killerUser != null) {
                 killerUser.addKill();
+                userManager.saveCombatStats(killer, killerUser);
             }
         }
     }
