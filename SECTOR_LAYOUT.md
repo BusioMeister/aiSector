@@ -89,9 +89,11 @@ Rankingi odświeżają się w tle co około 30 sekund.
 
 ## Punkty PvP
 
-Każdy profil zaczyna od 1000 pkt. Wygrana daje 5–70 pkt (30 przy równym
-rankingu); porażka odbiera 5–50 pkt (20 przy równym rankingu, maksymalnie
-50 przy przewadze ofiary o co najmniej 900 pkt). Wynik nie spada poniżej zera.
+Każdy profil zaczyna od 1000 pkt. Przy równym rankingu wygrana daje
+30 pkt, a porażka odbiera 32 pkt. Maksima to +49 i −50. Gdy zwycięzca
+ma co najmniej 300 pkt przewagi albo ofiara ma najwyżej 1 pkt, ranking
+nie zmienia się. Jeśli punkty się zmieniają, strata ofiary jest większa
+niż zysk zabójcy. Cooldown przeciw tej samej osobie nie jest jeszcze aktywny.
 Zabójstwo członka innej gildii dodaje do rankingu gildii zabójcy tyle, ile
 otrzymał zabójca. Śmierć od środowiska zeruje serię, ale nie odbiera punktów.
 

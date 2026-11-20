@@ -3,16 +3,21 @@ package ai.aisector.ranking;
 public final class Rating {
     public static final int INITIAL = 1000;
     public static final int MAX = 1_000_000_000;
+    private static final int NO_REWARD_GAP = 300;
 
     private Rating() {}
 
     public static int award(int killer, int victim) {
-        int proposed = (int) Math.clamp(30L + ((long) victim - killer) / 10L, 5, 70);
-        return Math.min(proposed, MAX - killer);
+        long gap = (long) victim - killer;
+        int proposed = (int) Math.clamp(30 + (gap < 0 ? gap / 10 : gap / 50), 0, 49);
+        // Whenever points move, at least one leaves the combined total.
+        return Math.min(proposed, Math.min(MAX - killer, Math.max(0, loss(killer, victim) - 1)));
     }
 
     public static int loss(int killer, int victim) {
-        return Math.min(victim, (int) Math.clamp(20L + ((long) victim - killer) / 30L, 5, 50));
+        long gap = (long) victim - killer;
+        if (gap <= -NO_REWARD_GAP || victim <= 1 || killer >= MAX) return 0;
+        return Math.min(victim, (int) Math.clamp(32 + (gap < 0 ? gap / 10 : gap / 50), 0, 50));
     }
 
     public static int read(Object value, int fallback) {

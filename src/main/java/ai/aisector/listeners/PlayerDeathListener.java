@@ -36,6 +36,7 @@ public class PlayerDeathListener implements Listener {
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player victim = event.getEntity();
         UUID victimUuid = victim.getUniqueId();
+        plugin.getCombatTitle().cancel(victimUuid);
         Location location = victim.getLocation();
         Player killer = victim.getKiller();
         Integer refundableLoss = ranking.refundableLoss(victim, killer);

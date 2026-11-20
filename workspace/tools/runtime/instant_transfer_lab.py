@@ -417,11 +417,11 @@ def main():
                     send(game, f"minecraft:damage {peer_name} 1000 minecraft:generic_kill by {name}")
                     wait(lambda: f"{name} zabił {peer_name}" in log("client")
                          and f"{name} zabił {peer_name}" in log("peer"), "global kill announcement", 12)
-                    wait(lambda: f"{peer_name}\n+55 pkt" in control("title"), "killer title", 8)
+                    wait(lambda: f"{peer_name}  +35 pkt" in control("title"), "killer title", 8)
                     game_connections = log("Proxy").count(f"{peer_name} -> {game} has connected")
                     wait(lambda: log("Proxy").count(f"{peer_name} -> Spawn has connected") >= 2, "victim returns to Spawn", 15)
                     wait(lambda: control("client-state", actor=peer) == "PLAY", "victim respawn", 15)
-                    wait(lambda: name + "\n−28 pkt" in control("title", actor=peer), "victim title", 8)
+                    wait(lambda: name + "  −37 pkt" in control("title", actor=peer), "victim title", 8)
                     control("command", f"s {peer_name}")
                     wait(lambda: log("Proxy").count(f"{peer_name} -> {game} has connected") > game_connections,
                          "bring victim back to administrator sector", 15)
@@ -429,10 +429,10 @@ def main():
                     control("command", f"backup {peer_name}")
                     time.sleep(1)
                     assert control("backup-shift-click") == "OK"
-                    wait(lambda: "Zwrócono 28 pkt" in log("client"), "shift backup stat refund", 12)
+                    wait(lambda: "Zwrócono 37 pkt" in log("client"), "shift backup stat refund", 12)
                     send(game, f"astats {peer_name}")
                     wait(lambda: re.search(r"ranking: .*1250.*killstreak:", log(game)) is not None, "restored ranking", 10)
-                    results["combat_ranking"] = {"gain": 55, "loss": 28, "refund": 28}
+                    results["combat_ranking"] = {"gain": 35, "loss": 37, "refund": 37}
                     (run / "results.json").write_text(json.dumps(results, indent=2))
                     print("COMBAT_RANKING_OK", run, flush=True)
                     return

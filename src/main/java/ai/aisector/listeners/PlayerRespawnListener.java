@@ -125,7 +125,7 @@ public class PlayerRespawnListener implements Listener {
     private void showLocalNotice(Player player, DeathNotice notice) {
         if (notice == null) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (Bukkit.getPlayer(player.getUniqueId()) == player && !player.isDead()) notice.show(player);
+            if (Bukkit.getPlayer(player.getUniqueId()) == player && !player.isDead()) notice.show(player, plugin.getCombatTitle());
         }, 8L);
     }
 

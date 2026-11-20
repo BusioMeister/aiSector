@@ -8,7 +8,6 @@ import ai.aisector.utils.BukkitTaskScheduler;
 import com.mongodb.client.model.Projections;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -111,8 +110,7 @@ public final class CombatRanking {
     private void animate(Player killer, String tag, String victim, int gain, NetworkRanking.Movement position) {
         int delta = position == null ? 0 : position.before() - position.after();
         String rank = delta > 0 ? "  ↑+" + delta : "";
-        Component subtitle = Component.text("+" + gain + " pkt" + rank, NamedTextColor.GREEN);
-        killer.showTitle(Title.title(DeathNotice.name(tag, victim, NamedTextColor.GREEN), subtitle, DeathNotice.TIMES));
+        plugin.getCombatTitle().show(killer, tag, victim, "+" + gain + " pkt" + rank, NamedTextColor.GREEN, true);
     }
 
     public DeathNotice deathNotice(Player victim, Player killer, Integer loss) {

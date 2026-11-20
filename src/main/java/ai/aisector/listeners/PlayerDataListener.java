@@ -512,7 +512,7 @@ public class PlayerDataListener implements Listener {
             if (respawnMarker != null) {
                 var notice = ai.aisector.ranking.DeathNotice.parse(respawnMarker);
                 if (notice == null) showDeathTitle(player);
-                else notice.show(player);
+                else notice.show(player, plugin.getCombatTitle());
             }
             else if (sector != null) {
                 MessageUtil.sendTitle(player, "", "§7Połączono z sektorem §9" + sector.getName(), 300, 1000, 300);

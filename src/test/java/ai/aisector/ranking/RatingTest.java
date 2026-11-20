@@ -7,14 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class RatingTest {
     @Test void gainAndLossUseSeparateCurves() {
         assertEquals(30, Rating.award(1000, 1000));
-        assertEquals(20, Rating.loss(1000, 1000));
-        assertEquals(55, Rating.award(1000, 1250));
-        assertEquals(28, Rating.loss(1000, 1250));
-        assertEquals(70, Rating.award(1000, 1900));
-        assertEquals(49, Rating.loss(1000, 1899));
-        assertEquals(50, Rating.loss(1000, 1900));
-        assertEquals(5, Rating.loss(2000, 1000));
-        assertEquals(2, Rating.loss(1000, 2));
+        assertEquals(32, Rating.loss(1000, 1000));
+        assertEquals(35, Rating.award(1000, 1250));
+        assertEquals(37, Rating.loss(1000, 1250));
+        assertEquals(49, Rating.award(1000, 2000));
+        assertEquals(50, Rating.loss(1000, 2000));
+        assertEquals(0, Rating.loss(1300, 1000));
+        assertEquals(0, Rating.award(1300, 1000));
+        assertEquals(0, Rating.loss(1000, 2));
         assertEquals(0, Rating.award(Rating.MAX, 1250));
     }
 

@@ -67,6 +67,7 @@ public class SectorPlugin extends JavaPlugin {
     private BukkitTask publisherTask;
     private final Map<UUID, String> playerDeathSectors = new HashMap<>();
     private final Map<UUID, ai.aisector.ranking.DeathNotice> deathNotices = new HashMap<>();
+    private final ai.aisector.ranking.CombatTitle combatTitle = new ai.aisector.ranking.CombatTitle(this);
     private ai.aisector.tab.NetworkTabList tabList;
     private MongoDBManager mongoDBManager;
     private UserManager userManager;
@@ -554,6 +555,7 @@ public class SectorPlugin extends JavaPlugin {
     }
     public Map<UUID, String> getPlayerDeathSectors() { return playerDeathSectors; }
     public Map<UUID, ai.aisector.ranking.DeathNotice> getDeathNotices() { return deathNotices; }
+    public ai.aisector.ranking.CombatTitle getCombatTitle() { return combatTitle; }
     public ai.aisector.tab.NetworkRanking getCachedRanking() { return tabList.currentRanking(); }
     public RedisManager getRedisManager() { return redisManager; }
     public SectorManager getSectorManager() { return sectorManager; }
