@@ -57,6 +57,11 @@ stan protokołu klienta przy przełączeniu — nie jest to tryb bez ekranu.
 
 ## Chunks na granicy i dalsze prace nad Velocity
 
+Do 20 bloków przed najbliższą ścianą bossbar pokazuje nazwę sąsiedniego
+sektora albo „Granica mapy”. Przy próbie podejścia do zewnętrznej ściany
+na mniej niż 0,65 bloku gracz jest odpychany do środka i dostaje komunikat
+na action barze. Wspólne krawędzie sektorów nie odpychają.
+
 Na każdym backendzie gry Paper utrzymuje po jednym rzędzie chunków po obu
 stronach wspólnej granicy (128 na backend w tym układzie). Ładuje je
 asynchronicznie po starcie i zwalnia własne bilety przy wyłączeniu. Spawn nie

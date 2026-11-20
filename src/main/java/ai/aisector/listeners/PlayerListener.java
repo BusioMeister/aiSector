@@ -2,6 +2,7 @@ package ai.aisector.listeners;
 
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.Sector;
+import ai.aisector.sectors.SectorEdge;
 import ai.aisector.sectors.SectorArrival;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.sectors.WorldBorderManager;
@@ -20,6 +21,9 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.util.Vector;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +37,8 @@ public class PlayerListener implements Listener {
     private final WorldBorderManager borderManager;
     private final UserManager userManager;
     private final Map<UUID, BossBar> bossBars = new HashMap<>();
+    private final Map<UUID, Long> lastMapEdgeAlert = new HashMap<>();
+    private final java.util.Set<UUID> queuedEdgePushes = new java.util.HashSet<>();
     private final Map<UUID, UUID> pendingSectorTransfers = new ConcurrentHashMap<>();
 
     public PlayerListener(SectorPlugin plugin) {
@@ -55,18 +61,28 @@ public class PlayerListener implements Listener {
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
         Location from = event.getFrom(), to = event.getTo();
-        if (sectorManager.isLockedSpawnBackend() && to != null && !sectorManager.insideLockedSpawn(to)) {
-            event.setCancelled(true);
-            return;
-        }
         if (to == null || !from.getWorld().equals(to.getWorld())
-                || (from.getBlockX() == to.getBlockX() && from.getBlockZ() == to.getBlockZ())) return;
+                || (from.getX() == to.getX() && from.getZ() == to.getZ())) return;
         if (pendingSectorTransfers.containsKey(player.getUniqueId()) || userManager.isTransferPending(player)) {
-            event.setCancelled(true);
+            if (from.getBlockX() != to.getBlockX() || from.getBlockZ() != to.getBlockZ()) event.setCancelled(true);
             return;
         }
 
         Sector previous = sectorManager.getSectorAt(from);
+        boolean lockedSpawn = sectorManager.isLockedSpawnBackend();
+        if (previous != null) {
+            SectorEdge.Push push = SectorEdge.repulsion(previous, from.getX(), from.getZ(), to.getX(), to.getZ(),
+                    (x, z) -> lockedSpawn ? null : sectorManager.getSector(x, z));
+            if (push.active()) {
+                if (!previous.isInside(to.getBlockX(), to.getBlockZ())) event.setCancelled(true);
+                repelAtMapEdge(player, push);
+                return;
+            }
+        }
+        if (lockedSpawn && !sectorManager.insideLockedSpawn(to)) {
+            event.setCancelled(true);
+            return;
+        }
         if (previous == null || previous.isInside(to.getBlockX(), to.getBlockZ())) return;
         Sector destination = sectorManager.getSectorAt(to);
         if (destination == null) {
@@ -127,33 +143,64 @@ public class PlayerListener implements Listener {
         plugin.getScoreboardManager().removeBoard(player);
         borderManager.clear(player);
         pendingSectorTransfers.remove(player.getUniqueId());
+        lastMapEdgeAlert.remove(player.getUniqueId());
+        queuedEdgePushes.remove(player.getUniqueId());
         removeBossBar(player);
     }
 
     private void updateBorderAndBossBar(Player player, Location loc) {
         Sector sector = sectorManager.getSectorAt(loc);
         borderManager.sendWorldBorder(player, sector, loc);
-        double distance = sector == null ? Double.POSITIVE_INFINITY : sector.distanceToEdge(loc.getX(), loc.getZ());
-        if (distance <= WARNING_DISTANCE) showBossBar(player, (int) Math.max(0, distance));
-        else removeBossBar(player);
+        if (sector == null || sector.distanceToEdge(loc.getX(), loc.getZ()) > WARNING_DISTANCE) {
+            removeBossBar(player);
+            return;
+        }
+        SectorEdge edge = SectorEdge.nearest(sector, loc.getX(), loc.getZ());
+        Sector neighbor = sectorManager.isLockedSpawnBackend() ? null
+                : edge.neighbor(sector, loc.getBlockX(), loc.getBlockZ(), sectorManager::getSector);
+        showBossBar(player, neighbor, Math.max(0, edge.distance(sector, loc.getX(), loc.getZ())));
+    }
+
+    private void repelAtMapEdge(Player player, SectorEdge.Push push) {
+        UUID id = player.getUniqueId();
+        if (queuedEdgePushes.add(id)) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                queuedEdgePushes.remove(id);
+                if (!isCurrentSession(player) || userManager.isTransferPending(player)
+                        || pendingSectorTransfers.containsKey(id)) return;
+                Vector inward = new Vector(push.x(), 0, push.z()).normalize().multiply(0.65);
+                inward.setY(player.getVelocity().getY());
+                player.setVelocity(inward);
+            });
+        }
+        long now = System.nanoTime();
+        Long previous = lastMapEdgeAlert.get(id);
+        if (previous == null || now - previous >= 1_000_000_000L) {
+            lastMapEdgeAlert.put(id, now);
+            player.sendActionBar(Component.text("Jesteś na granicy mapy!", NamedTextColor.RED));
+        }
     }
 
     private boolean isCurrentSession(Player player) {
         return player.isOnline() && Bukkit.getPlayer(player.getUniqueId()) == player;
     }
 
-    private void showBossBar(Player player, int distance) {
+    private void showBossBar(Player player, Sector neighbor, double distance) {
         BossBar bar = bossBars.get(player.getUniqueId());
-        String title = "§cGranica sektora za " + distance + "§c kratek";
-        double progress = (double) distance / WARNING_DISTANCE;
+        int blocks = (int) Math.ceil(distance);
+        String title = neighbor == null ? "§cGranica mapy §7• §f" + blocks + " m"
+                : "§eZbliżasz się do sektora §f" + neighbor.getName() + " §7• §f" + blocks + " m";
+        BarColor color = neighbor == null ? BarColor.RED : BarColor.YELLOW;
+        double progress = Math.clamp(1 - (double) blocks / WARNING_DISTANCE, 0, 1);
         if (bar == null) {
-            bar = Bukkit.createBossBar(title, BarColor.RED, BarStyle.SOLID);
+            bar = Bukkit.createBossBar(title, color, BarStyle.SOLID);
             bar.setProgress(progress);
             bossBars.put(player.getUniqueId(), bar);
             bar.addPlayer(player);
             return;
         }
         if (!bar.getTitle().equals(title)) bar.setTitle(title);
+        if (bar.getColor() != color) bar.setColor(color);
         if (bar.getProgress() != progress) bar.setProgress(progress);
     }
 

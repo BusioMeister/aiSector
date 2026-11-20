@@ -25,9 +25,10 @@ def main():
     parser.add_argument("--sector-platform", action="store_true", help="Walk across the real aiSector border on a 50x50 platform")
     parser.add_argument("--two-clients", action="store_true", help="Exercise nearby player head updates during arrival")
     parser.add_argument("--guild-create", action="store_true", help="Verify creation feedback without WorldEdit")
+    parser.add_argument("--map-edge", action="store_true", help="Verify shared and outer bossbars plus map edge repulsion")
     args = parser.parse_args()
-    if (args.two_clients or args.guild_create) and not args.sector_platform:
-        parser.error("--two-clients and --guild-create require --sector-platform")
+    if (args.two_clients or args.guild_create or args.map_edge) and not args.sector_platform:
+        parser.error("These checks require --sector-platform")
     starts = {"GameWest": 18, "GameEast": 24, "Spawn": 29}
     ports = {"GameWest": 25576, "GameEast": 25577, "Spawn": 25578, "Proxy": 25575}
     if any(listening(port) for port in ports.values()):
@@ -96,7 +97,7 @@ def main():
         command([JAVA / "java.exe", "--add-modules", "jdk.attach", "-cp", run, "AttachSmoke",
                  (actor or client).pid, agent, payload])
         wait(output.exists, "agent result", 15)
-        if action in {"trace-command-walk", "trace-border-walk"}:
+        if action in {"trace-command-walk", "trace-border-walk", "trace-edge-walk"}:
             return output.read_text(), output.with_name(output.name + ".walk").read_text()
         return output.read_text()
 
@@ -231,6 +232,8 @@ def main():
                 time.sleep(.5)
                 if index < 2:
                     control("screenshot")
+                if args.map_edge:
+                    assert dest in control("boundary-title"), "Missing destination sector in border bossbar"
                 before = log("Proxy").count(f"{name} -> {dest} has connected")
                 print("PLATFORM_WALK", role, dest, flush=True)
                 trace, walk = control("trace-border-walk", str(yaw))
@@ -247,6 +250,27 @@ def main():
                 results[str(index + 1)] = {"target": dest, "screens": trace, "server_x": x,
                                            "server_y": y, "server_z": z, "border_confirmed": True}
                 role = dest
+            if args.map_edge:
+                edge_x = -8 if role == "GameWest" else 8
+                send(role, f"forceload add {edge_x} -502 {edge_x + 2} -480")
+                time.sleep(2)
+                send(role, f"fill {edge_x} 140 -500 {edge_x + 2} 140 -480 minecraft:stone")
+                send(role, f"fill {edge_x} 141 -500 {edge_x + 2} 143 -480 minecraft:air")
+                time.sleep(1)
+                send(role, f"minecraft:tp {name} {edge_x + .5} 141 -497.5 180 0")
+                assert abs(position(role)[2] - (-497.5)) < .05
+                assert "Granica mapy" in control("boundary-title")
+                trace, walk = control("trace-edge-walk", "180")
+                (run / "map-edge-walk.txt").write_text(walk)
+                samples = [row.split() for row in walk.splitlines()]
+                z = [float(row[3]) for row in samples]
+                assert trace == "0 PLAY" and any(row[6] == "true" for row in samples)
+                assert all(value >= -500.1 for value in z) and any(b - a > .12 for a, b in zip(z, z[1:])), z
+                assert position(role)[2] >= -500
+                results["map_edge"] = {"bossbar": True, "actionbar": True, "repelled": True}
+                (run / "results.json").write_text(json.dumps(results, indent=2))
+                print("MAP_EDGE_REPULSION_OK", run, flush=True)
+                return
             if args.guild_create:
                 send(role, f"op {name}")
                 wait(lambda: f"Made {name} a server operator" in log(role), "guild test-only OP", 10)
