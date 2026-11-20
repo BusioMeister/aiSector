@@ -141,19 +141,19 @@ public final class NetworkTabList implements Listener {
         var result = new ArrayList<>(java.util.Collections.nCopies(80, EMPTY));
         result.set(0, title("INFORMACJE O TOBIE"));
         result.set(2, field("Nick: ", player.getName()));
-        result.set(3, field("Ranga: ", clip(stats.rank())));
-        result.set(4, field("Zabójstwa: ", value(stats.kills())));
-        result.set(5, field("Śmierci: ", value(stats.deaths())));
-        result.set(6, field("Ranking: ", position(stats.playerRank())));
+        result.set(3, icon("★", GOLD, field("Ranga: ", clip(stats.rank()))));
+        result.set(4, icon("⚔", TextColor.color(0xff5555), field("Zabójstwa: ", value(stats.kills()))));
+        result.set(5, icon("☠", NamedTextColor.WHITE, field("Śmierci: ", value(stats.deaths()))));
+        result.set(6, icon("▲", GOLD, field("Ranking: ", position(stats.playerRank()))));
         result.set(8, title("TWÓJ SEKTOR"));
-        result.set(10, field("Sektor: ", plugin.getConfig().getString("this-sector-name", "—")));
+        result.set(10, icon("⌖", GOLD, field("Sektor: ", plugin.getConfig().getString("this-sector-name", "—"))));
         result.set(11, field("Gracze na sektorze: ", Bukkit.getOnlinePlayers().stream().filter(player::canSee).count()));
         result.set(17, WIDE);
         result.set(60, title("INFORMACJE O GILDII"));
-        result.set(62, field("Gildia: ", stats.tag() == null ? "Brak" : clip(stats.tag())));
+        result.set(62, icon("⚑", GOLD, field("Gildia: ", stats.tag() == null ? "Brak" : clip(stats.tag()))));
         result.set(63, field("Rola: ", stats.role()));
         result.set(64, field("Członkowie: ", stats.members()));
-        result.set(65, field("Ranking gildii: ", position(stats.guildRank())));
+        result.set(65, icon("▲", GOLD, field("Ranking gildii: ", position(stats.guildRank()))));
         result.set(68, title("LASTPLAY.NET"));
         result.set(70, Component.text("/g info", NamedTextColor.GRAY));
         result.set(71, Component.text("/spawn", NamedTextColor.GRAY));
@@ -186,6 +186,9 @@ public final class NetworkTabList implements Listener {
     }
 
     private static String clip(String text) { return text.length() <= 16 ? text : text.substring(0, 15) + "…"; }
+    private static Component icon(String text, TextColor color, Component field) {
+        return Component.text(text + " ", color).append(field);
+    }
     private static String value(Object value) { return value == null ? "—" : value.toString(); }
     private static Component title(String text) { return Component.text(text, GOLD); }
     private static String position(Integer value) { return value == null ? "—" : "#" + value; }
