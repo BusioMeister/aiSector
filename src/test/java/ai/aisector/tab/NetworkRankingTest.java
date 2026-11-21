@@ -11,6 +11,12 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NetworkRankingTest {
+    @Test void rankingRowNeverTruncatesAPlayerName() {
+        String nick = "WWWWWWWWWWWWWWWW";
+        var entries = java.util.Collections.nCopies(20, new NetworkRanking.Entry(id(1), nick, 9999, 0));
+        assertEquals("#20  " + nick + "  9999", PlainTextComponentSerializer.plainText()
+                .serialize(NetworkTabList.rankingRow(entries, 19, true)));
+    }
     private static String id(int i) { return new UUID(0, i).toString(); }
     private static Document player(int i, int kills, int deaths) {
         return new Document("uuid", id(i)).append("name", "Player" + i).append("rating", kills).append("deaths", deaths);

@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class NetworkTabList implements Listener {
     private static final int COLUMN_WIDTH = 128;
+    private static final int[] COLUMN_WIDTHS = {124, 156, 112, 120};
     private static final String ASCII_ADVANCES = "42466662444626266666666666225656766666666466666666666666666464663666665662653666666646666664247";
     private static final String LAYOUT_CHANNEL = "aisector:tab_panel";
     private static final byte[] HIDE_LISTED_ROWS = {1};
@@ -172,8 +173,8 @@ public final class NetworkTabList implements Listener {
         result.set(70, Component.text(Messages.text("network-tab-list.g-info"), NamedTextColor.GRAY));
         result.set(71, Component.text(Messages.text("network-tab-list.spawn"), NamedTextColor.GRAY));
         for (int i = 0; i < 20; i++) {
-            result.set(20 + i, rankingRow(ranking == null ? List.of() : ranking.players(), i));
-            result.set(40 + i, rankingRow(ranking == null ? List.of() : ranking.guilds(), i));
+            result.set(20 + i, rankingRow(ranking == null ? List.of() : ranking.players(), i, true));
+            result.set(40 + i, rankingRow(ranking == null ? List.of() : ranking.guilds(), i, false));
         }
         return result;
     }
@@ -202,8 +203,9 @@ public final class NetworkTabList implements Listener {
 
     private static void appendPanelRow(net.kyori.adventure.text.TextComponent.Builder panel, List<Component> columns) {
         var plain = PlainTextComponentSerializer.plainText();
-        for (Component column : columns) {
-            int remaining = COLUMN_WIDTH - panelTextWidth(plain.serialize(column));
+        for (int i = 0; i < columns.size(); i++) {
+            Component column = columns.get(i);
+            int remaining = COLUMN_WIDTHS[i] - panelTextWidth(plain.serialize(column));
             panel.append(Component.text("│ ", NamedTextColor.DARK_GRAY)).append(column);
             // In the vanilla font a normal space advances 4 px and a bold space 5 px.
             // Use the latter for the remainder, instead of rounding each column to 4 px.
@@ -237,17 +239,17 @@ public final class NetworkTabList implements Listener {
         }).sum();
     }
 
-    private static Component rankingRow(List<NetworkRanking.Entry> entries, int index) {
+    static Component rankingRow(List<NetworkRanking.Entry> entries, int index, boolean player) {
         var row = Component.text("#" + (index + 1) + "  ", index == 0 ? GOLD : NamedTextColor.GRAY);
         if (index >= entries.size()) return row.append(Component.text("—", NamedTextColor.DARK_GRAY));
         var entry = entries.get(index);
-        String kills = entry.points() < 10000 ? Long.toString(entry.points())
+        String points = entry.points() < 10000 ? Long.toString(entry.points())
                 : entry.points() < 1_000_000 ? entry.points() / 1_000 + "k"
                 : entry.points() < 1_000_000_000 ? entry.points() / 1_000_000 + "M" : entry.points() / 1_000_000_000 + "G";
-        String label = fit(entry.label(), COLUMN_WIDTH - 14
-                - panelTextWidth("#" + (index + 1) + "    " + kills));
+        String label = player ? entry.label() : fit(entry.label(), COLUMN_WIDTHS[2] - 14
+                - panelTextWidth("#" + (index + 1) + "    " + points));
         return row.append(Component.text(label, NamedTextColor.WHITE))
-                .append(Component.text("  " + kills, GOLD));
+                .append(Component.text("  " + points, GOLD));
     }
 
     private static String fit(String text, int width) {

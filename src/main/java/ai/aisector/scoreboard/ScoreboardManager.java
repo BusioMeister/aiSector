@@ -9,6 +9,8 @@ import ai.aisector.user.UserManager;
 import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.minimessage.tag.standard.StandardTags;
@@ -32,6 +34,7 @@ public class ScoreboardManager {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final String LOGO_CHAR = "\uE001";
+    private static final TextColor GOLD = TextColor.color(0xffca55);
 
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
 
@@ -70,24 +73,25 @@ public class ScoreboardManager {
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
         obj.setDisplayName(LOGO_CHAR);
 
-        registerTeamWithEntry(board, obj, "guild", "§7", 6);
+        registerTeamWithEntry(board, obj, "guild", "§7", 11);
 
 
         // tło
-        obj.getScore(ChatColor.of("#202020") + "               ").setScore(13);
+        obj.getScore("               ").setScore(14);
+        // The large logo glyph needs an extra empty row above the sector.
+        obj.getScore(" ").setScore(13);
 
         // stałe entry (niewidoczne) dla dynamicznych linii
         registerTeamWithEntry(board, obj, "sector",  "§0", 12);
-        obj.getScore(ChatColor.of("#000000") + "").setScore(11); // separator (inny string)
+        obj.getScore("    ").setScore(10);
 
         registerTeamWithEntry(board, obj, "kills",   "§1", 9);
         registerTeamWithEntry(board, obj, "deaths",  "§2", 8);
 
-        obj.getScore("  ").setScore(7); // separator
+        registerTeamWithEntry(board, obj, "rating", "§8", 7);
+        obj.getScore("  ").setScore(6);
 
-        registerTeamWithEntry(board, obj, "time",    "§3", 6);
-
-        obj.getScore("   ").setScore(5); // separator
+        registerTeamWithEntry(board, obj, "time",    "§3", 5);
 
         registerTeamWithEntry(board, obj, "date",    "§4", 4);
         registerTeamWithEntry(board, obj, "clock",   "§5", 3);
@@ -154,15 +158,21 @@ public class ScoreboardManager {
                 t.addEntry("§z");
                 obj.getScore("§z").setScore(1);
             }
-            t.prefix(Component.text(Messages.text("scoreboard-manager.wczytywanie", ChatColor.GRAY)));
+            t.prefix(LegacyComponentSerializer.legacySection().deserialize(
+                    Messages.text("scoreboard-manager.wczytywanie", ChatColor.GRAY)));
             return;
+        }
+        if (board.getTeam("loading") != null) {
+            board.resetScores("§z");
+            board.getTeam("loading").unregister();
         }
 
         int kills = user.getKills();
         int deaths = user.getDeaths();
 
         long totalSeconds = user.getPlayTimeSeconds();
-        long sessionSeconds = (System.currentTimeMillis() - user.getSessionStartMillis()) / 1000L;
+        long sessionSeconds = user.getSessionStartMillis() <= 0 ? 0L
+                : (System.currentTimeMillis() - user.getSessionStartMillis()) / 1000L;
         if (sessionSeconds > 0) totalSeconds += sessionSeconds;
         String timePlayed = formatPlayTime(totalSeconds);
 
@@ -182,19 +192,18 @@ public class ScoreboardManager {
             if (t == null) registerTeamWithEntry(board, obj, "sector", "§0", 12);
             t = board.getTeam("sector");
             Component label = gradient(Messages.text("scoreboard-manager.sektor"));
-            Component value = Component.text(" " + sector, NamedTextColor.WHITE);
+            Component value = Component.text(" " + sector, GOLD);
             t.prefix(label.append(value));
         }
         {
             Team tg = board.getTeam("guild");
-            if (tg == null) registerTeamWithEntry(board, obj, "guild", "§7", 6);
+            if (tg == null) registerTeamWithEntry(board, obj, "guild", "§7", 11);
             tg = board.getTeam("guild");
 
-            String guildTag = "-";
-            if (user != null && user.hasGuild()) guildTag = user.getGuildTag();
-
-            Component label = Component.text(Messages.text("scoreboard-manager.gildia", ChatColor.YELLOW));
-            Component value = Component.text(ChatColor.WHITE + guildTag);
+            String guildTag = user.hasGuild() ? "[" + user.getGuildTag() + "]" : "—";
+            Component label = LegacyComponentSerializer.legacySection()
+                    .deserialize(Messages.text("scoreboard-manager.gildia", ChatColor.GRAY));
+            Component value = Component.text(guildTag, GOLD);
             tg.prefix(label.append(value));
 
         }
@@ -221,7 +230,7 @@ public class ScoreboardManager {
         // SPĘDZONY CZAS (gradient tak jak chciałeś)
         {
             Team t = board.getTeam("time");
-            if (t == null) registerTeamWithEntry(board, obj, "time", "§3", 6);
+            if (t == null) registerTeamWithEntry(board, obj, "time", "§3", 5);
             t = board.getTeam("time");
             Component label = gradient(Messages.text("scoreboard-manager.spedzone"));
             Component value = Component.text(" " + timePlayed, NamedTextColor.WHITE);
@@ -234,7 +243,7 @@ public class ScoreboardManager {
             if (t == null) registerTeamWithEntry(board, obj, "date", "§4", 4);
             t = board.getTeam("date");
             String text = ChatColor.of("#dddddd") + "📅 " + ChatColor.WHITE + dateStr;
-            t.prefix(Component.text(text));
+            t.prefix(LegacyComponentSerializer.legacySection().deserialize(text));
         }
 
         // GODZINA
@@ -243,7 +252,7 @@ public class ScoreboardManager {
             if (t == null) registerTeamWithEntry(board, obj, "clock", "§5", 3);
             t = board.getTeam("clock");
             String text = ChatColor.of("#dddddd") + "🕒 " + ChatColor.WHITE + timeStr;
-            t.prefix(Component.text(text));
+            t.prefix(LegacyComponentSerializer.legacySection().deserialize(text));
         }
 
         // IP (gradient na nazwie)
@@ -252,9 +261,14 @@ public class ScoreboardManager {
             if (t == null) registerTeamWithEntry(board, obj, "ip", "§6", 2);
             t = board.getTeam("ip");
             Component label = gradient(Messages.text("scoreboard-manager.lastplay-net"));
-            Component prefix = Component.text(Messages.text("scoreboard-manager.ip", ChatColor.of("#aaaaaa")));
+            Component prefix = LegacyComponentSerializer.legacySection()
+                    .deserialize(Messages.text("scoreboard-manager.ip", ChatColor.GRAY));
             t.prefix(prefix.append(label));
         }
+
+        if (board.getTeam("rating") == null) registerTeamWithEntry(board, obj, "rating", "§8", 7);
+        board.getTeam("rating").prefix(Component.text(Messages.text("scoreboard-manager.rating"), NamedTextColor.GRAY)
+                .append(Component.text(user.getRating(), GOLD)));
     }
 
     private String formatPlayTime(long totalSeconds) {
