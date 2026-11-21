@@ -181,11 +181,20 @@ public final class NetworkTabList implements Listener {
 
     static Component renderPanel(List<Component> slots, Component buildLine) {
         var panel = Component.text().append(brand()).append(Component.newline());
-        appendPanelRow(panel, List.of(title(Messages.text("network-tab-list.gracz-i-sektor")), title(Messages.text("network-tab-list.top-20-graczy")),
-                title(Messages.text("network-tab-list.top-20-gildii")), title(Messages.text("network-tab-list.twoja-gildia"))));
+        var headings = List.of(title(Messages.text("network-tab-list.gracz-i-sektor")), title(Messages.text("network-tab-list.top-20-graczy")),
+                title(Messages.text("network-tab-list.top-20-gildii")), title(Messages.text("network-tab-list.twoja-gildia")));
+        int[] widths = COLUMN_WIDTHS.clone();
+        var plain = PlainTextComponentSerializer.plainText();
+        for (int col = 0; col < widths.length; col++) {
+            widths[col] = Math.max(widths[col], panelTextWidth(plain.serialize(headings.get(col))) + 12);
+            for (int row = 0; row < 20; row++) {
+                widths[col] = Math.max(widths[col], panelTextWidth(plain.serialize(slots.get(col * 20 + row))) + 12);
+            }
+        }
+        appendPanelRow(panel, headings, widths);
         for (int row = 0; row < 20; row++) {
             panel.append(Component.newline());
-            appendPanelRow(panel, List.of(slots.get(row), slots.get(20 + row), slots.get(40 + row), slots.get(60 + row)));
+            appendPanelRow(panel, List.of(slots.get(row), slots.get(20 + row), slots.get(40 + row), slots.get(60 + row)), widths);
         }
         return panel.append(Component.newline()).append(Component.text(
                         Messages.text("network-tab-list.lastplay-net-ranking-wedlug-punktow"), NamedTextColor.GRAY))
@@ -201,22 +210,19 @@ public final class NetworkTabList implements Listener {
         }
     }
 
-    private static void appendPanelRow(net.kyori.adventure.text.TextComponent.Builder panel, List<Component> columns) {
+    private static void appendPanelRow(net.kyori.adventure.text.TextComponent.Builder panel, List<Component> columns, int[] widths) {
         var plain = PlainTextComponentSerializer.plainText();
         for (int i = 0; i < columns.size(); i++) {
             Component column = columns.get(i);
-            int remaining = COLUMN_WIDTHS[i] - panelTextWidth(plain.serialize(column));
+            int remaining = widths[i] - panelTextWidth(plain.serialize(column));
             panel.append(Component.text("│ ", NamedTextColor.DARK_GRAY)).append(column);
             // In the vanilla font a normal space advances 4 px and a bold space 5 px.
             // Use the latter for the remainder, instead of rounding each column to 4 px.
             int fineSpaces = Math.floorMod(remaining, 4);
             int normalSpaces = (remaining - 5 * fineSpaces) / 4;
-            if (normalSpaces < 0) {
-                panel.append(Component.space());
-            } else {
-                if (normalSpaces > 0) panel.append(Component.text(" ".repeat(normalSpaces)));
-                if (fineSpaces > 0) panel.append(Component.text(" ".repeat(fineSpaces)).decorate(TextDecoration.BOLD));
-            }
+            // Every integer >= 12 can be represented using 4 px and 5 px spaces.
+            if (normalSpaces > 0) panel.append(Component.text(" ".repeat(normalSpaces)));
+            if (fineSpaces > 0) panel.append(Component.text(" ".repeat(fineSpaces)).decorate(TextDecoration.BOLD));
         }
         panel.append(Component.text("│", NamedTextColor.DARK_GRAY));
     }
