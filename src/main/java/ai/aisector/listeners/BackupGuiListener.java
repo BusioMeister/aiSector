@@ -1,5 +1,8 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+import ai.aisector.utils.PluginMenu;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
 import ai.aisector.database.RedisManager;
@@ -48,18 +51,18 @@ public final class BackupGuiListener implements Listener {
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player admin)) return;
-        String title = event.getView().getTitle();
-        if (title.startsWith("§8Backupy gracza: §c")) {
+        var inventory = event.getView().getTopInventory();
+        if (PluginMenu.is(inventory, PluginMenu.Kind.BACKUPS)) {
             handleMainGuiClick(event, admin);
-        } else if (title.startsWith("§8Podgląd zgonu: ")) {
+        } else if (PluginMenu.is(inventory, PluginMenu.Kind.BACKUP_VIEW)) {
             handleViewGuiClick(event, admin);
         }
     }
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
-        String title = event.getView().getTitle();
-        if (title.startsWith("§8Backupy gracza: §c") || title.startsWith("§8Podgląd zgonu: ")) {
+        var inventory = event.getView().getTopInventory();
+        if (PluginMenu.is(inventory, PluginMenu.Kind.BACKUPS) || PluginMenu.is(inventory, PluginMenu.Kind.BACKUP_VIEW)) {
             event.setCancelled(true);
         }
     }
@@ -71,15 +74,15 @@ public final class BackupGuiListener implements Listener {
         if (clickedItem == null || clickedItem.getType() != Material.PLAYER_HEAD
                 || !clickedItem.hasItemMeta()) return;
         ItemMeta meta = clickedItem.getItemMeta();
-        if (meta == null || meta.getLore() == null || meta.getLore().isEmpty()) return;
-
-        String idLine = meta.getLore().get(meta.getLore().size() - 1);
-        if (!idLine.startsWith("§0ID:")) return;
+        if (meta == null) return;
+        String id = meta.getPersistentDataContainer().get(org.bukkit.NamespacedKey.fromString("aisector:backup-id"),
+                org.bukkit.persistence.PersistentDataType.STRING);
+        if (id == null) return;
         ObjectId recordId;
         try {
-            recordId = new ObjectId(idLine.substring(5));
+            recordId = new ObjectId(id);
         } catch (IllegalArgumentException exception) {
-            admin.sendMessage("§cNieprawidłowy identyfikator backupu.");
+            admin.sendMessage(Messages.text("backup-gui-listener.nieprawidlowy-identyfikator-backupu"));
             return;
         }
 
@@ -92,9 +95,9 @@ public final class BackupGuiListener implements Listener {
                     Player currentAdmin = Bukkit.getPlayer(adminUuid);
                     if (currentAdmin != admin || !admin.isOnline()) return;
                     if (error != null) {
-                        currentAdmin.sendMessage("§cNie udało się odczytać backupu.");
+                        currentAdmin.sendMessage(Messages.text("backup-gui-listener.nie-udalo-sie-odczytac-backupu"));
                     } else if (record == null) {
-                        currentAdmin.sendMessage("§cWystąpił błąd: Nie znaleziono tego zapisu śmierci.");
+                        currentAdmin.sendMessage(Messages.text("backup-gui-listener.wystapil-blad-nie-znaleziono-tego-zapisu-smierci"));
                     } else if (viewOnly) {
                         openBackupView(currentAdmin, record);
                     } else if (restoreClick) {
@@ -107,16 +110,17 @@ public final class BackupGuiListener implements Listener {
         String targetName = record.getString("victim_name");
         String invData = record.getString("inventory_data");
         if (invData == null || invData.length() > MAX_BACKUP_JSON_CHARS) {
-            admin.sendMessage("§cDane ekwipunku backupu są puste lub zbyt duże.");
+            admin.sendMessage(Messages.text("backup-gui-listener.dane-ekwipunku-backupu-sa-puste-lub-zbyt"));
             return;
         }
         try {
-            Inventory viewGui = InventorySerializer.createGuiFromJson(invData, "§8Podgląd zgonu: " + targetName);
+            Inventory viewGui = InventorySerializer.fillGuiFromJson(invData, new PluginMenu(
+                    PluginMenu.Kind.BACKUP_VIEW, targetName, 45, Messages.text("backup-gui-listener.preview-title", targetName)).getInventory());
 
             ItemStack backButton = new ItemStack(Material.BARRIER);
             ItemMeta backMeta = backButton.getItemMeta();
-            backMeta.setDisplayName("§cPowrót");
-            backMeta.setLore(Collections.singletonList("§7Kliknij, aby wrócić do listy zgonów."));
+            backMeta.setDisplayName(Messages.text("backup-gui-listener.powrot"));
+            backMeta.setLore(Collections.singletonList(Messages.text("backup-gui-listener.kliknij-aby-wrocic-do-listy-zgonow")));
             backButton.setItemMeta(backMeta);
             viewGui.setItem(44, backButton);
 
@@ -127,7 +131,7 @@ public final class BackupGuiListener implements Listener {
             for (int i = 41; i < 44; i++) viewGui.setItem(i, filler);
             admin.openInventory(viewGui);
         } catch (IOException | RuntimeException exception) {
-            admin.sendMessage("§cWystąpił błąd podczas odczytu ekwipunku.");
+            admin.sendMessage(Messages.text("backup-gui-listener.wystapil-blad-podczas-odczytu-ekwipunku"));
             plugin.getLogger().warning("Could not read death backup inventory: " + exception.getMessage());
         }
     }
@@ -135,7 +139,7 @@ public final class BackupGuiListener implements Listener {
     private void restoreBackup(Player admin, ObjectId recordId, Document record, boolean restoreStats) {
         String restoredBy = record.getString("restored_by");
         if (restoredBy != null && !restoredBy.equals("Nikt")) {
-            admin.sendMessage("§cTen ekwipunek został już przywrócony przez §e" + restoredBy + "§c.");
+            admin.sendMessage(Messages.text("backup-gui-listener.ten-ekwipunek-zostal-juz-przywrocony-przez", restoredBy));
             return;
         }
 
@@ -143,21 +147,21 @@ public final class BackupGuiListener implements Listener {
         String victimUuid = record.getString("victim_uuid");
         String inventoryData = record.getString("inventory_data");
         if (inventoryData == null || inventoryData.length() > MAX_BACKUP_JSON_CHARS) {
-            admin.sendMessage("§cDane ekwipunku backupu są puste lub zbyt duże.");
+            admin.sendMessage(Messages.text("backup-gui-listener.dane-ekwipunku-backupu-sa-puste-lub-zbyt"));
             return;
         }
         UUID victimId;
         try {
             victimId = UUID.fromString(victimUuid);
         } catch (RuntimeException exception) {
-            admin.sendMessage("§cBackup zawiera nieprawidłowy UUID gracza.");
+            admin.sendMessage(Messages.text("backup-gui-listener.backup-zawiera-nieprawidlowy-uuid-gracza"));
             return;
         }
         InventorySerializer.PreparedInventory preparedInventory;
         try {
             preparedInventory = InventorySerializer.prepareInventory(inventoryData);
         } catch (RuntimeException malformedInventory) {
-            admin.sendMessage("§cDane ekwipunku backupu są uszkodzone; backup nie został oznaczony jako przywrócony.");
+            admin.sendMessage(Messages.text("backup-gui-listener.dane-ekwipunku-backupu-sa-uszkodzone-backup-nie"));
             plugin.getLogger().warning("Refusing malformed death backup " + recordId + ": "
                     + malformedInventory.getMessage());
             return;
@@ -170,8 +174,8 @@ public final class BackupGuiListener implements Listener {
                 ? points : null;
         if (restoreStats && (refund == null || victim == null || plugin.getUserManager().getUser(victim) == null
                 || plugin.getUserManager().isTransferPending(victim))) {
-            admin.sendMessage(refund == null ? "§cTen backup nie ma zapisanych statystyk do zwrotu."
-                    : "§cAby zwrócić statystyki, gracz musi być na Twoim sektorze z wczytanym profilem.");
+            admin.sendMessage(refund == null ? Messages.text("backup-gui-listener.ten-backup-nie-ma-zapisanych-statystyk-do")
+                    : Messages.text("backup-gui-listener.aby-zwrocic-statystyki-gracz-musi-byc-na"));
             return;
         }
 
@@ -184,11 +188,11 @@ public final class BackupGuiListener implements Listener {
                 boolean scheduled = BukkitTaskScheduler.execute(plugin, () -> {
                     Player currentAdmin = Bukkit.getPlayer(adminUuid);
                     if (error != null) {
-                        messageIfOnline(currentAdmin, "§cNie udało się oznaczyć backupu jako przywróconego.");
+                        messageIfOnline(currentAdmin, Messages.text("backup-gui-listener.nie-udalo-sie-oznaczyc-backupu-jako-przywroconego"));
                         return;
                     }
                     if (result.getModifiedCount() == 0) {
-                        messageIfOnline(currentAdmin, "§cTen ekwipunek został już przywrócony przez innego administratora.");
+                        messageIfOnline(currentAdmin, Messages.text("backup-gui-listener.ten-ekwipunek-zostal-juz-przywrocony-przez-innego"));
                         return;
                     }
 
@@ -196,7 +200,7 @@ public final class BackupGuiListener implements Listener {
                     if (restoreStats && (currentVictim != victim || !victim.isOnline()
                             || plugin.getUserManager().getUser(victim) == null)) {
                         rollbackRestoreMarker(recordId, adminName, claimToken);
-                        messageIfOnline(currentAdmin, "§cGracz zmienił sektor lub wyszedł. Backup pozostaje dostępny.");
+                        messageIfOnline(currentAdmin, Messages.text("backup-gui-listener.gracz-zmienil-sektor-lub-wyszedl-backup-pozostaje"));
                         return;
                     }
                     if (currentVictim == null || !currentVictim.isOnline()) {
@@ -205,7 +209,7 @@ public final class BackupGuiListener implements Listener {
                     }
                     if (plugin.getUserManager().isTransferPending(currentVictim)) {
                         rollbackRestoreMarker(recordId, adminName, claimToken);
-                        messageIfOnline(currentAdmin, "§cGracz jest w trakcie transferu. Ponów przywrócenie po jego zakończeniu.");
+                        messageIfOnline(currentAdmin, Messages.text("backup-gui-listener.gracz-jest-w-trakcie-transferu-ponow-przywrocenie"));
                         return;
                     }
                     try {
@@ -213,10 +217,10 @@ public final class BackupGuiListener implements Listener {
                     } catch (RuntimeException applyError) {
                         plugin.getLogger().severe("Backup apply failed after durable claim " + recordId
                                 + "; manual review required: " + applyError.getMessage());
-                        messageIfOnline(currentAdmin, "§cNie udało się potwierdzić przywrócenia; wymagana ręczna weryfikacja.");
+                        messageIfOnline(currentAdmin, Messages.text("backup-gui-listener.nie-udalo-sie-potwierdzic-przywrocenia-wymagana-reczna"));
                         return;
                     }
-                    currentVictim.sendMessage("§aTwój ekwipunek ze śmierci został przywrócony przez administratora.");
+                    currentVictim.sendMessage(Messages.text("backup-gui-listener.twoj-ekwipunek-ze-smierci-zostal-przywrocony-przez"));
                     if (restoreStats) {
                         var users = plugin.getUserManager();
                         var profile = users.getUser(currentVictim);
@@ -228,11 +232,11 @@ public final class BackupGuiListener implements Listener {
                                 BukkitTaskScheduler.execute(plugin, () -> {
                                     Player operator = Bukkit.getPlayer(adminUuid);
                                     if (statsError != null) {
-                                        messageIfOnline(operator, "§eOddano ekwipunek, ale zapis statystyk nie został potwierdzony.");
+                                        messageIfOnline(operator, Messages.text("backup-gui-listener.oddano-ekwipunek-ale-zapis-statystyk-nie-zostal"));
                                     } else {
-                                        messageIfOnline(operator, "§aZwrócono " + returned + " pkt i skorygowano śmierć.");
+                                        messageIfOnline(operator, Messages.text("backup-gui-listener.zwrocono-pkt-i-skorygowano-smierc", returned));
                                         if (Bukkit.getPlayer(victimId) == currentVictim)
-                                            currentVictim.sendMessage("§aPrzywrócono statystyki z backupu: +" + returned + " pkt, −1 śmierć.");
+                                            currentVictim.sendMessage(Messages.text("backup-gui-listener.przywrocono-statystyki-z-backupu-pkt-1-smierc", returned));
                                     }
                                 }));
                     }
@@ -255,9 +259,8 @@ public final class BackupGuiListener implements Listener {
                         BukkitTaskScheduler.execute(plugin, () -> {
                             Player currentAdmin = Bukkit.getPlayer(adminUuid);
                             messageIfOnline(currentAdmin, pendingBackupExists
-                                    ? "§cGracz ma już oczekujący backup; obecny backup nie został nadpisany."
-                                    : "§cNie można potwierdzić zapisu oczekującego backupu. "
-                                    + "Marker pozostaje zablokowany do ręcznej weryfikacji.");
+                                    ? Messages.text("backup-gui-listener.gracz-ma-juz-oczekujacy-backup-obecny-backup-2")
+                                    : Messages.text("backup-gui-listener.nie-mozna-potwierdzic-zapisu-oczekujacego-backupu-marker"));
                         });
                         return;
                     }
@@ -287,9 +290,8 @@ public final class BackupGuiListener implements Listener {
                             Player currentAdmin = Bukkit.getPlayer(adminUuid);
                             if (currentAdmin != null) {
                                 currentAdmin.sendMessage(pendingBackupExists
-                                        ? "§cGracz ma już oczekujący backup; obecny backup nie został nadpisany."
-                                        : "§cNie udało się zakończyć przywracania backupu. "
-                                        + "Sprawdź jego stan przed ponowieniem operacji.");
+                                        ? Messages.text("backup-gui-listener.gracz-ma-juz-oczekujacy-backup-obecny-backup")
+                                        : Messages.text("backup-gui-listener.nie-udalo-sie-zakonczyc-przywracania-backupu-sprawdz"));
                             }
                         });
                         if (pendingBackupExists) {
@@ -350,7 +352,7 @@ public final class BackupGuiListener implements Listener {
 
     private void finishRestore(Player admin, String targetName) {
         if (admin == null) return;
-        admin.sendMessage("§aPomyślnie przywrócono backup dla gracza §e" + targetName + "§a.");
+        admin.sendMessage(Messages.text("backup-gui-listener.pomyslnie-przywrocono-backup-dla-gracza", targetName));
         admin.closeInventory();
     }
 
@@ -363,7 +365,7 @@ public final class BackupGuiListener implements Listener {
         if (event.getClickedInventory() != event.getView().getTopInventory()) return;
         if (event.getSlot() == 44 && event.getCurrentItem() != null
                 && event.getCurrentItem().getType() == Material.BARRIER) {
-            String targetName = event.getView().getTitle().substring(17);
+            String targetName = ((PluginMenu) event.getView().getTopInventory().getHolder()).target();
             admin.performCommand("backup " + targetName);
         }
     }

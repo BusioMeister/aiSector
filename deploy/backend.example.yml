@@ -1,0 +1,15 @@
+# Copy to plugins/aiSECTOR/config.yml on each Paper server.
+# Set this to the corresponding name from velocity.example.toml.
+this-sector-name: "Spawn"
+
+redis:
+  host: "127.0.0.1"
+  port: 6380
+  password: ""
+
+mongodb:
+  uri: "mongodb://127.0.0.1:27017"
+  database: "aisector"
+
+mysql:
+  enabled: false

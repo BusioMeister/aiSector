@@ -1,5 +1,7 @@
 package ai.aisector.cobblex;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
@@ -21,7 +23,7 @@ public class CobbleXCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!(sender instanceof Player)) { sender.sendMessage("Only players."); return true; }
+        if (!(sender instanceof Player)) { sender.sendMessage(Messages.text("cobble-x-command.only-players")); return true; }
         Player p = (Player) sender;
 
         int needed = 9 * 64;
@@ -30,7 +32,7 @@ public class CobbleXCommand implements CommandExecutor {
             have += is.getAmount();
         }
         if (have < needed) {
-            p.sendMessage("§cPotrzebujesz 9×64 Cobblestone (576), masz: " + have + ".");
+            p.sendMessage(Messages.text("cobble-x-command.potrzebujesz-964-cobblestone-576-masz", have));
             return true;
         }
 
@@ -49,7 +51,7 @@ public class CobbleXCommand implements CommandExecutor {
 
         int amount = 1 + rnd.nextInt(3); // 1..3
         p.getInventory().addItem(ai.aisector.cobblex.CobbleXItems.createCobbleX(plugin, amount));
-        p.sendMessage("§aOtrzymano §2" + amount + "× CobbleX.");
+        p.sendMessage(Messages.text("cobble-x-command.otrzymano-cobblex", amount));
         return true;
     }
 }

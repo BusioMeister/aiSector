@@ -1,5 +1,7 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import net.kyori.adventure.text.Component;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -8,7 +10,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 public class GuiClickListener implements Listener {
 
     // Tytuł naszego GUI, którego będziemy pilnować
-    private final Component guiTitle = Component.text("Informacje o Sektorach");
+    private final Component guiTitle = Component.text(Messages.text("gui-click-listener.informacje-o-sektorach"));
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {

@@ -1,5 +1,7 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
 import ai.aisector.guilds.Guild;
@@ -90,7 +92,7 @@ public class PlayerDataListener implements Listener {
                     if (loadError != null || user == null) {
                         plugin.getLogger().severe("Could not load profile for " + player.getName() + ": "
                                 + (loadError == null ? "empty profile result" : loadError.getMessage()));
-                        player.kickPlayer("§cWystąpił krytyczny błąd podczas ładowania Twojego profilu.");
+                        player.kickPlayer(Messages.text("player-data-listener.wystapil-krytyczny-blad-podczas-ladowania-twojego-profilu"));
                         return;
                     }
                     reconcileGuildMembershipAndConfigure(player, user, network);
@@ -209,7 +211,7 @@ public class PlayerDataListener implements Listener {
                         if (error != null) {
                             plugin.getLogger().severe("Failed to load join/transfer state for " + player.getName()
                                     + ": " + error.getMessage());
-                            player.kickPlayer("§cNie udało się bezpiecznie wczytać danych sieciowych. Połącz się ponownie za chwilę.");
+                            player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-bezpiecznie-wczytac-danych-sieciowych"));
                             return;
                         }
                         try {
@@ -217,7 +219,7 @@ public class PlayerDataListener implements Listener {
                         } catch (RuntimeException exception) {
                             plugin.getLogger().severe("Failed to apply join/transfer state for " + player.getName()
                                     + ": " + exception.getMessage());
-                            player.kickPlayer("§cNie udało się bezpiecznie wczytać danych sieciowych. Połącz się ponownie za chwilę.");
+                            player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-bezpiecznie-wczytac-danych-sieciowych"));
                         }
                     }));
 
@@ -247,7 +249,7 @@ public class PlayerDataListener implements Listener {
             } catch (RuntimeException exception) {
                 plugin.getLogger().severe("Transfer snapshot for " + player.getName()
                         + " could not be restored; the Redis copy was retained: " + exception.getMessage());
-                player.kickPlayer("§cNie udało się bezpiecznie przywrócić Twoich danych. Spróbuj ponownie za chwilę.");
+                player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-bezpiecznie-przywrocic-twoich-danych"));
                 return;
             }
         }
@@ -260,7 +262,7 @@ public class PlayerDataListener implements Listener {
                 throw new IllegalArgumentException("Pending backup exceeds the 1 MiB limit");
             }
             InventorySerializer.deserializeAndUpdateInventory(player.getInventory(), state.pendingBackup());
-            player.sendMessage("§aTwój ekwipunek z backupu został przywrócony.");
+            player.sendMessage(Messages.text("player-data-listener.twoj-ekwipunek-z-backupu-zostal-przywrocony"));
         }
 
         // The async spawn hook already submitted this exact request to Paper. Movement or mouse
@@ -320,7 +322,7 @@ public class PlayerDataListener implements Listener {
                 return;
             }
             plugin.getLogger().warning("No safe random landing found in " + sector.getName());
-            player.sendMessage("§eNie znaleziono bezpiecznego miejsca. Wracasz na spawn.");
+            player.sendMessage(Messages.text("player-data-listener.nie-znaleziono-bezpiecznego-miejsca-wracasz-na-spawn"));
             if (restored != null) {
                 player.getInventory().setHeldItemSlot(restored.heldSlot());
                 restored.flight().apply(player);
@@ -328,12 +330,12 @@ public class PlayerDataListener implements Listener {
             try {
                 sectorManager.returnAfterFailedRandomArrival(player, sector).whenComplete((ignored, transferError) -> {
                     if (transferError != null) scheduleMainThread(() -> {
-                        if (isCurrentSession(player)) player.kickPlayer("§cNie udało się wrócić na spawn. Połącz się ponownie.");
+                        if (isCurrentSession(player)) player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-wrocic-na-spawn-polacz"));
                     });
                 });
             } catch (RuntimeException transferError) {
                 plugin.getLogger().warning("Could not prepare safe return for " + player.getUniqueId() + ": " + transferError.getMessage());
-                player.kickPlayer("§cNie udało się przygotować powrotu na spawn. Połącz się ponownie.");
+                player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-przygotowac-powrotu-na-spawn"));
             }
         });
     }
@@ -360,14 +362,14 @@ public class PlayerDataListener implements Listener {
                 plugin.getGuildTagManager().updateTagsFor(player);
                  if (restored != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, restored.heldSlot());
                 sendWelcomePackage(player, state.respawnMarker());
-                if (consumedForced) player.sendMessage("§aZostałeś przeniesiony na sektor §e" + state.forcedSector() + "§a.");
+                if (consumedForced) player.sendMessage(Messages.text("player-data-listener.zostales-przeniesiony-na-sektor", state.forcedSector()));
             };
             if (destination == null) { complete.run(); return; }
             ai.aisector.utils.AsyncTeleportHandoff.start(() -> player.teleportAsync(destination),
                     task -> BukkitTaskScheduler.execute(plugin, task), () -> isCurrentSession(player), complete,
                     error -> {
                         plugin.getLogger().severe("Join teleport failed; Redis state retained for " + player.getUniqueId());
-                        player.kickPlayer("§cNie udało się bezpiecznie przywrócić lokalizacji. Połącz się ponownie.");
+                        player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-bezpiecznie-przywrocic-lokalizacji-polacz"));
                     });
     }
 
@@ -515,7 +517,7 @@ public class PlayerDataListener implements Listener {
                 else notice.show(player, plugin.getCombatTitle());
             }
             else if (sector != null) {
-                MessageUtil.sendTitle(player, "", "§7Połączono z sektorem §9" + sector.getName(), 300, 1000, 300);
+                MessageUtil.sendTitle(player, "", Messages.text("player-data-listener.polaczono-z-sektorem", sector.getName()), 300, 1000, 300);
             }
         }, 2L);
     }
@@ -527,7 +529,7 @@ public class PlayerDataListener implements Listener {
                 java.time.Duration.ofMillis(500)  // fadeOut
         );
         net.kyori.adventure.title.Title title = net.kyori.adventure.title.Title.title(
-                Component.text("UMARŁEŚ!", NamedTextColor.RED), // Czerwony, główny tytuł
+                Component.text(Messages.text("player-data-listener.umarles"), NamedTextColor.RED), // Czerwony, główny tytuł
                 Component.text(""), // Pusty podtytuł
                 times
         );

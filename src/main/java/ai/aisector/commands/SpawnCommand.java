@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
 import ai.aisector.shared.RedisChannels;
@@ -36,18 +38,18 @@ public class SpawnCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda może być wykonana tylko przez gracza.");
+            sender.sendMessage(Messages.text("spawn-command.ta-komenda-moze-byc-wykonana-tylko-przez"));
             return true;
         }
 
         Player player = (Player) sender;
-        player.sendMessage("§7Pobieram lokalizację globalnego spawnu...");
+        player.sendMessage(Messages.text("spawn-command.pobieram-lokalizacje-globalnego-spawnu"));
         redisManager.getAsync(RedisChannels.GLOBAL_SPAWN).whenComplete((spawnDataJson, error) ->
                 BukkitTaskScheduler.execute(plugin, () -> {
                     if (!player.isOnline()) return;
                     if (error != null) {
                         plugin.getLogger().warning("Could not read global spawn: " + error.getMessage());
-                        player.sendMessage("§cNie udało się odczytać globalnego spawnu.");
+                        player.sendMessage(Messages.text("spawn-command.nie-udalo-sie-odczytac-globalnego-spawnu"));
                         return;
                     }
                     teleportToGlobalSpawn(player, spawnDataJson);
@@ -57,7 +59,7 @@ public class SpawnCommand implements CommandExecutor {
 
     private void teleportToGlobalSpawn(Player player, String spawnDataJson) {
         if (spawnDataJson == null || spawnDataJson.isEmpty()) {
-            player.sendMessage("§cSpawn serwera nie został jeszcze ustawiony!");
+            player.sendMessage(Messages.text("spawn-command.spawn-serwera-nie-zostal-jeszcze-ustawiony"));
             return;
         }
 
@@ -65,7 +67,7 @@ public class SpawnCommand implements CommandExecutor {
         try {
             spawnData = GlobalSpawnData.parse(spawnDataJson);
         } catch (RuntimeException exception) {
-            player.sendMessage("§cZapisany spawn jest nieprawidłowy.");
+            player.sendMessage(Messages.text("spawn-command.zapisany-spawn-jest-nieprawidlowy"));
             return;
         }
         String targetSector = spawnData.sector();
@@ -78,12 +80,12 @@ public class SpawnCommand implements CommandExecutor {
             spawnLocation = new Location(world, spawnData.x(), spawnData.y(), spawnData.z(),
                     spawnData.yaw(), spawnData.pitch());
         } catch (RuntimeException exception) {
-            player.sendMessage("§cLokalizacja globalnego spawnu jest nieprawidłowa.");
+            player.sendMessage(Messages.text("spawn-command.lokalizacja-globalnego-spawnu-jest-nieprawidlowa"));
             return;
         }
 
         if (targetSector.equalsIgnoreCase(currentSectorName)) {
-            player.sendMessage("§7Teleportuję na spawn...");
+            player.sendMessage(Messages.text("spawn-command.teleportuje-na-spawn"));
             try {
                 player.teleportAsync(spawnLocation).whenComplete((success, error) -> {
                     BukkitTaskScheduler.execute(plugin, () -> {
@@ -91,16 +93,16 @@ public class SpawnCommand implements CommandExecutor {
                             if (error != null || !Boolean.TRUE.equals(success)) {
                                 plugin.getLogger().warning("Could not teleport " + player.getName()
                                         + " to the local spawn" + (error == null ? "" : ": " + error.getMessage()));
-                                player.sendMessage("§cNie udało się teleportować na spawn.");
+                                player.sendMessage(Messages.text("spawn-command.nie-udalo-sie-teleportowac-na-spawn"));
                                 return;
                             }
-                            player.sendMessage("§aZostałeś przeteleportowany na spawn!");
+                            player.sendMessage(Messages.text("spawn-command.zostales-przeteleportowany-na-spawn"));
                     });
                 });
             } catch (RuntimeException exception) {
                 plugin.getLogger().warning("Could not start local spawn teleport for " + player.getName()
                         + ": " + exception.getMessage());
-                player.sendMessage("§cNie udało się teleportować na spawn.");
+                player.sendMessage(Messages.text("spawn-command.nie-udalo-sie-teleportowac-na-spawn"));
             }
         } else {
             try {
@@ -111,10 +113,10 @@ public class SpawnCommand implements CommandExecutor {
             } catch (RuntimeException exception) {
                 plugin.getLogger().warning("Could not prepare spawn transfer for " + player.getName()
                         + ": " + exception.getMessage());
-                player.sendMessage("§cNie udało się przygotować transferu na spawn.");
+                player.sendMessage(Messages.text("spawn-command.nie-udalo-sie-przygotowac-transferu-na-spawn"));
                 return;
             }
-            player.sendMessage("§7Trwa bezpieczny transfer na serwer spawnu...");
+            player.sendMessage(Messages.text("spawn-command.trwa-bezpieczny-transfer-na-serwer-spawnu"));
         }
     }
 

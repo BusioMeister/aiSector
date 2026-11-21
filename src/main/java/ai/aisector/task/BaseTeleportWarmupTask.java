@@ -1,5 +1,7 @@
 package ai.aisector.task;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
 import ai.aisector.sectors.SectorManager;
@@ -97,7 +99,7 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
     public void start() {
         if (!TeleportWarmupRegistry.registerWarmup(player, this)) {
             bossBar.removeAll();
-            player.sendMessage("§ePoprzednia teleportacja jest już w trakcie wykonywania.");
+            player.sendMessage(Messages.text("base-teleport-warmup-task.poprzednia-teleportacja-jest-juz-w-trakcie-wykonywania"));
             return;
         }
         try {
@@ -118,12 +120,12 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
         }
 
         if (!player.getWorld().equals(startLocation.getWorld())) {
-            player.sendMessage("§cTeleportacja anulowana! Zmieniłeś świat.");
+            player.sendMessage(Messages.text("base-teleport-warmup-task.teleportacja-anulowana-zmieniles-swiat"));
             cancel();
             return;
         }
         if (player.getLocation().distanceSquared(startLocation) > 1.0) {
-            player.sendMessage("§cTeleportacja anulowana! Ruszyłeś się.");
+            player.sendMessage(Messages.text("base-teleport-warmup-task.teleportacja-anulowana-ruszyles-sie"));
             cancel();
             return;
         }
@@ -137,7 +139,7 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
         bossBar.setProgress(Math.max(0.0, Math.min(1.0, (double) timeLeft / (double) warmupSeconds)));
 
         player.sendActionBar(net.kyori.adventure.text.Component.text(
-                actionBarTextPrefix + timeLeft + "s"
+                Messages.text("base-teleport-warmup-task.s", actionBarTextPrefix + timeLeft)
         ));
 
         timeLeft--;
@@ -169,7 +171,7 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
         bossBar.removeAll();
 
         if (targetSector == null || targetSector.isBlank()) {
-            player.sendMessage("§cNie udało się ustalić sektora docelowego.");
+            player.sendMessage(Messages.text("base-teleport-warmup-task.nie-udalo-sie-ustalic-sektora-docelowego"));
             TeleportWarmupRegistry.completePendingOperation(player, operationToken);
             return;
         }
@@ -181,7 +183,7 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
 
         if (targetSector.equals(currentSector)) {
             if (targetLocation.getWorld() == null) {
-                player.sendMessage("§cWystąpił błąd: świat docelowy nie istnieje.");
+                player.sendMessage(Messages.text("base-teleport-warmup-task.wystapil-blad-swiat-docelowy-nie-istnieje"));
                 TeleportWarmupRegistry.completePendingOperation(player, operationToken);
                 return;
             }
@@ -194,7 +196,7 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
                                 player.sendMessage(successMessage);
                                 plugin.getWorldBorderManager().sendWorldBorder(player,
                                         sectorManager.getSectorByName(targetSector));
-                            } else player.sendMessage("§cNie udało się wykonać teleportacji.");
+                            } else player.sendMessage(Messages.text("base-teleport-warmup-task.nie-udalo-sie-wykonac-teleportacji"));
                         } finally {
                             TeleportWarmupRegistry.completePendingOperation(player, operationToken);
                         }
@@ -202,14 +204,14 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
                     if (!scheduled) TeleportWarmupRegistry.completePendingOperation(player, operationToken);
                 });
             } catch (RuntimeException exception) {
-                player.sendMessage("§cNie udało się wykonać teleportacji.");
+                player.sendMessage(Messages.text("base-teleport-warmup-task.nie-udalo-sie-wykonac-teleportacji"));
                 plugin.getLogger().warning("Could not teleport " + player.getName() + ": " + exception.getMessage());
                 TeleportWarmupRegistry.completePendingOperation(player, operationToken);
             }
             return;
         }
 
-        player.sendMessage("§7Ukończono odliczanie, rozpoczynam transfer...");
+        player.sendMessage(Messages.text("base-teleport-warmup-task.ukonczono-odliczanie-rozpoczynam-transfer"));
 
         try {
             if (targetWorldName == null || targetWorldName.isBlank()) {
@@ -221,7 +223,7 @@ public class BaseTeleportWarmupTask extends BukkitRunnable {
                     .whenComplete((ignored, error) ->
                             TeleportWarmupRegistry.completePendingOperation(player, operationToken));
         } catch (RuntimeException exception) {
-            player.sendMessage("§cNie udało się przygotować transferu: " + exception.getMessage());
+            player.sendMessage(Messages.text("base-teleport-warmup-task.nie-udalo-sie-przygotowac-transferu", exception.getMessage()));
             plugin.getLogger().warning("Could not prepare warmup transfer for " + player.getName()
                     + ": " + exception.getMessage());
             TeleportWarmupRegistry.completePendingOperation(player, operationToken);

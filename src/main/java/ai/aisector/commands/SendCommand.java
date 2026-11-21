@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import com.google.gson.JsonObject;
@@ -21,22 +23,22 @@ public class SendCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!sender.hasPermission("aisector.command.send")) {
-            sender.sendMessage("§cNie masz uprawnień.");
+            sender.sendMessage(Messages.text("send-command.nie-masz-uprawnien"));
             return true;
         }
         if (args.length != 2) {
-            sender.sendMessage("§cUżycie: /send <gracz> <sektor>");
+            sender.sendMessage(Messages.text("send-command.uzycie-send"));
             return true;
         }
 
         String targetName = args[0];
         String targetSector = args[1];
         if (targetName.isBlank() || targetName.length() > 16 || targetSector.isBlank() || targetSector.length() > 128) {
-            sender.sendMessage("§cNieprawidłowa nazwa gracza lub sektora.");
+            sender.sendMessage(Messages.text("send-command.nieprawidlowa-nazwa-gracza-lub-sektora"));
             return true;
         }
         if (Bukkit.getPlayer(targetName) == null) {
-            sender.sendMessage("§cGracz o nicku '" + targetName + "' nie jest online na tym serwerze. Wysyłam prośbę do sieci...");
+            sender.sendMessage(Messages.text("send-command.gracz-o-nicku-nie-jest-online-na", targetName));
         }
 
         // Krok B: Wysyłamy prośbę do Velocity o zorganizowanie transferu.
@@ -45,12 +47,12 @@ public class SendCommand implements CommandExecutor {
         request.addProperty("targetName", targetName);
         request.addProperty("targetSector", targetSector);
 
-        sender.sendMessage("§7Przetwarzanie prośby o wysłanie gracza...");
+        sender.sendMessage(Messages.text("send-command.przetwarzanie-prosby-o-wyslanie-gracza"));
         plugin.getRedisManager().publishAsync(RedisChannels.SEND_REQUEST, request.toString())
                 .whenComplete((subscribers, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (error != null || subscribers == null || subscribers == 0) {
-                        sender.sendMessage("§cNie udało się wysłać żądania transferu do sieci.");
+                        sender.sendMessage(Messages.text("send-command.nie-udalo-sie-wyslac-zadania-transferu-do"));
                     }
                 }));
         return true;

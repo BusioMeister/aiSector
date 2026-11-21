@@ -1,5 +1,7 @@
 package ai.aisector.guilds;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
 import ai.aisector.user.UserManager;
@@ -34,7 +36,7 @@ public class GuildRegionListener implements Listener {
         }
         if (!canBuild(e.getPlayer(), e.getBlock().getLocation())) {
             e.setCancelled(true);
-            e.getPlayer().sendMessage("§cNie możesz budować na terenie tej gildii.");
+            e.getPlayer().sendMessage(Messages.text("guild-region-listener.nie-mozesz-budowac-na-terenie-tej-gildii"));
         }
     }
 
@@ -46,13 +48,13 @@ public class GuildRegionListener implements Listener {
         }
         if (!canBuild(e.getPlayer(), e.getBlock().getLocation())) {
             e.setCancelled(true);
-            e.getPlayer().sendMessage("§cNie możesz niszczyć na terenie tej gildii.");
+            e.getPlayer().sendMessage(Messages.text("guild-region-listener.nie-mozesz-niszczyc-na-terenie-tej-gildii"));
         }
     }
 
     private boolean guildDataReady(Player player) {
         if (guildManager.isReady()) return true;
-        player.sendMessage("§cDane gildii są ładowane. Spróbuj ponownie za chwilę.");
+        player.sendMessage(Messages.text("guild-region-listener.dane-gildii-sa-ladowane-sprobuj-ponownie-za"));
         return false;
     }
 

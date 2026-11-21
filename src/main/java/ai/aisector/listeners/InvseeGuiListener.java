@@ -1,7 +1,9 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
+import ai.aisector.utils.PluginMenu;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -14,24 +16,22 @@ public class InvseeGuiListener implements Listener {
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
-        String title = event.getView().getTitle();
-        if (!title.startsWith("§8Ekwipunek gracza: §c")) {
+        if (!PluginMenu.is(event.getInventory(), PluginMenu.Kind.INVSEE)) {
             return;
         }
 
-        String strippedTitle = ChatColor.stripColor(title);
-        String targetName = strippedTitle.substring("Ekwipunek gracza: ".length());
+        String targetName = ((PluginMenu) event.getInventory().getHolder()).target();
 
         Player targetPlayer = Bukkit.getPlayer(targetName);
 
         if (targetPlayer == null || !targetPlayer.isOnline()) {
-            event.getPlayer().sendMessage("§cGracz " + targetName + " wylogował się. Zmiany nie zostały zapisane.");
+            event.getPlayer().sendMessage(Messages.text("invsee-gui-listener.gracz-wylogowal-sie-zmiany-nie-zostaly-zapisane", targetName));
             return;
         }
 
         ai.aisector.SectorPlugin plugin = (ai.aisector.SectorPlugin) Bukkit.getPluginManager().getPlugin("aiSECTOR");
         if (plugin != null && plugin.getUserManager().isTransferPending(targetPlayer)) {
-            event.getPlayer().sendMessage("§cGracz jest w trakcie transferu. Zmiany nie zostały zapisane.");
+            event.getPlayer().sendMessage(Messages.text("invsee-gui-listener.gracz-jest-w-trakcie-transferu-zmiany-nie"));
             return;
         }
 
@@ -64,6 +64,6 @@ public class InvseeGuiListener implements Listener {
         targetInventory.setArmorContents(armor);
         targetInventory.setItemInOffHand(offhand);
 
-        event.getPlayer().sendMessage("§aZapisano zmiany w ekwipunku gracza §e" + targetName + "§a.");
+        event.getPlayer().sendMessage(Messages.text("invsee-gui-listener.zapisano-zmiany-w-ekwipunku-gracza", targetName));
     }
 }

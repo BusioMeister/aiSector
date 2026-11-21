@@ -1,5 +1,7 @@
 package ai.aisector.cobblex;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -18,11 +20,11 @@ public final class CobbleXItems {
     public static ItemStack createCobbleX(SectorPlugin plugin, int amount) {
         ItemStack it = new ItemStack(Material.MOSSY_COBBLESTONE, Math.max(1, amount));
         ItemMeta meta = it.getItemMeta();
-        meta.setDisplayName("§2§lCobbleX");
+        meta.setDisplayName(Messages.text("cobble-x-items.cobblex"));
         meta.setLore(List.of(
-                "§7Specjalny blok losujący nagrody",
-                "§7Postaw, a zniknie i odda loot",
-                "§8Konfigurowalne szanse w cobblex.yml"
+                Messages.text("cobble-x-items.specjalny-blok-losujacy-nagrody"),
+                Messages.text("cobble-x-items.postaw-a-zniknie-i-odda-loot"),
+                Messages.text("cobble-x-items.konfigurowalne-szanse-w-cobblex-yml")
         ));
         meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
         meta.getPersistentDataContainer().set(key(plugin), PersistentDataType.BYTE, (byte) 1);

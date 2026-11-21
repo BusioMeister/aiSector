@@ -1,5 +1,7 @@
 package ai.aisector.ranking;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
 import ai.aisector.utils.BukkitTaskScheduler;
@@ -45,25 +47,23 @@ public final class AdminStatsCommand implements TabExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission(PERMISSION)) return true;
         if (args.length != 1 && args.length != 4) {
-            sender.sendMessage("§6Statystyki §7• §fset = ustaw, add = zmień (np. -1)");
-            sender.sendMessage("§e/astats Nick §7— podgląd");
-            sender.sendMessage("§e/astats Nick add kills 1 §7— dodaj zabójstwo");
-            sender.sendMessage("§e/astats Nick add deaths -1 §7— odejmij śmierć");
-            sender.sendMessage("§e/astats Nick set ranking 1250 §7— ustaw punkty");
-            sender.sendMessage("§e/astats Nick set killstreak 5 §7— ustaw serię");
+            sender.sendMessage(Messages.text("admin-stats-command.statystyki-set-ustaw-add-zmien-np-1"));
+            sender.sendMessage(Messages.text("admin-stats-command.astats-nick-podglad"));
+            sender.sendMessage(Messages.text("admin-stats-command.astats-nick-add-kills-1-dodaj-zabojstwo"));
+            sender.sendMessage(Messages.text("admin-stats-command.astats-nick-add-deaths-1-odejmij-smierc"));
+            sender.sendMessage(Messages.text("admin-stats-command.astats-nick-set-ranking-1250-ustaw-punkty"));
+            sender.sendMessage(Messages.text("admin-stats-command.astats-nick-set-killstreak-5-ustaw-serie"));
             return true;
         }
         Player target = Bukkit.getPlayerExact(args[0]);
         var users = plugin.getUserManager();
         User user = target == null ? null : users.getUser(target);
         if (user == null || users.isTransferPending(target)) {
-            sender.sendMessage("§cGracz musi być na tym sektorze z wczytanym profilem.");
+            sender.sendMessage(Messages.text("admin-stats-command.gracz-musi-byc-na-tym-sektorze-z"));
             return true;
         }
         if (args.length == 1) {
-            sender.sendMessage("§6" + target.getName() + " §7— zabójstwa: §f" + user.getKills()
-                    + " §7| śmierci: §f" + user.getDeaths() + " §7| ranking: §f" + user.getRating()
-                    + " §7| killstreak: §f" + user.getKillstreak());
+            sender.sendMessage(Messages.text("admin-stats-command.zabojstwa-smierci-ranking-killstreak", target.getName(), user.getKills(), user.getDeaths(), user.getRating(), user.getKillstreak()));
             return true;
         }
         String operation = args[1].toLowerCase(Locale.ROOT);
@@ -75,7 +75,7 @@ public final class AdminStatsCommand implements TabExecutor {
             value = Integer.parseInt(args[3]);
             if (operation.equals("set") && (value < 0 || value > stat.max)) throw new IllegalArgumentException();
         } catch (IllegalArgumentException error) {
-            sender.sendMessage("§cUżyj set lub add, poprawnej statystyki i liczby całkowitej (add przyjmuje też wartości ujemne).");
+            sender.sendMessage(Messages.text("admin-stats-command.uzyj-set-lub-add-poprawnej-statystyki-i"));
             return true;
         }
         int old = stat.read.applyAsInt(user);
@@ -85,8 +85,8 @@ public final class AdminStatsCommand implements TabExecutor {
         users.saveCombatStats(target, user).whenComplete((ignored, error) -> {
             if (error == null) plugin.getLogger().info(audit);
             BukkitTaskScheduler.execute(plugin, () -> sender.sendMessage(error == null
-                    ? "§aZapisano " + target.getName() + ": " + args[2] + " " + old + " → " + next
-                    : "§cNie udało się potwierdzić zapisu statystyk."));
+                    ? Messages.text("admin-stats-command.zapisano", target.getName(), args[2], old, next)
+                    : Messages.text("admin-stats-command.nie-udalo-sie-potwierdzic-zapisu-statystyk")));
         });
         return true;
     }

@@ -1,5 +1,7 @@
 package ai.aisector.task; // Upewnij się, że pakiet jest poprawny
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
@@ -35,13 +37,13 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
         this.successMessage = successMessage;
         this.sectorManager = sectorManager;
         this.borderManager = borderManager;
-        this.bossBar = org.bukkit.Bukkit.createBossBar("§aTeleportacja za: §e" + timeLeft, BarColor.GREEN, BarStyle.SOLID);
+        this.bossBar = org.bukkit.Bukkit.createBossBar(Messages.text("local-teleport-warmup-task.teleportacja-za", timeLeft), BarColor.GREEN, BarStyle.SOLID);
     }
 
     public void start() {
         if (!TeleportWarmupRegistry.registerWarmup(player, this)) {
             bossBar.removeAll();
-            player.sendMessage("§ePoprzednia teleportacja jest już w trakcie wykonywania.");
+            player.sendMessage(Messages.text("local-teleport-warmup-task.poprzednia-teleportacja-jest-juz-w-trakcie-wykonywania"));
             return;
         }
         try {
@@ -62,12 +64,12 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
         }
 
         if (!player.getWorld().equals(startLocation.getWorld())) {
-            player.sendMessage("§cTeleportacja anulowana! Zmieniłeś świat.");
+            player.sendMessage(Messages.text("local-teleport-warmup-task.teleportacja-anulowana-zmieniles-swiat"));
             cancel();
             return;
         }
         if (player.getLocation().distanceSquared(startLocation) > 1.0) {
-            player.sendMessage("§cTeleportacja anulowana! Ruszyłeś się.");
+            player.sendMessage(Messages.text("local-teleport-warmup-task.teleportacja-anulowana-ruszyles-sie"));
             cancel();
             return;
         }
@@ -77,9 +79,9 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
             return;
         }
 
-        bossBar.setTitle("§aTeleportacja za: §e" + timeLeft);
+        bossBar.setTitle(Messages.text("local-teleport-warmup-task.teleportacja-za", timeLeft));
         bossBar.setProgress((double) timeLeft / 5.0);
-        player.sendActionBar(net.kyori.adventure.text.Component.text("§cNie ruszaj się! §7Teleportacja za §e" + timeLeft + "s"));
+        player.sendActionBar(net.kyori.adventure.text.Component.text(Messages.text("local-teleport-warmup-task.nie-ruszaj-sie-teleportacja-za-s", timeLeft)));
         timeLeft--;
     }
 
@@ -107,14 +109,14 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
             // The scheduled warmup has already ended.
         }
         bossBar.removeAll();
-        player.sendMessage("§aTeleportacja...");
+        player.sendMessage(Messages.text("local-teleport-warmup-task.teleportacja"));
         try {
             player.teleportAsync(targetLocation).whenComplete((success, error) -> {
                 boolean scheduled = BukkitTaskScheduler.execute(plugin, () -> {
                     try {
                         if (!isCurrentSession()) return;
                         if (error != null || !Boolean.TRUE.equals(success)) {
-                            player.sendMessage("§cTeleportacja nie powiodła się.");
+                            player.sendMessage(Messages.text("local-teleport-warmup-task.teleportacja-nie-powiodla-sie"));
                             return;
                         }
                         player.sendMessage(successMessage);
@@ -128,7 +130,7 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
             });
         } catch (RuntimeException exception) {
             TeleportWarmupRegistry.completePendingOperation(player, operationToken);
-            player.sendMessage("§cTeleportacja nie powiodła się.");
+            player.sendMessage(Messages.text("local-teleport-warmup-task.teleportacja-nie-powiodla-sie"));
             plugin.getLogger().warning("Could not schedule local TPA teleport for " + player.getName()
                     + ": " + exception.getMessage());
         }

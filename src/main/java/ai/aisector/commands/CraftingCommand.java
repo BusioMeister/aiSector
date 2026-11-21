@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -14,13 +16,13 @@ public class CraftingCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda jest tylko dla graczy.");
+            sender.sendMessage(Messages.text("crafting-command.ta-komenda-jest-tylko-dla-graczy"));
             return true;
         }
         Player p = (Player) sender;
 
         if (PERM != null && !PERM.isEmpty() && !p.hasPermission(PERM)) {
-            p.sendMessage("§cNie masz uprawnień do tej komendy.");
+            p.sendMessage(Messages.text("crafting-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 

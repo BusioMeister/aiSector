@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
 import ai.aisector.redis.packet.RedisPacketPublisher;
@@ -23,21 +25,21 @@ public class AlertCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.command.alert")) {
-            sender.sendMessage("§cNie masz uprawnień.");
+            sender.sendMessage(Messages.text("alert-command.nie-masz-uprawnien"));
             return true;
         }
         if (args.length == 0) {
-            sender.sendMessage("§cUżycie: /alert <wiadomość>");
+            sender.sendMessage(Messages.text("alert-command.uzycie-alert"));
             return true;
         }
 
         String message = String.join(" ", args);
         if (message.length() > 256) {
-            sender.sendMessage("§cOgłoszenie może mieć maksymalnie 256 znaków.");
+            sender.sendMessage(Messages.text("alert-command.ogloszenie-moze-miec-maksymalnie-256-znakow"));
             return true;
         }
         // The alert is delivered as the registered shared packet on the canonical packet channel.
-        String formattedMessage = "§8[§cOGŁOSZENIE§8] §f" + message;
+        String formattedMessage = Messages.text("alert-command.format", message);
         AlertPacket packet = new AlertPacket();
         packet.message = formattedMessage;
 
@@ -46,11 +48,11 @@ public class AlertCommand implements CommandExecutor {
             BukkitTaskScheduler.execute(plugin, () -> {
                 if (sender instanceof org.bukkit.entity.Player player && !player.isOnline()) return;
                 if (error != null) {
-                    sender.sendMessage("§cNie udało się wysłać ogłoszenia.");
+                    sender.sendMessage(Messages.text("alert-command.nie-udalo-sie-wyslac-ogloszenia"));
                 } else if (subscribers == null || subscribers == 0) {
-                    sender.sendMessage("§eOgłoszenie nie dotarło do żadnego odbiorcy.");
+                    sender.sendMessage(Messages.text("alert-command.ogloszenie-nie-dotarlo-do-zadnego-odbiorcy"));
                 } else {
-                    sender.sendMessage("§aOgłoszenie zostało wysłane do sieci.");
+                    sender.sendMessage(Messages.text("alert-command.ogloszenie-zostalo-wyslane-do-sieci"));
                 }
             });
                 });

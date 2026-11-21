@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.database.RedisManager;
@@ -24,7 +26,7 @@ public class TpacceptCommand implements CommandExecutor {
         if (!(sender instanceof Player)) return true;
         Player accepter = (Player) sender;
         if (accepter.getLocation().getWorld() == null) {
-            accepter.sendMessage("§cNie można odczytać twojej lokalizacji.");
+            accepter.sendMessage(Messages.text("tpaccept-command.nie-mozna-odczytac-twojej-lokalizacji"));
             return true;
         }
 
@@ -45,7 +47,7 @@ public class TpacceptCommand implements CommandExecutor {
         redisManager.publishAsync(RedisChannels.TPA_ACCEPT, req.toString()).whenComplete((subscribers, error) -> {
             if (error != null || subscribers == null || subscribers == 0) {
                 BukkitTaskScheduler.execute(plugin, () -> {
-                    if (accepter.isOnline()) accepter.sendMessage("§cNie udało się wysłać akceptacji TPA przez sieć.");
+                    if (accepter.isOnline()) accepter.sendMessage(Messages.text("tpaccept-command.nie-udalo-sie-wyslac-akceptacji-tpa-przez"));
                 });
             }
         });

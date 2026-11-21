@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -27,16 +29,16 @@ public final class BanListCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.ban.list")) {
-            sender.sendMessage("§cBrak uprawnień.");
+            sender.sendMessage(Messages.text("ban-list-command.brak-uprawnien"));
             return true;
         }
-        sender.sendMessage("§7Pobieram aktywne bany...");
+        sender.sendMessage(Messages.text("ban-list-command.pobieram-aktywne-bany"));
         plugin.getRedisManager().executeAsync(this::readBanList)
                 .whenComplete((lines, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (error != null) {
                         plugin.getLogger().warning("Could not read ban list: " + error.getMessage());
-                        sender.sendMessage("§cNie udało się pobrać listy banów.");
+                        sender.sendMessage(Messages.text("ban-list-command.nie-udalo-sie-pobrac-listy-banow"));
                         return;
                     }
                     if (lines != null) lines.forEach(sender::sendMessage);
@@ -82,16 +84,15 @@ public final class BanListCommand implements CommandExecutor {
                 String name = valueOrDefault(ban.get("name"), member);
                 String reason = valueOrDefault(ban.get("reason"), "Brak");
                 String by = valueOrDefault(ban.get("banned_by"), "System");
-                lines.add("§e" + name + (ipBan ? " §7(IP)" : "") + " §7(" + formatExpiration(expires)
-                        + ") §8- §f" + reason + " §8by §f" + by);
+                lines.add(Messages.text("ban-list-command.by", name, (ipBan ? " §7(IP)" : ""), formatExpiration(expires), reason, by));
             }
         } while (!ScanParams.SCAN_POINTER_START.equals(cursor) && scanned < MAX_SCAN_PER_CATEGORY);
 
         if (displayed >= MAX_DISPLAY_PER_CATEGORY) {
-            lines.add("§8Lista ograniczona do " + MAX_DISPLAY_PER_CATEGORY + " wpisów w tej kategorii.");
+            lines.add(Messages.text("ban-list-command.lista-ograniczona-do-wpisow-w-tej-kategorii", MAX_DISPLAY_PER_CATEGORY));
         }
         if (!ScanParams.SCAN_POINTER_START.equals(cursor) && scanned >= MAX_SCAN_PER_CATEGORY) {
-            lines.add("§8Skanowanie ograniczone do " + MAX_SCAN_PER_CATEGORY + " indeksów; uruchom ponownie, aby kontynuować.");
+            lines.add(Messages.text("ban-list-command.skanowanie-ograniczone-do-indeksow-uruchom-ponownie-aby", MAX_SCAN_PER_CATEGORY));
         }
     }
 

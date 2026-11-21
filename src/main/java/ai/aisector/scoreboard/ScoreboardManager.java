@@ -1,5 +1,7 @@
 package ai.aisector.scoreboard;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.user.User;
@@ -149,7 +151,7 @@ public class ScoreboardManager {
                 t.addEntry("§z");
                 obj.getScore("§z").setScore(1);
             }
-            t.prefix(Component.text(ChatColor.GRAY + "Wczytywanie..."));
+            t.prefix(Component.text(Messages.text("scoreboard-manager.wczytywanie", ChatColor.GRAY)));
             return;
         }
 
@@ -176,7 +178,7 @@ public class ScoreboardManager {
             Team t = board.getTeam("sector");
             if (t == null) registerTeamWithEntry(board, obj, "sector", "§0", 12);
             t = board.getTeam("sector");
-            Component label = gradient("<gradient:#FF55FF:#FF99FF>⚑ Sektor:</gradient>");
+            Component label = gradient(Messages.text("scoreboard-manager.sektor"));
             Component value = Component.text(" " + sector, NamedTextColor.WHITE);
             t.prefix(label.append(value));
         }
@@ -188,7 +190,7 @@ public class ScoreboardManager {
             String guildTag = "-";
             if (user != null && user.hasGuild()) guildTag = user.getGuildTag();
 
-            Component label = Component.text(ChatColor.YELLOW + "Gildia: ");
+            Component label = Component.text(Messages.text("scoreboard-manager.gildia", ChatColor.YELLOW));
             Component value = Component.text(ChatColor.WHITE + guildTag);
             tg.prefix(label.append(value));
 
@@ -198,7 +200,7 @@ public class ScoreboardManager {
             Team t = board.getTeam("kills");
             if (t == null) registerTeamWithEntry(board, obj, "kills", "§1", 9);
             t = board.getTeam("kills");
-            Component label = gradient("<gradient:#FB0000:#880000>⚔ Zabójstwa:</gradient>");
+            Component label = gradient(Messages.text("scoreboard-manager.zabojstwa"));
             Component value = Component.text(" " + kills, NamedTextColor.WHITE);
             t.prefix(label.append(value));
         }
@@ -208,7 +210,7 @@ public class ScoreboardManager {
             Team t = board.getTeam("deaths");
             if (t == null) registerTeamWithEntry(board, obj, "deaths", "§2", 8);
             t = board.getTeam("deaths");
-            Component label = gradient("<gradient:#FB0000:#880000>☠ Śmierci:</gradient>");
+            Component label = gradient(Messages.text("scoreboard-manager.smierci"));
             Component value = Component.text(" " + deaths, NamedTextColor.WHITE);
             t.prefix(label.append(value));
         }
@@ -218,7 +220,7 @@ public class ScoreboardManager {
             Team t = board.getTeam("time");
             if (t == null) registerTeamWithEntry(board, obj, "time", "§3", 6);
             t = board.getTeam("time");
-            Component label = gradient("<gradient:#00C8C8:#00FFFF>⏱ Spędzone:</gradient>");
+            Component label = gradient(Messages.text("scoreboard-manager.spedzone"));
             Component value = Component.text(" " + timePlayed, NamedTextColor.WHITE);
             t.prefix(label.append(value));
         }
@@ -246,8 +248,8 @@ public class ScoreboardManager {
             Team t = board.getTeam("ip");
             if (t == null) registerTeamWithEntry(board, obj, "ip", "§6", 2);
             t = board.getTeam("ip");
-            Component label = gradient("<gradient:#FFCC00:#FF8800>LastPlay.NET</gradient>");
-            Component prefix = Component.text(ChatColor.of("#aaaaaa") + "IP: ");
+            Component label = gradient(Messages.text("scoreboard-manager.lastplay-net"));
+            Component prefix = Component.text(Messages.text("scoreboard-manager.ip", ChatColor.of("#aaaaaa")));
             t.prefix(prefix.append(label));
         }
     }

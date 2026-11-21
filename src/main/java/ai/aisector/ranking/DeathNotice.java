@@ -21,7 +21,8 @@ public record DeathNotice(String tag, String killer, Integer loss, int droppedPl
     }
 
     public void show(Player victim, CombatTitle animator) {
-        animator.show(victim, tag, killer, loss == null ? "zabił Cię" : "−" + loss + " pkt"
+        animator.show(victim, tag, killer, loss == null ? ai.aisector.utils.Messages.text("death-notice.killed-you")
+                : ai.aisector.utils.Messages.text("death-notice.lost-points", loss)
                 + (droppedPlaces > 0 ? "  ↓" + droppedPlaces : ""), NamedTextColor.RED, false);
     }
 }

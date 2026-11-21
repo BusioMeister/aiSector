@@ -1,5 +1,7 @@
 package ai.aisector.sectors;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -46,7 +48,7 @@ public final class LockedSpawnListener implements Listener {
             sectors.transferFromSpawnButton(player);
         } catch (RuntimeException failure) {
             plugin.getLogger().warning("Could not prepare spawn exit for " + player.getUniqueId() + ": " + failure.getMessage());
-            player.sendMessage("§cNie udało się przygotować losowego teleportu. Spróbuj ponownie.");
+            player.sendMessage(Messages.text("locked-spawn-listener.nie-udalo-sie-przygotowac-losowego-teleportu-sprobuj"));
         }
     }
 

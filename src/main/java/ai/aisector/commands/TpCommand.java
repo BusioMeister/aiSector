@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import com.google.gson.JsonObject;
@@ -21,22 +23,22 @@ public class TpCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda musi być wykonana przez gracza.");
+            sender.sendMessage(Messages.text("tp-command.ta-komenda-musi-byc-wykonana-przez-gracza"));
             return true;
         }
         if (!sender.hasPermission("aisector.command.tp")) {
-            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            sender.sendMessage(Messages.text("tp-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
         if (args.length != 1) {
-            sender.sendMessage("§cUżycie: /tp <gracz>");
+            sender.sendMessage(Messages.text("tp-command.uzycie-tp"));
             return true;
         }
 
         Player admin = (Player) sender;
         String targetName = args[0];
         if (targetName.isBlank() || targetName.length() > 16) {
-            admin.sendMessage("§cNieprawidłowa nazwa gracza.");
+            admin.sendMessage(Messages.text("tp-command.nieprawidlowa-nazwa-gracza"));
             return true;
         }
 
@@ -44,11 +46,11 @@ public class TpCommand implements CommandExecutor {
         Player targetPlayer = Bukkit.getPlayer(targetName);
         if (targetPlayer != null) {
             admin.teleport(targetPlayer.getLocation());
-            admin.sendMessage("§aPrzeteleportowano do gracza " + targetName + ".");
+            admin.sendMessage(Messages.text("tp-command.przeteleportowano-do-gracza", targetName));
             return true;
         }
         if (plugin.getSectorManager().isLockedSpawnBackend() && !admin.isOp()) {
-            admin.sendMessage("§cZe spawnu można wyjść przyciskiem na gąbce.");
+            admin.sendMessage(Messages.text("tp-command.ze-spawnu-mozna-wyjsc-przyciskiem-na-gabce"));
             return true;
         }
 
@@ -58,12 +60,12 @@ public class TpCommand implements CommandExecutor {
         request.addProperty("adminUUID", admin.getUniqueId().toString());
         request.addProperty("targetName", targetName);
 
-        sender.sendMessage("§7Przetwarzanie prośby o teleportację do gracza na innym sektorze...");
+        sender.sendMessage(Messages.text("tp-command.przetwarzanie-prosby-o-teleportacje-do-gracza-na"));
         plugin.getRedisManager().publishAsync(RedisChannels.ADMIN_TP_REQUEST, request.toString())
                 .whenComplete((subscribers, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (!admin.isOnline()) return;
                     if (error != null || subscribers == null || subscribers == 0) {
-                        sender.sendMessage("§cNie udało się wysłać żądania teleportacji do proxy.");
+                        sender.sendMessage(Messages.text("tp-command.nie-udalo-sie-wyslac-zadania-teleportacji-do"));
                     }
                 }));
 

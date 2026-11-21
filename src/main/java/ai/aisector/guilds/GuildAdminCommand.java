@@ -1,5 +1,7 @@
 package ai.aisector.guilds;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
 import ai.aisector.utils.BukkitTaskScheduler;
@@ -35,7 +37,7 @@ public class GuildAdminCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!sender.hasPermission("gildie.admin")) {
-            sender.sendMessage(ChatColor.RED + "Brak uprawnień.");
+            sender.sendMessage(Messages.text("guild-admin-command.brak-uprawnien", ChatColor.RED));
             return true;
         }
 
@@ -44,7 +46,7 @@ public class GuildAdminCommand implements CommandExecutor {
             return true;
         }
         if (!guildManager.isReady()) {
-            sender.sendMessage(ChatColor.GRAY + "Dane gildii są jeszcze ładowane. Spróbuj ponownie za chwilę.");
+            sender.sendMessage(Messages.text("guild-admin-command.dane-gildii-sa-jeszcze-ladowane-sprobuj-ponownie", ChatColor.GRAY));
             return true;
         }
 
@@ -62,7 +64,7 @@ public class GuildAdminCommand implements CommandExecutor {
                 break;
             case "fixuser":
                 if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "Użycie: /ga fixuser <gracz>");
+                    sender.sendMessage(Messages.text("guild-admin-command.uzycie-ga-fixuser", ChatColor.RED));
                     return true;
                 }
                 handleFixGuild(sender, args[1]);
@@ -73,10 +75,10 @@ public class GuildAdminCommand implements CommandExecutor {
 
 
     private void sendHelp(CommandSender sender) {
-        sender.sendMessage(ChatColor.GOLD + "Gildie - komendy administracyjne:");
-        sender.sendMessage(ChatColor.GRAY + "/ga list " + ChatColor.DARK_GRAY + "- lista wszystkich gildii");
-        sender.sendMessage(ChatColor.GRAY + "/ga usun <tag> " + ChatColor.DARK_GRAY + "- usuń gildię po tagu");
-        sender.sendMessage(ChatColor.GRAY + "/ga fixuser <gracz>" + ChatColor.DARK_GRAY + "- usuń gildię po tagu");
+        sender.sendMessage(Messages.text("guild-admin-command.gildie-komendy-administracyjne", ChatColor.GOLD));
+        sender.sendMessage(Messages.text("guild-admin-command.ga-list-lista-wszystkich-gildii", ChatColor.GRAY, ChatColor.DARK_GRAY));
+        sender.sendMessage(Messages.text("guild-admin-command.ga-usun-usun-gildie-po-tagu", ChatColor.GRAY, ChatColor.DARK_GRAY));
+        sender.sendMessage(Messages.text("guild-admin-command.ga-fixuser-usun-gildie-po-tagu", ChatColor.GRAY, ChatColor.DARK_GRAY));
     }
 
     // /ga list
@@ -85,7 +87,7 @@ public class GuildAdminCommand implements CommandExecutor {
                 .whenComplete((documents, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (error != null) {
-                        sender.sendMessage(ChatColor.RED + "Nie udało się wczytać listy gildii.");
+                        sender.sendMessage(Messages.text("guild-admin-command.nie-udalo-sie-wczytac-listy-gildii", ChatColor.RED));
                         plugin.getLogger().warning("Could not load guild list for admin: " + error.getMessage());
                         return;
                     }
@@ -100,22 +102,22 @@ public class GuildAdminCommand implements CommandExecutor {
                         }
                     }
                     if (tags.isEmpty()) {
-                        sender.sendMessage(ChatColor.YELLOW + "Nie ma żadnych gildii.");
+                        sender.sendMessage(Messages.text("guild-admin-command.nie-ma-zadnych-gildii", ChatColor.YELLOW));
                         return;
                     }
-                    sender.sendMessage(ChatColor.GOLD + "Gildie w sieci (" + tags.size() + "):");
+                    sender.sendMessage(Messages.text("guild-admin-command.gildie-w-sieci", ChatColor.GOLD, tags.size()));
                     sender.sendMessage(ChatColor.YELLOW + String.join(", ", tags));
                 }));
     }
     private void handleFixGuild(CommandSender sender, String playerName) {
         Player target = Bukkit.getPlayerExact(playerName);
         if (target == null) {
-            sender.sendMessage("Ten gracz nie jest online.");
+            sender.sendMessage(Messages.text("guild-admin-command.ten-gracz-nie-jest-online"));
             return;
         }
         User user = plugin.getUserManager().loadOrGetUser(target);
         if (user == null) {
-            sender.sendMessage("Nie udało się załadować danych gracza.");
+            sender.sendMessage(Messages.text("guild-admin-command.nie-udalo-sie-zaladowac-danych-gracza"));
             return;
         }
 
@@ -125,16 +127,15 @@ public class GuildAdminCommand implements CommandExecutor {
                 .whenComplete((ignored, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (error != null) {
-                        sender.sendMessage(ChatColor.RED + "Nie udało się zapisać zmian dla " + targetName + ".");
+                        sender.sendMessage(Messages.text("guild-admin-command.nie-udalo-sie-zapisac-zmian-dla", ChatColor.RED, targetName));
                         plugin.getLogger().warning("Could not persist guild fix for " + targetUuid + ": "
                                 + error.getMessage());
                         return;
                     }
-                    sender.sendMessage("Wyczyszczono dane gildii dla " + targetName + ".");
+                    sender.sendMessage(Messages.text("guild-admin-command.wyczyszczono-dane-gildii-dla", targetName));
                     Player currentTarget = Bukkit.getPlayer(targetUuid);
                     if (currentTarget == target && target.isOnline()) {
-                        currentTarget.sendMessage(ChatColor.RED
-                                + "Twoje przypisanie do gildii zostało zresetowane przez administrację.");
+                        currentTarget.sendMessage(Messages.text("guild-admin-command.twoje-przypisanie-do-gildii-zostalo-zresetowane-przez", ChatColor.RED));
                     }
                 }));
     }
@@ -142,23 +143,23 @@ public class GuildAdminCommand implements CommandExecutor {
     // /ga usun <tag>
     private void handleDelete(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "Użycie: /ga usun <tag>");
+            sender.sendMessage(Messages.text("guild-admin-command.uzycie-ga-usun", ChatColor.RED));
             return;
         }
 
         String tag = GuildManager.normalizeTag(args[1]);
         Guild guild = guildManager.getGuild(tag);
         if (guild == null) {
-            sender.sendMessage(ChatColor.GRAY + "Wczytuję gildię [" + tag + "] z Mongo...");
+            sender.sendMessage(Messages.text("guild-admin-command.wczytuje-gildie-z-mongo", ChatColor.GRAY, tag));
             guildManager.reloadGuildAsync(tag).whenComplete((loaded, error) ->
                     BukkitTaskScheduler.execute(plugin, () -> {
                         if (sender instanceof Player player && !player.isOnline()) return;
                         if (error != null) {
-                            sender.sendMessage(ChatColor.RED + "Nie udało się wczytać gildii [" + tag + "].");
+                            sender.sendMessage(Messages.text("guild-admin-command.nie-udalo-sie-wczytac-gildii", ChatColor.RED, tag));
                             plugin.getLogger().warning("Could not load guild " + tag + " for admin deletion: "
                                     + error.getMessage());
                         } else if (loaded == null) {
-                            sender.sendMessage(ChatColor.RED + "Gildia o tagu [" + tag + "] nie istnieje.");
+                            sender.sendMessage(Messages.text("guild-admin-command.gildia-o-tagu-nie-istnieje", ChatColor.RED, tag));
                         } else {
                             deleteLoadedGuild(sender, tag, loaded);
                         }
@@ -175,8 +176,7 @@ public class GuildAdminCommand implements CommandExecutor {
                 BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (error != null || !Boolean.TRUE.equals(deleted)) {
-                        sender.sendMessage(ChatColor.RED + "Nie udało się bezpiecznie usunąć gildii. "
-                                + "Odśwież dane i spróbuj ponownie.");
+                        sender.sendMessage(Messages.text("guild-admin-command.nie-udalo-sie-bezpiecznie-usunac-gildii-odswiez", ChatColor.RED));
                         if (error != null) {
                             plugin.getLogger().warning("Could not delete guild " + tag + ": " + error.getMessage());
                         }
@@ -191,11 +191,10 @@ public class GuildAdminCommand implements CommandExecutor {
                             user.setGuildTag(null);
                             user.setGuildRole(null);
                         }
-                        member.sendMessage(ChatColor.RED
-                                + "Twoja gildia [" + tag + "] została usunięta przez administrację.");
+                        member.sendMessage(Messages.text("guild-admin-command.twoja-gildia-zostala-usunieta-przez-administracje", ChatColor.RED, tag));
                     }
-                    sender.sendMessage(ChatColor.GREEN + "Usunięto gildię [" + tag + "].");
-                    sendGlobal("§6[GILDIA] §eGildia §f[" + tag + "] §ezostała usunięta przez administrację.");
+                    sender.sendMessage(Messages.text("guild-admin-command.usunieto-gildie", ChatColor.GREEN, tag));
+                    sendGlobal(Messages.text("guild-admin-command.gildia-gildia-zostala-usunieta-przez-administracje", tag));
                 }));
     }
 

@@ -5,6 +5,8 @@ import ai.aisector.database.RedisManager;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.utils.BukkitTaskScheduler;
 import org.bukkit.Bukkit;
+
+import ai.aisector.utils.Messages;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -287,7 +289,7 @@ public class SectorManager {
             if (!key.equals("player:final_teleport_target:" + player.getUniqueId())
                     || !isValidSpawnWarmupTarget(sectorId, location)
                     || !insideLockedSpawn(player.getLocation())) {
-                player.sendMessage("§cCel teleportacji nie należy do sektora gry.");
+                player.sendMessage(Messages.text("sector-manager.cel-teleportacji-nie-nalezy-do-sektora-gry"));
                 return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid Spawn warmup target"));
             }
             spawnExit = "spawn-warmup";
@@ -309,7 +311,7 @@ public class SectorManager {
                                                         org.bukkit.event.player.PlayerMoveEvent initialSeamMove) {
         Objects.requireNonNull(player, "player");
         if (isLockedSpawnBackend() && spawnExit == null) {
-            player.sendMessage("§cUżyj przycisku, domu, bazy gildii albo zaakceptowanego /tpa.");
+            player.sendMessage(Messages.text("sector-manager.uzyj-przycisku-domu-bazy-gildii-albo-zaakceptowanego"));
             return CompletableFuture.failedFuture(new IllegalStateException("Missing authorized Spawn exit route"));
         }
         if (sectorId == null || !sectorId.matches("[A-Za-z0-9_-]{1,64}")) {
@@ -370,7 +372,7 @@ public class SectorManager {
                 plugin.getLogger().warning("Could not transfer " + playerName + " to " + sectorId
                         + ": " + error.getMessage());
                 if (player.isOnline() && Bukkit.getPlayer(playerUuid) == player) {
-                    player.sendMessage("§cTransfer nie powiódł się. Jeśli połączenie nie zostanie zakończone, połącz się ponownie.");
+                    player.sendMessage(Messages.text("sector-manager.transfer-nie-powiodl-sie-jesli-polaczenie-nie"));
                 }
             });
             if (!scheduled) {

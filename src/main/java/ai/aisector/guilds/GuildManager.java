@@ -587,8 +587,7 @@ public class GuildManager {
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 Player owner = Bukkit.getPlayer(ownerUuid);
                 if (owner != null) {
-                    owner.sendMessage("§cZmiany gildii [" + tag + "] nie zostały zapisane. "
-                            + "Spróbuj ponowić operację za chwilę.");
+                    owner.sendMessage(ai.aisector.utils.Messages.text("guild-manager.retry-save", tag));
                 }
             });
         } catch (RuntimeException ignoredShutdown) {

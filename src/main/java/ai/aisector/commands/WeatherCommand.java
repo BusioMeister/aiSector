@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.database.RedisManager;
@@ -26,12 +28,12 @@ public class WeatherCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.command.weather")) {
-            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            sender.sendMessage(Messages.text("weather-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 
         if (args.length != 1 || !weatherTypes.contains(args[0].toLowerCase(Locale.ROOT))) {
-            sender.sendMessage("§cUżycie: /weather <clear|rain|thunder>");
+            sender.sendMessage(Messages.text("weather-command.uzycie-weather"));
             return true;
         }
 
@@ -47,10 +49,9 @@ public class WeatherCommand implements CommandExecutor {
                 .whenComplete((subscribers, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof org.bukkit.entity.Player player && !player.isOnline()) return;
                     if (error != null || subscribers == null || subscribers == 0) {
-                        sender.sendMessage("§cNie udało się rozesłać zmiany pogody przez sieć.");
+                        sender.sendMessage(Messages.text("weather-command.nie-udalo-sie-rozeslac-zmiany-pogody-przez"));
                     } else {
-                        sender.sendMessage("§aRozesłano polecenie zmiany pogody na §e" + weather
-                                + " §ana wszystkich serwerach.");
+                        sender.sendMessage(Messages.text("weather-command.rozeslano-polecenie-zmiany-pogody-na-na-wszystkich", weather));
                     }
                 }));
         return true;

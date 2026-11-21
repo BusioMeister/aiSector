@@ -1,5 +1,7 @@
 package ai.aisector.skills;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
 import org.bukkit.Bukkit;
@@ -90,7 +92,7 @@ public class MiningLevelManager {
             user.setMiningExperience(user.getMiningExperience() - requiredXp);
             user.setMiningLevel(user.getMiningLevel() + 1);
 
-            player.sendMessage("§a§lAWANS! §7Osiągnąłeś §e" + user.getMiningLevel() + " §7poziom kopania!");
+            player.sendMessage(Messages.text("mining-level-manager.awans-osiagnales-poziom-kopania", user.getMiningLevel()));
         }
     }
 

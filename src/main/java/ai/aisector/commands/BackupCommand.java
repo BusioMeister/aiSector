@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
 import com.mongodb.client.model.Filters;
@@ -36,21 +38,21 @@ public final class BackupCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player admin)) {
-            sender.sendMessage("Ta komenda jest tylko dla graczy.");
+            sender.sendMessage(Messages.text("backup-command.ta-komenda-jest-tylko-dla-graczy"));
             return true;
         }
         if (!admin.hasPermission("aisector.command.backup")) {
-            admin.sendMessage("§cNie masz uprawnień do tej komendy.");
+            admin.sendMessage(Messages.text("backup-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
         if (args.length != 1) {
-            admin.sendMessage("§cUżycie: /backup <gracz>");
+            admin.sendMessage(Messages.text("backup-command.uzycie-backup"));
             return true;
         }
 
         String targetName = args[0];
         if (targetName.isBlank() || targetName.length() > 16) {
-            admin.sendMessage("§cNieprawidłowa nazwa gracza.");
+            admin.sendMessage(Messages.text("backup-command.nieprawidlowa-nazwa-gracza"));
             return true;
         }
         UUID adminUuid = admin.getUniqueId();
@@ -60,12 +62,11 @@ public final class BackupCommand implements CommandExecutor {
                     Player currentAdmin = Bukkit.getPlayer(adminUuid);
                     if (currentAdmin == null || !currentAdmin.isOnline()) return;
                     if (error != null) {
-                        currentAdmin.sendMessage("§cNie udało się wczytać backupów.");
+                        currentAdmin.sendMessage(Messages.text("backup-command.nie-udalo-sie-wczytac-backupow"));
                         plugin.getLogger().warning("Could not load death backups for " + targetName + ": "
                                 + error.getMessage());
                     } else if (records == null || records.isEmpty()) {
-                        currentAdmin.sendMessage("§cNie znaleziono żadnych zapisów śmierci dla gracza §e"
-                                + targetName + "§c.");
+                        currentAdmin.sendMessage(Messages.text("backup-command.nie-znaleziono-zadnych-zapisow-smierci-dla-gracza", targetName));
                     } else {
                         openBackupGui(currentAdmin, targetName, records);
                     }
@@ -74,7 +75,8 @@ public final class BackupCommand implements CommandExecutor {
     }
 
     private void openBackupGui(Player admin, String targetName, List<Document> records) {
-        Inventory gui = Bukkit.createInventory(null, 45, "§8Backupy gracza: §c" + targetName);
+        Inventory gui = new ai.aisector.utils.PluginMenu(ai.aisector.utils.PluginMenu.Kind.BACKUPS, targetName, 45,
+                Messages.text("backup-command.backupy-gracza", targetName)).getInventory();
         int slotIndex = 0;
         for (Document record : records) {
             if (slotIndex >= 45) break;
@@ -91,35 +93,35 @@ public final class BackupCommand implements CommandExecutor {
                 }
             }
             Date timestamp = record.getDate("timestamp");
-            meta.setDisplayName("§cZgon z dnia: §f" + (timestamp == null ? "nieznana data" : dateFormat.format(timestamp)));
+            meta.setDisplayName(Messages.text("backup-command.zgon-z-dnia", (timestamp == null ? "nieznana data" : dateFormat.format(timestamp))));
 
             List<String> lore = new ArrayList<>();
             Document location = record.get("location", Document.class);
-            lore.add("§7Sektor: §b" + record.getString("sector"));
-            lore.add("§7Zabójca: §e" + record.getString("killer_name"));
+            lore.add(Messages.text("backup-command.sektor", record.getString("sector")));
+            lore.add(Messages.text("backup-command.zabojca", record.getString("killer_name")));
             if (location != null) {
-                lore.add("§7Pozycja: §f" + coordinate(location, "x") + ", "
-                        + coordinate(location, "y") + ", " + coordinate(location, "z"));
+                lore.add(Messages.text("backup-command.pozycja", coordinate(location, "x"), coordinate(location, "y"), coordinate(location, "z")));
             }
             lore.add(" ");
 
             String restoredBy = record.getString("restored_by");
             if (restoredBy == null || restoredBy.equals("Nikt")) {
-                lore.add("§aPrzywrócono przez: §fNikt");
+                lore.add(Messages.text("backup-command.przywrocono-przez-nikt"));
                 lore.add(" ");
-                 lore.add("§eLPM - Przywróć ekwipunek");
+                 lore.add(Messages.text("backup-command.lpm-przywroc-ekwipunek"));
                  if (record.get("refundableRating") instanceof Integer refund) {
-                     lore.add("§6Shift + LPM - Ekwipunek, +" + refund + " pkt i −1 śmierć");
+                     lore.add(Messages.text("backup-command.shift-lpm-ekwipunek-pkt-i-1-smierc", refund));
                  }
-                lore.add("§ePPM - Pokaż ekwipunek");
+                lore.add(Messages.text("backup-command.ppm-pokaz-ekwipunek"));
             } else {
-                lore.add("§cPrzywrócono przez: §f" + restoredBy);
+                lore.add(Messages.text("backup-command.przywrocono-przez", restoredBy));
                 Date restoredAt = record.getDate("restored_at");
-                if (restoredAt != null) lore.add("§cData przywrócenia: §f" + dateFormat.format(restoredAt));
+                if (restoredAt != null) lore.add(Messages.text("backup-command.data-przywrocenia", dateFormat.format(restoredAt)));
                 lore.add(" ");
-                lore.add("§ePPM - Pokaż ekwipunek");
+                lore.add(Messages.text("backup-command.ppm-pokaz-ekwipunek"));
             }
-            lore.add("§0ID:" + record.getObjectId("_id").toHexString());
+             meta.getPersistentDataContainer().set(org.bukkit.NamespacedKey.fromString("aisector:backup-id"),
+                     org.bukkit.persistence.PersistentDataType.STRING, record.getObjectId("_id").toHexString());
             meta.setLore(lore);
             skull.setItemMeta(meta);
             gui.setItem(slotIndex++, skull);

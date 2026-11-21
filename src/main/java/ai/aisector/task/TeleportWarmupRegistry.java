@@ -1,5 +1,7 @@
 package ai.aisector.task;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -25,7 +27,7 @@ public final class TeleportWarmupRegistry {
             }
             if (current instanceof BukkitRunnable previous && ACTIVE.replace(playerUuid, current, task)) {
                 previous.cancel();
-                if (player.isOnline()) player.sendMessage("§ePoprzednia teleportacja została zastąpiona nową.");
+                if (player.isOnline()) player.sendMessage(Messages.text("teleport-warmup-registry.poprzednia-teleportacja-zostala-zastapiona-nowa"));
                 return true;
             }
         }

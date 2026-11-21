@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import com.google.gson.JsonObject;
@@ -20,12 +22,12 @@ public class SectorInfoCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("GUI jest dostępne tylko dla graczy.");
+            sender.sendMessage(Messages.text("sector-info-command.gui-jest-dostepne-tylko-dla-graczy"));
             return true;
         }
         Player player = (Player) sender;
         if (!player.hasPermission("aisector.command.sectorinfo")) {
-            player.sendMessage("§cNie masz uprawnień.");
+            player.sendMessage(Messages.text("sector-info-command.nie-masz-uprawnien"));
             return true;
         }
 
@@ -36,7 +38,7 @@ public class SectorInfoCommand implements CommandExecutor {
                 .whenComplete((subscribers, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (!player.isOnline()) return;
                     if (error != null || subscribers == null || subscribers == 0) {
-                        player.sendMessage("§cNie udało się pobrać informacji o sektorach.");
+                        player.sendMessage(Messages.text("sector-info-command.nie-udalo-sie-pobrac-informacji-o-sektorach"));
                     }
                 }));
         return true;

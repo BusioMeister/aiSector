@@ -54,7 +54,7 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
     private void processChat(Player player, String raw) {
         if (!player.isOnline()) return;
         if (!GlobalChatPayloadValidation.validMessage(raw)) {
-            player.sendMessage("§cWiadomość jest zbyt długa.");
+            player.sendMessage(Messages.text("global-chat-plugin.wiadomosc-jest-zbyt-dluga"));
             return;
         }
         if (raw.startsWith("!!")) {
@@ -78,7 +78,7 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
     private void sendGuildChatToProxy(Player sender, String content) {
         User user = plugin.getUserManager().getUser(sender);
         if (user == null || !user.hasGuild()) {
-            sender.sendMessage("§cNie jesteś w gildii.");
+            sender.sendMessage(Messages.text("global-chat-plugin.nie-jestes-w-gildii"));
             return;
         }
 
@@ -91,7 +91,7 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
     private void sendAllyChatToProxy(Player sender, String content) {
         User user = plugin.getUserManager().getUser(sender);
         if (user == null || !user.hasGuild()) {
-            sender.sendMessage("§cNie jesteś w gildii.");
+            sender.sendMessage(Messages.text("global-chat-plugin.nie-jestes-w-gildii"));
             return;
         }
 

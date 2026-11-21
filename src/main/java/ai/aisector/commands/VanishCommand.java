@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.player.VanishManager;
 import ai.aisector.user.User;
@@ -22,12 +24,12 @@ public class VanishCommand implements CommandExecutor {
         if (!(sender instanceof Player)) return true;
         Player player = (Player) sender;
         if (!player.hasPermission("aisector.command.vanish")) {
-            player.sendMessage("§cNie masz uprawnień.");
+            player.sendMessage(Messages.text("vanish-command.nie-masz-uprawnien"));
             return true;
         }
         User user = plugin.getUserManager().getUser(player);
         if (user == null) {
-            player.sendMessage("§cWystąpił błąd wczytywania Twoich danych.");
+            player.sendMessage(Messages.text("vanish-command.wystapil-blad-wczytywania-twoich-danych"));
             return true;
         }
 
@@ -40,13 +42,13 @@ public class VanishCommand implements CommandExecutor {
             // po vanish/unvanish:
             plugin.getGuildTagManager().updateTagsFor(player);
 
-            player.sendMessage("§aVanish został włączony.");
+            player.sendMessage(Messages.text("vanish-command.vanish-zostal-wlaczony"));
         } else {
             vanishManager.unvanish(player);
             // po vanish/unvanish:
             plugin.getGuildTagManager().updateTagsFor(player);
 
-            player.sendMessage("§cVanish został wyłączony.");
+            player.sendMessage(Messages.text("vanish-command.vanish-zostal-wylaczony"));
         }
         return true;
     }

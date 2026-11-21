@@ -1,5 +1,7 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
 import ai.aisector.task.HomeTeleportWarmupTask;
@@ -35,7 +37,7 @@ public class HomeGuiListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!event.getView().getTitle().equals("§8Wybierz dom do teleportacji")) return;
+        if (!ai.aisector.utils.PluginMenu.is(event.getView().getTopInventory(), ai.aisector.utils.PluginMenu.Kind.HOME)) return;
         event.setCancelled(true);
         if (event.getClickedInventory() != event.getView().getTopInventory()
                 || event.getSlot() < 2 || event.getSlot() > 6) return;
@@ -55,7 +57,7 @@ public class HomeGuiListener implements Listener {
                             Player currentPlayer = Bukkit.getPlayer(playerUuid);
                             if (currentPlayer == null || currentPlayer != player || !currentPlayer.isOnline()) return;
                             if (error != null || home == null) {
-                                currentPlayer.sendMessage("§cWystąpił błąd podczas wczytywania tego domu.");
+                                currentPlayer.sendMessage(Messages.text("home-gui-listener.wystapil-blad-podczas-wczytywania-tego-domu"));
                                 if (error != null) {
                                     plugin.getLogger().warning("Could not load home " + homeSlot + " for " + playerUuid
                                             + ": " + error.getMessage());
@@ -67,7 +69,7 @@ public class HomeGuiListener implements Listener {
                             try {
                                 storedHome = StoredHomeData.parse(home);
                             } catch (RuntimeException invalidHome) {
-                                currentPlayer.sendMessage("§cZapis tego domu jest nieprawidłowy.");
+                                currentPlayer.sendMessage(Messages.text("home-gui-listener.zapis-tego-domu-jest-nieprawidlowy"));
                                 return;
                             }
                             if (storedHome.slot() != homeSlot) return;
@@ -88,6 +90,6 @@ public class HomeGuiListener implements Listener {
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
-        if (event.getView().getTitle().equals("§8Wybierz dom do teleportacji")) event.setCancelled(true);
+        if (ai.aisector.utils.PluginMenu.is(event.getView().getTopInventory(), ai.aisector.utils.PluginMenu.Kind.HOME)) event.setCancelled(true);
     }
 }

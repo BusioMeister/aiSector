@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.RedisManager;
 import ai.aisector.shared.RedisChannels;
@@ -28,13 +30,13 @@ public class SetSpawnSectorCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda może być wykonana tylko przez gracza.");
+            sender.sendMessage(Messages.text("set-spawn-sector-command.ta-komenda-moze-byc-wykonana-tylko-przez"));
             return true;
         }
 
         Player player = (Player) sender;
         if (!player.hasPermission("aisector.command.setspawn")) {
-            player.sendMessage("§cNie masz uprawnień, aby użyć tej komendy.");
+            player.sendMessage(Messages.text("set-spawn-sector-command.nie-masz-uprawnien-aby-uzyc-tej-komendy"));
             return true;
         }
 
@@ -42,7 +44,7 @@ public class SetSpawnSectorCommand implements CommandExecutor {
         String sectorName = sectorManager.getSectorForLocation(spawnLocation.getBlockX(), spawnLocation.getBlockZ());
 
         if (sectorName == null || sectorName.isEmpty()) {
-            player.sendMessage("§cNie możesz ustawić spawnu, ponieważ nie stoisz w żadnym sektorze!");
+            player.sendMessage(Messages.text("set-spawn-sector-command.nie-mozesz-ustawic-spawnu-poniewaz-nie-stoisz"));
             return true;
         }
 
@@ -60,10 +62,9 @@ public class SetSpawnSectorCommand implements CommandExecutor {
                         if (!player.isOnline() || !player.getUniqueId().equals(playerId)
                                 || Bukkit.getPlayer(playerId) != player) return;
                         if (error != null) {
-                            player.sendMessage("§cWystąpił błąd podczas zapisu spawnu do Redis.");
+                            player.sendMessage(Messages.text("set-spawn-sector-command.wystapil-blad-podczas-zapisu-spawnu-do-redis"));
                         } else {
-                            player.sendMessage("§aPomyślnie ustawiono globalny spawn serwera w sektorze §e"
-                                    + sectorName + "§a!");
+                            player.sendMessage(Messages.text("set-spawn-sector-command.pomyslnie-ustawiono-globalny-spawn-serwera-w-sektorze", sectorName));
                         }
                     });
                 });

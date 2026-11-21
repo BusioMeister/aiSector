@@ -27,9 +27,9 @@ public class TeleportWarmupTask {
                 targetLocation,
                 targetServerName,
                 5,
-                "§aTeleportacja za: §e",
-                "§cNie ruszaj się! §7Teleportacja za §e",
-                "§aPrzeteleportowano!",
+                ai.aisector.utils.Messages.text("teleport.countdown"),
+                ai.aisector.utils.Messages.text("teleport.stay-still"),
+                ai.aisector.utils.Messages.text("teleport.arrived"),
                 "player:final_teleport_target:" + player.getUniqueId(),
                 60,
                 plugin

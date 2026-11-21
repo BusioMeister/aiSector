@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -23,11 +25,11 @@ public class PasteTestCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.command.pastetest")) {
-            sender.sendMessage(ChatColor.RED + "Brak uprawnień.");
+            sender.sendMessage(Messages.text("paste-test-command.brak-uprawnien", ChatColor.RED));
             return true;
         }
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Tylko gracz.");
+            sender.sendMessage(Messages.text("paste-test-command.tylko-gracz"));
             return true;
         }
 
@@ -35,24 +37,23 @@ public class PasteTestCommand implements CommandExecutor {
 
         String schemName = args[0];
         if (!schemName.matches("[A-Za-z0-9_-]{1,64}(?:\\.schem)?")) {
-            sender.sendMessage(ChatColor.RED + "Nieprawidłowa nazwa schematu.");
+            sender.sendMessage(Messages.text("paste-test-command.nieprawidlowa-nazwa-schematu", ChatColor.RED));
             return true;
         }
         boolean pasteAir = args.length >= 2 && args[1].equalsIgnoreCase("air");
         UUID playerUuid = player.getUniqueId();
         Location location = player.getLocation().clone();
-        player.sendMessage(ChatColor.GRAY + "Wczytuję schematic...");
+        player.sendMessage(Messages.text("paste-test-command.wczytuje-schematic", ChatColor.GRAY));
         plugin.pasteSchematicAsync(location, schemName).whenComplete((ignored, error) ->
                 BukkitTaskScheduler.execute(plugin, () -> {
                     Player currentPlayer = Bukkit.getPlayer(playerUuid);
                     if (currentPlayer == null || !currentPlayer.isOnline()) return;
                     if (error != null) {
-                        currentPlayer.sendMessage(ChatColor.RED + "Błąd: " + error.getMessage());
+                        currentPlayer.sendMessage(Messages.text("paste-test-command.blad", ChatColor.RED, error.getMessage()));
                         plugin.getLogger().warning("Schematic paste failed for " + schemName + ": "
                                 + error.getMessage());
                     } else {
-                        currentPlayer.sendMessage(ChatColor.GREEN + "Wklejono schem: " + schemName
-                                + (pasteAir ? " (z air)" : " (bez air)"));
+                        currentPlayer.sendMessage(Messages.text("paste-test-command.wklejono-schem", ChatColor.GREEN, schemName, (pasteAir ? " (z air)" : " (bez air)")));
                     }
                 }));
         return true;

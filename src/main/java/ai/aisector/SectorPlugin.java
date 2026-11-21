@@ -32,6 +32,7 @@ import ai.aisector.scoreboard.ScoreboardManager;
 
 import ai.aisector.utils.GlobalChatPlugin;
 import ai.aisector.utils.BukkitTaskScheduler;
+import ai.aisector.utils.Messages;
 import com.google.gson.JsonObject;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
@@ -100,6 +101,11 @@ public class SectorPlugin extends JavaPlugin {
             saveResource("permissions.yml", false);
         }
         getDataFolder().mkdirs();
+        try {
+            Messages.initialize(getDataFolder().toPath());
+        } catch (java.io.IOException error) {
+            getLogger().warning("Could not load messages.properties; defaults remain active: " + error.getMessage());
+        }
 
         File schemFolder = new File(getDataFolder(), "schematics");
         if (!schemFolder.exists()) schemFolder.mkdirs();
@@ -132,6 +138,10 @@ public class SectorPlugin extends JavaPlugin {
                 message -> getLogger().warning(message)
         );
         sectorManager = new SectorManager(this, redisManager);
+        CoreCommand core = new CoreCommand(this);
+        getCommand("core").setExecutor(core);
+        getCommand("core").setTabCompleter(core);
+        core.subscribe();
         worldBorderManager = new WorldBorderManager(sectorManager::isLockedSpawnBackend);
 
         userManager = new UserManager(this);
@@ -402,7 +412,7 @@ public class SectorPlugin extends JavaPlugin {
             new LocalTeleportWarmupTask(
                     playerToTeleport,
                     targetLocation,
-                    (p.message != null && !p.message.isEmpty()) ? p.message : "§aZostałeś przeteleportowany.",
+                        (p.message != null && !p.message.isEmpty()) ? p.message : Messages.text("teleport.completed"),
                     this.sectorManager,
                     this.worldBorderManager,
                     this

@@ -109,8 +109,11 @@ public class InventorySerializer {
     }
 
     public static Inventory createGuiFromJson(String json, String title) throws IOException {
+        return fillGuiFromJson(json, Bukkit.createInventory(null, 45, title));
+    }
+
+    public static Inventory fillGuiFromJson(String json, Inventory gui) throws IOException {
         // Używamy 5 rzędów (45 slotów)
-        Inventory gui = Bukkit.createInventory(null, 45, title);
         Map<Integer, String> serialized = parseSerializedInventory(json);
 
         for (Map.Entry<Integer, String> entry : serialized.entrySet()) {

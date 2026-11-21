@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
@@ -34,15 +36,15 @@ public class TpposCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda jest tylko dla graczy.");
+            sender.sendMessage(Messages.text("tppos-command.ta-komenda-jest-tylko-dla-graczy"));
             return true;
         }
         if (!sender.hasPermission("aisector.command.tppos")) {
-            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            sender.sendMessage(Messages.text("tppos-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
         if (args.length != 3) {
-            sender.sendMessage("§cUżycie: /tppos <x> <y> <z>");
+            sender.sendMessage(Messages.text("tppos-command.uzycie-tppos"));
             return true;
         }
 
@@ -52,7 +54,7 @@ public class TpposCommand implements CommandExecutor {
             coordinates = TpposCoordinates.parse(args[0], args[1], args[2],
                     player.getWorld().getMinHeight(), player.getWorld().getMaxHeight());
         } catch (IllegalArgumentException e) {
-            sender.sendMessage("§cWspółrzędne są nieprawidłowe lub poza granicami świata.");
+            sender.sendMessage(Messages.text("tppos-command.wspolrzedne-sa-nieprawidlowe-lub-poza-granicami-swiata"));
             return true;
         }
 
@@ -63,7 +65,7 @@ public class TpposCommand implements CommandExecutor {
         String currentSectorName = plugin.getConfig().getString("this-sector-name", "");
 
         if (targetSectorName == null || targetSectorName.isEmpty()) {
-            player.sendMessage("§cPodane koordynaty nie należą do żadnego znanego sektora.");
+            player.sendMessage(Messages.text("tppos-command.podane-koordynaty-nie-naleza-do-zadnego-znanego"));
             return true;
         }
 
@@ -74,18 +76,17 @@ public class TpposCommand implements CommandExecutor {
                         if (!player.isOnline() || !player.getUniqueId().equals(playerId)
                                 || Bukkit.getPlayer(playerId) != player) return;
                         if (error != null || !Boolean.TRUE.equals(success)) {
-                            player.sendMessage("§cNie udało się wykonać teleportu.");
+                            player.sendMessage(Messages.text("tppos-command.nie-udalo-sie-wykonac-teleportu"));
                             return;
                         }
                         Sector target = sectorManager.getSectorForLocation(
                                 targetLocation.getBlockX(), targetLocation.getBlockZ()) == null ? null
                                 : sectorManager.getSectorByName(targetSectorName);
                         if (target != null) borderManager.sendWorldBorder(player, target);
-                        player.sendMessage("§aPrzeteleportowano na koordynaty: §e" + (int) x + ", "
-                                + (int) y + ", " + (int) z);
+                        player.sendMessage(Messages.text("tppos-command.przeteleportowano-na-koordynaty", (int) x, (int) y, (int) z));
                     }));
         } else {
-            player.sendMessage("§7Koordynaty znajdują się w innym sektorze. Rozpoczynam transfer...");
+            player.sendMessage(Messages.text("tppos-command.koordynaty-znajduja-sie-w-innym-sektorze-rozpoczynam"));
 
             try {
                 String snapshot = userManager.serializePlayerDataForTransfer(player, player.getLocation());
@@ -95,7 +96,7 @@ public class TpposCommand implements CommandExecutor {
             } catch (RuntimeException exception) {
                 plugin.getLogger().warning("Could not prepare coordinate transfer for " + player.getName()
                         + ": " + exception.getMessage());
-                player.sendMessage("§cNie udało się przygotować transferu.");
+                player.sendMessage(Messages.text("tppos-command.nie-udalo-sie-przygotowac-transferu"));
                 return true;
             }
         }

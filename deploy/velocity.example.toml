@@ -1,0 +1,17 @@
+# Copy to the proxy's working directory as velocity.toml.
+config-version = "2.9"
+bind = "0.0.0.0:25565"
+online-mode = true
+force-key-authentication = true
+player-info-forwarding-mode = "modern"
+# Create this file locally with a unique secret; never commit it.
+forwarding-secret-file = "forwarding.secret"
+ping-passthrough = "DISABLED"
+
+[servers]
+Spawn = "127.0.0.1:25566"
+GameWest = "127.0.0.1:25567"
+GameEast = "127.0.0.1:25568"
+try = ["Spawn"]
+
+[forced-hosts]

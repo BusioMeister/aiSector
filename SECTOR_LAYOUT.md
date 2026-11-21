@@ -76,6 +76,15 @@ bieżącego sektora. Zawartość łódki ze skrzynią wypada po stronie sektora.
 
 ## TAB i czat wejścia
 
+Teksty pluginów znajdują się w plikach UTF-8 `plugins/aiSECTOR/messages.properties`
+na każdym backendzie i `plugins/velocitysector/messages.properties` na proxy.
+Każdy proces czyta swój plik. Po edycji użyj `/core reload` na dowolnym sektorze
+(operator lub `aisector.core.reload`). Polecenie rozsyła żądanie przez Redis;
+nie kopiuje plików i nie przeładowuje ustawień mapy ani baz danych.
+Nieusunięte modyfikacje zostają w pliku przy aktualizacji, a brakujące klucze
+używają domyślnych wartości z JAR-a. `{0}`, `{1}`, itd. to parametry.
+MOTD serwera jest nadal ustawiane przez `/motd`.
+
 Publiczne wiadomości wejścia i wyjścia z backendów są wyłączone. Prywatne
 powitanie LastPlay.net jest wysyłane tylko przy pierwszym połączeniu z siecią.
 

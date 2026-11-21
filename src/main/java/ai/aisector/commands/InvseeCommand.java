@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
@@ -18,15 +20,15 @@ public class InvseeCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda jest tylko dla graczy.");
+            sender.sendMessage(Messages.text("invsee-command.ta-komenda-jest-tylko-dla-graczy"));
             return true;
         }
         if (!sender.hasPermission("aisector.command.invsee")) {
-            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            sender.sendMessage(Messages.text("invsee-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
         if (args.length != 1) {
-            sender.sendMessage("§cUżycie: /invsee <gracz>");
+            sender.sendMessage(Messages.text("invsee-command.uzycie-invsee"));
             return true;
         }
 
@@ -35,12 +37,13 @@ public class InvseeCommand implements CommandExecutor {
         Player targetPlayer = Bukkit.getPlayer(targetName);
 
         if (targetPlayer == null) {
-            admin.sendMessage("§cGracz o nicku '" + targetName + "' nie jest online na tym sektorze.");
+            admin.sendMessage(Messages.text("invsee-command.gracz-o-nicku-nie-jest-online-na", targetName));
             return true;
         }
 
         // 🔥 ZMIANA: Zmniejszamy GUI do 5 rzędów (45 slotów)
-        Inventory invseeGui = Bukkit.createInventory(null, 45, "§8Ekwipunek gracza: §c" + targetPlayer.getName());
+        Inventory invseeGui = new ai.aisector.utils.PluginMenu(ai.aisector.utils.PluginMenu.Kind.INVSEE,
+                targetPlayer.getName(), 45, Messages.text("invsee-command.ekwipunek-gracza", targetPlayer.getName())).getInventory();
         PlayerInventory targetInventory = targetPlayer.getInventory();
 
         // Układamy przedmioty w nowym, kompaktowym porządku

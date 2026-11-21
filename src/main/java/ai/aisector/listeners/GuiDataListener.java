@@ -5,6 +5,8 @@ import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.utils.BukkitTaskScheduler;
 import net.kyori.adventure.text.Component;
+
+import ai.aisector.utils.Messages;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
@@ -62,7 +64,7 @@ public class GuiDataListener extends JedisPubSub {
                     int visibleCount = Math.min(54, sectorsData.size());
                     int inventorySize = Math.max(9, (int) (Math.ceil(visibleCount / 9.0) * 9));
                     Inventory gui = Bukkit.createInventory(null, inventorySize,
-                            Component.text("Informacje o Sektorach"));
+                            Component.text(Messages.text("gui-data-listener.informacje-o-sektorach")));
 
                     for (int i = 0; i < visibleCount; i++) {
                         SectorGuiPayload data = sectorsData.get(i);
@@ -77,24 +79,24 @@ public class GuiDataListener extends JedisPubSub {
                         List<Component> lore = new ArrayList<>();
                         lore.add(Component.text(""));
                         if (isOnline) {
-                            lore.add(Component.text("Status: ").color(NamedTextColor.GRAY)
-                                    .append(Component.text("Online", NamedTextColor.GREEN)));
-                            lore.add(Component.text("Gracze: ").color(NamedTextColor.GRAY)
+                            lore.add(Component.text(Messages.text("gui-data-listener.status")).color(NamedTextColor.GRAY)
+                                    .append(Component.text(Messages.text("gui-data-listener.online"), NamedTextColor.GREEN)));
+                            lore.add(Component.text(Messages.text("gui-data-listener.gracze")).color(NamedTextColor.GRAY)
                                     .append(Component.text(data.players(), NamedTextColor.WHITE)));
-                            lore.add(Component.text("TPS: ").color(NamedTextColor.GRAY)
+                            lore.add(Component.text(Messages.text("gui-data-listener.tps")).color(NamedTextColor.GRAY)
                                     .append(Component.text(data.tps(), NamedTextColor.WHITE)));
-                            lore.add(Component.text("RAM: ").color(NamedTextColor.GRAY)
-                                    .append(Component.text(data.ramMb() + " MB", NamedTextColor.WHITE)));
+                            lore.add(Component.text(Messages.text("gui-data-listener.ram")).color(NamedTextColor.GRAY)
+                                    .append(Component.text(Messages.text("gui-data-listener.mb", data.ramMb()), NamedTextColor.WHITE)));
                         } else {
-                            lore.add(Component.text("Status: ").color(NamedTextColor.GRAY)
-                                    .append(Component.text("Offline", NamedTextColor.RED)));
+                            lore.add(Component.text(Messages.text("gui-data-listener.status")).color(NamedTextColor.GRAY)
+                                    .append(Component.text(Messages.text("gui-data-listener.offline"), NamedTextColor.RED)));
                         }
 
                         Sector sectorInfo = sectorManager.getSectorByName(name);
                         if (sectorInfo != null) {
                             lore.add(Component.text(""));
-                            lore.add(Component.text("Wielkość: ").color(NamedTextColor.GRAY)
-                                    .append(Component.text(sectorInfo.getWidth() + "x" + sectorInfo.getDepth(),
+                            lore.add(Component.text(Messages.text("gui-data-listener.wielkosc")).color(NamedTextColor.GRAY)
+                                    .append(Component.text(Messages.text("gui-data-listener.x", sectorInfo.getWidth(), sectorInfo.getDepth()),
                                             NamedTextColor.WHITE)));
                         }
 

@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.command.Command;
@@ -12,7 +14,7 @@ public class GameModeCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "Ta komenda może być używana tylko przez graczy!");
+            sender.sendMessage(Messages.text("game-mode-command.ta-komenda-moze-byc-uzywana-tylko-przez", ChatColor.RED));
             return true;
         }
 
@@ -21,25 +23,25 @@ public class GameModeCommand implements CommandExecutor {
         // --- POCZĄTEK DODANEGO KODU ---
         // Sprawdzamy, czy gracz jest operatorem LUB ma odpowiednią permisję
         if (!player.isOp() && !player.hasPermission("aisector.command.gamemode")) {
-            player.sendMessage(ChatColor.RED + "Nie masz uprawnień do tej komendy.");
+            player.sendMessage(Messages.text("game-mode-command.nie-masz-uprawnien-do-tej-komendy", ChatColor.RED));
             return true;
         }
         // --- KONIEC DODANEGO KODU ---
 
         if (command.getName().equalsIgnoreCase("gamemode") || command.getName().equalsIgnoreCase("gm")) {
             if (args.length != 1) {
-                player.sendMessage(ChatColor.RED + "Poprawne użycie: /gamemode <creative|survival|adventure|spectator>");
+                player.sendMessage(Messages.text("game-mode-command.poprawne-uzycie-gamemode", ChatColor.RED));
                 return true;
             }
 
             GameMode newGameMode = getGameModeFromString(args[0]);
             if (newGameMode == null) {
-                player.sendMessage(ChatColor.RED + "Nieprawidłowy tryb gry. Dostępne tryby: creative, survival, adventure, spectator.");
+                player.sendMessage(Messages.text("game-mode-command.nieprawidlowy-tryb-gry-dostepne-tryby-creative-survival", ChatColor.RED));
                 return true;
             }
 
             player.setGameMode(newGameMode);
-            player.sendMessage(ChatColor.GREEN + "Zmieniłeś tryb gry na " + newGameMode.toString().toLowerCase() + ".");
+            player.sendMessage(Messages.text("game-mode-command.zmieniles-tryb-gry-na", ChatColor.GREEN, newGameMode.toString().toLowerCase()));
             return true;
         }
 

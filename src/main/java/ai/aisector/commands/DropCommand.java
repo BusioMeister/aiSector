@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.drop.DropMainGui;
 import org.bukkit.command.Command;
@@ -18,14 +20,14 @@ public class DropCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda jest tylko dla graczy.");
+            sender.sendMessage(Messages.text("drop-command.ta-komenda-jest-tylko-dla-graczy"));
             return true;
         }
 
         Player player = (Player) sender;
 
         if (!player.hasPermission("aisector.command.drop")) {
-            player.sendMessage("§cNie masz uprawnień do tej komendy.");
+            player.sendMessage(Messages.text("drop-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 

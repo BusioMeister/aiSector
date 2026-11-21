@@ -140,6 +140,8 @@ commands:
   astats:
     description: Podgląd i edycja statystyk gracza.
     permission: aisector.astats
+  core:
+    description: Zarządzanie katalogiem wiadomości.
   sethome:
     description: Ustawia lokalizację domu.
     permission: aisector.command.sethome
@@ -148,6 +150,9 @@ commands:
     permission: aisector.command.home
 
 permissions:
+  aisector.core.reload:
+    description: Allows reloading messages across the sector network.
+    default: op
   aisector.astats:
     description: Allows editing combat and ranking statistics.
     default: op

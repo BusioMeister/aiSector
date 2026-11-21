@@ -1,5 +1,7 @@
 package ai.aisector.cobblex;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import org.bukkit.Particle;
 import org.bukkit.event.EventHandler;
@@ -64,9 +66,9 @@ public class CobbleXListener implements Listener {
                     p.getWorld().dropItemNaturally(p.getLocation(), left);
                 }
             }
-            p.sendMessage("§aCobbleX: §fotrzymano §e" + reward.getAmount() + "x §6" + reward.getType());
+            p.sendMessage(Messages.text("cobble-x-listener.cobblex-otrzymano-x", reward.getAmount(), reward.getType()));
         } else {
-            p.sendMessage("§cCobbleX: brak skonfigurowanych nagród.");
+            p.sendMessage(Messages.text("cobble-x-listener.cobblex-brak-skonfigurowanych-nagrod"));
         }
 
         // 3) Particles

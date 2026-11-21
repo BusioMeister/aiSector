@@ -1,5 +1,7 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.Sector;
 import ai.aisector.sectors.SectorBoatBoundary;
@@ -127,7 +129,7 @@ public class PlayerListener implements Listener {
             event.setCancelled(true);
             queueBoundaryPush(player, SectorEdge.backInside(previous, to.getBlockX(), to.getBlockZ()), previous);
             if (cooldown == SeamCrossingCooldown.Crossing.BLOCKED_NOTIFY) {
-                player.sendActionBar(Component.text("Odczekaj 2 sekundy przed kolejnym przejściem.", NamedTextColor.YELLOW));
+                player.sendActionBar(Component.text(Messages.text("player-listener.odczekaj-2-sekundy-przed-kolejnym-przejsciem"), NamedTextColor.YELLOW));
             }
             return;
         }
@@ -158,7 +160,7 @@ public class PlayerListener implements Listener {
             pendingSectorTransfers.remove(playerUuid, transferToken);
             plugin.getLogger().warning("Could not capture transfer state for " + player.getName()
                     + ": " + exception.getMessage());
-            player.sendMessage("§cNie udało się przygotować transferu. Pozostajesz na obecnym sektorze.");
+            player.sendMessage(Messages.text("player-listener.nie-udalo-sie-przygotowac-transferu-pozostajesz-na"));
         }
     }
 
@@ -168,7 +170,7 @@ public class PlayerListener implements Listener {
         if (nearBoatBoundary(boat.getLocation())) {
             event.setCancelled(true);
             if (event.getPlayer() != null) event.getPlayer().sendActionBar(
-                    Component.text("Nie możesz postawić łódki przy granicy sektora.", NamedTextColor.RED));
+                    Component.text(Messages.text("player-listener.nie-mozesz-postawic-lodki-przy-granicy-sektora"), NamedTextColor.RED));
         }
     }
 
@@ -177,7 +179,7 @@ public class PlayerListener implements Listener {
         if (!(event.getVehicle() instanceof Boat boat) || !(event.getEntered() instanceof Player player)) return;
         if (nearBoatBoundary(boat.getLocation()) || nearBoatBoundary(player.getLocation())) {
             event.setCancelled(true);
-            player.sendActionBar(Component.text("Nie możesz wsiąść do łódki przy granicy sektora.", NamedTextColor.RED));
+            player.sendActionBar(Component.text(Messages.text("player-listener.nie-mozesz-wsiasc-do-lodki-przy-granicy"), NamedTextColor.RED));
         }
     }
 
@@ -234,7 +236,7 @@ public class PlayerListener implements Listener {
                     returnTo.setPitch(at.getPitch());
                     if (!rider.teleport(returnTo, PlayerTeleportEvent.TeleportCause.PLUGIN)) continue;
                 }
-                rider.sendActionBar(Component.text("Łódka rozbiła się na granicy sektora!", NamedTextColor.RED));
+                rider.sendActionBar(Component.text(Messages.text("player-listener.lodka-rozbila-sie-na-granicy-sektora"), NamedTextColor.RED));
                 pushInsideSector(rider, local, inward, true);
             }
         });
@@ -291,7 +293,7 @@ public class PlayerListener implements Listener {
         Long previous = lastMapEdgeAlert.get(id);
         if (previous == null || now - previous >= 1_000_000_000L) {
             lastMapEdgeAlert.put(id, now);
-            player.sendActionBar(Component.text("Jesteś na granicy mapy!", NamedTextColor.RED));
+            player.sendActionBar(Component.text(Messages.text("player-listener.jestes-na-granicy-mapy"), NamedTextColor.RED));
         }
     }
 
@@ -392,8 +394,8 @@ public class PlayerListener implements Listener {
     private void showBossBar(Player player, Sector neighbor, double distance) {
         BossBar bar = bossBars.get(player.getUniqueId());
         int blocks = (int) Math.ceil(distance);
-        String title = neighbor == null ? "§cGranica mapy §7• §f" + blocks + " m"
-                : "§eZbliżasz się do sektora §f" + neighbor.getName() + " §7• §f" + blocks + " m";
+        String title = neighbor == null ? Messages.text("player-listener.granica-mapy-m", blocks)
+                : Messages.text("player-listener.zblizasz-sie-do-sektora-m", neighbor.getName(), blocks);
         BarColor color = neighbor == null ? BarColor.RED : BarColor.YELLOW;
         double progress = Math.clamp(1 - (double) blocks / WARNING_DISTANCE, 0, 1);
         if (bar == null) {

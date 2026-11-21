@@ -1,5 +1,7 @@
 package ai.aisector.sectors.player;
 
+import ai.aisector.utils.Messages;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -56,7 +58,7 @@ public class VanishTagManager {
         // --- KLUCZOWA ZMIANA ---
         // Ustawiamy prefix i kolor ZA KAŻDYM RAZEM, poza warunkiem 'if'.
         // To gwarantuje, że stare wartości zostaną nadpisane nowymi.
-        vanishedTeam.prefix(Component.text("[V] ", NamedTextColor.RED));   // Twój nowy, czerwony kolor
+        vanishedTeam.prefix(Component.text(Messages.text("vanish-tag-manager.v"), NamedTextColor.RED));   // Twój nowy, czerwony kolor
         vanishedTeam.color(NamedTextColor.WHITE); // Twój nowy, biały kolor
         // --- KONIEC ZMIANY ---
 

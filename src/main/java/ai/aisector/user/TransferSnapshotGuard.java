@@ -1,5 +1,7 @@
 package ai.aisector.user;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -45,7 +47,7 @@ final class TransferSnapshotGuard implements Listener {
             if (seals.get(player.getUniqueId()) == seal && player.isOnline()
                     && Bukkit.getPlayer(player.getUniqueId()) == player) {
                 // Never release a live source while an already published snapshot may still be consumed.
-                player.kickPlayer("Transfer nie został zakończony. Połącz się ponownie.");
+                player.kickPlayer(Messages.text("transfer-snapshot-guard.transfer-nie-zostal-zakonczony-polacz-sie-ponownie"));
             }
         }, 1200L);
         return seal;

@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.database.RedisManager;
@@ -26,13 +28,13 @@ public class TimeCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.command.time")) {
-            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            sender.sendMessage(Messages.text("time-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 
         if (args.length != 2 || !args[0].equalsIgnoreCase("set")
                 || !timeTypes.contains(args[1].toLowerCase(Locale.ROOT))) {
-            sender.sendMessage("§cUżycie: /time set <day|night>");
+            sender.sendMessage(Messages.text("time-command.uzycie-time-set"));
             return true;
         }
 
@@ -48,10 +50,9 @@ public class TimeCommand implements CommandExecutor {
                 .whenComplete((subscribers, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof org.bukkit.entity.Player player && !player.isOnline()) return;
                     if (error != null || subscribers == null || subscribers == 0) {
-                        sender.sendMessage("§cNie udało się rozesłać zmiany czasu przez sieć.");
+                        sender.sendMessage(Messages.text("time-command.nie-udalo-sie-rozeslac-zmiany-czasu-przez"));
                     } else {
-                        sender.sendMessage("§aRozesłano polecenie zmiany czasu na §e" + time
-                                + " §ana wszystkich serwerach.");
+                        sender.sendMessage(Messages.text("time-command.rozeslano-polecenie-zmiany-czasu-na-na-wszystkich", time));
                     }
                 }));
         return true;

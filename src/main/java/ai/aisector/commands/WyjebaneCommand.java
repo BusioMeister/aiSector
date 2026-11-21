@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.database.RedisManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -24,7 +26,7 @@ public class WyjebaneCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Tej komendy może użyć tylko gracz.");
+            sender.sendMessage(Messages.text("wyjebane-command.tej-komendy-moze-uzyc-tylko-gracz"));
             return true;
         }
         Player player = (Player) sender;
@@ -34,11 +36,11 @@ public class WyjebaneCommand implements CommandExecutor {
                 .longValue() == 1L).whenComplete((disabled, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (!player.isOnline()) return;
                     if (error != null) {
-                        player.sendMessage("§cNie udało się zmienić ustawień prywatnych wiadomości.");
+                        player.sendMessage(Messages.text("wyjebane-command.nie-udalo-sie-zmienic-ustawien-prywatnych-wiadomosci"));
                     } else if (Boolean.TRUE.equals(disabled)) {
-                        player.sendMessage("§aOd teraz masz WYJEBANE!");
+                        player.sendMessage(Messages.text("wyjebane-command.od-teraz-masz-wyjebane"));
                     } else {
-                        player.sendMessage("§cOd teraz §4NIE §cmasz WYJEBANE!");
+                        player.sendMessage(Messages.text("wyjebane-command.od-teraz-nie-masz-wyjebane"));
                     }
                 }));
         return true;

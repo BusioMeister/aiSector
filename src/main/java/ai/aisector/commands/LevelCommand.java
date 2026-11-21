@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.user.User;
@@ -32,16 +34,16 @@ public class LevelCommand implements CommandExecutor {
         long requiredXp = levelManager.getExperienceForNextLevel(currentLevel);
 
         player.sendMessage("§m                                        ");
-        player.sendMessage("§7Twoje Statystyki Kopania:");
-        player.sendMessage("§fAktualnie posiadasz §e" + currentXp + " pkt §fczyli §a" + currentLevel + " poziom!");
+        player.sendMessage(Messages.text("level-command.twoje-statystyki-kopania"));
+        player.sendMessage(Messages.text("level-command.aktualnie-posiadasz-pkt-czyli-poziom", currentXp, currentLevel));
         if (currentLevel < 100) {
-            player.sendMessage("§fDo następnego poziomu brakuje Ci: §c" + (requiredXp - currentXp) + " pkt");
+            player.sendMessage(Messages.text("level-command.do-nastepnego-poziomu-brakuje-ci-pkt", (requiredXp - currentXp)));
         } else {
-            player.sendMessage("§aOsiągnąłeś maksymalny poziom!");
+            player.sendMessage(Messages.text("level-command.osiagnales-maksymalny-poziom"));
         }
         player.sendMessage(" ");
-        player.sendMessage("§7Wykopany kamień: §e" + user.getMinedBlockCount(Material.STONE));
-        player.sendMessage("§7Wykopany obsydian: §e" + user.getMinedBlockCount(Material.OBSIDIAN));
+        player.sendMessage(Messages.text("level-command.wykopany-kamien", user.getMinedBlockCount(Material.STONE)));
+        player.sendMessage(Messages.text("level-command.wykopany-obsydian", user.getMinedBlockCount(Material.OBSIDIAN)));
         player.sendMessage("§m                                        ");
 
         return true;

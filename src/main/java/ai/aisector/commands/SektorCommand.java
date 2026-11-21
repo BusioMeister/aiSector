@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.database.RedisManager;
@@ -21,15 +23,15 @@ public class SektorCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!sender.hasPermission("aisector.command.sektor")) {
-            sender.sendMessage("§cNie masz uprawnień.");
+            sender.sendMessage(Messages.text("sektor-command.nie-masz-uprawnien"));
             return true;
         }
         if (args.length != 1) {
-            sender.sendMessage("§cUżycie: /sektor <gracz>");
+            sender.sendMessage(Messages.text("sektor-command.uzycie-sektor"));
             return true;
         }
         if (args[0].isBlank() || args[0].length() > 16) {
-            sender.sendMessage("§cNieprawidłowa nazwa gracza.");
+            sender.sendMessage(Messages.text("sektor-command.nieprawidlowa-nazwa-gracza"));
             return true;
         }
 
@@ -40,7 +42,7 @@ public class SektorCommand implements CommandExecutor {
         redisManager.publishAsync(RedisChannels.SECTOR_REQUEST, req.toString()).whenComplete((subscribers, error) -> {
             if (error != null || subscribers == null || subscribers == 0) {
                 BukkitTaskScheduler.execute(plugin, () -> sender.sendMessage(
-                        "§cNie udało się sprawdzić sektora gracza: proxy niedostępne."));
+                        Messages.text("sektor-command.nie-udalo-sie-sprawdzic-sektora-gracza-proxy")));
             }
         });
         return true;

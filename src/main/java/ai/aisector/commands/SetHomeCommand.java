@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
 import com.mongodb.client.model.Filters;
@@ -32,11 +34,11 @@ public final class SetHomeCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Ta komenda jest tylko dla graczy.");
+            sender.sendMessage(Messages.text("set-home-command.ta-komenda-jest-tylko-dla-graczy"));
             return true;
         }
         if (!player.hasPermission("aisector.command.sethome")) {
-            player.sendMessage("§cNie masz uprawnień do tej komendy.");
+            player.sendMessage(Messages.text("set-home-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 
@@ -46,7 +48,7 @@ public final class SetHomeCommand implements CommandExecutor {
                     Player currentPlayer = Bukkit.getPlayer(playerUuid);
                     if (currentPlayer != player || !player.isOnline()) return;
                     if (error != null) {
-                        currentPlayer.sendMessage("§cNie udało się wczytać ustawień domów.");
+                        currentPlayer.sendMessage(Messages.text("set-home-command.nie-udalo-sie-wczytac-ustawien-domow"));
                         plugin.getLogger().warning("Could not load home slots for " + playerUuid + ": "
                                 + error.getMessage());
                         return;
@@ -58,7 +60,7 @@ public final class SetHomeCommand implements CommandExecutor {
 
     private void openSetHomeGui(Player player, List<Document> homes) {
         HomeSlotMenu holder = new HomeSlotMenu(player.getUniqueId(), homes);
-        Inventory gui = Bukkit.createInventory(holder, 9, "§8Ustaw swój dom");
+        Inventory gui = Bukkit.createInventory(holder, 9, Messages.text("set-home-command.ustaw-swoj-dom"));
         holder.attach(gui);
         boolean[] occupied = new boolean[6];
         for (Document home : homes) {
@@ -75,11 +77,10 @@ public final class SetHomeCommand implements CommandExecutor {
             ItemStack item = new ItemStack(occupied[slot] ? Material.GREEN_CONCRETE : Material.RED_CONCRETE);
             ItemMeta meta = item.getItemMeta();
             meta.setDisplayName(occupied[slot]
-                    ? "§aDom #" + slot + " (Ustawiony)"
-                    : "§cPusty slot na dom #" + slot);
+                    ? Messages.text("set-home-command.dom-ustawiony", slot)
+                    : Messages.text("set-home-command.pusty-slot-na-dom", slot));
             List<String> lore = new ArrayList<>();
-            lore.add(occupied[slot] ? "§7Kliknij PPM, aby usunąć ten dom."
-                    : "§7Kliknij PPM, aby ustawić dom w tym miejscu.");
+            lore.add(Messages.text(occupied[slot] ? "set-home-command.remove-hint" : "set-home-command.set-hint"));
             meta.setLore(lore);
             item.setItemMeta(meta);
             gui.setItem(slot + 1, item);

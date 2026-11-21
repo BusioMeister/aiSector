@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.user.UserManager;
@@ -25,22 +27,22 @@ public class SummonCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda musi być wykonana przez gracza.");
+            sender.sendMessage(Messages.text("summon-command.ta-komenda-musi-byc-wykonana-przez-gracza"));
             return true;
         }
         if (!sender.hasPermission("aisector.command.s")) {
-            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            sender.sendMessage(Messages.text("summon-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
         if (args.length != 1) {
-            sender.sendMessage("§cUżycie: /s <gracz>");
+            sender.sendMessage(Messages.text("summon-command.uzycie-s"));
             return true;
         }
 
         Player admin = (Player) sender;
         String targetName = args[0];
         if (targetName.isBlank() || targetName.length() > 16) {
-            admin.sendMessage("§cNieprawidłowa nazwa gracza.");
+            admin.sendMessage(Messages.text("summon-command.nieprawidlowa-nazwa-gracza"));
             return true;
         }
 
@@ -48,8 +50,8 @@ public class SummonCommand implements CommandExecutor {
         Player targetPlayer = Bukkit.getPlayer(targetName);
         if (targetPlayer != null) {
             targetPlayer.teleport(admin.getLocation());
-            targetPlayer.sendMessage("§aZostałeś przywołany.");
-            admin.sendMessage("§aPrzywołano gracza §e" + targetName + "§a.");
+            targetPlayer.sendMessage(Messages.text("summon-command.zostales-przywolany"));
+            admin.sendMessage(Messages.text("summon-command.przywolano-gracza", targetName));
             return true;
         }
 
@@ -78,9 +80,9 @@ public class SummonCommand implements CommandExecutor {
                     Player onlineAdmin = Bukkit.getPlayer(java.util.UUID.fromString(adminUuid));
                     if (onlineAdmin == null) return;
                     if (error != null || subscribers == null || subscribers == 0) {
-                        onlineAdmin.sendMessage("§cNie udało się wysłać prośby o przywołanie gracza.");
+                        onlineAdmin.sendMessage(Messages.text("summon-command.nie-udalo-sie-wyslac-prosby-o-przywolanie"));
                     } else {
-                        onlineAdmin.sendMessage("§7Przetwarzanie prośby o przywołanie gracza...");
+                        onlineAdmin.sendMessage(Messages.text("summon-command.przetwarzanie-prosby-o-przywolanie-gracza"));
                     }
                 }));
         return true;

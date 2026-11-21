@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.resolver.NameResolver;
 import ai.aisector.shared.NetworkAddressUtil;
@@ -21,11 +23,11 @@ public final class UnbanCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.unban")) {
-            sender.sendMessage("§cBrak uprawnień.");
+            sender.sendMessage(Messages.text("unban-command.brak-uprawnien"));
             return true;
         }
         if (args.length < 1) {
-            sender.sendMessage("§cUżycie: /unban <nick|ip>");
+            sender.sendMessage(Messages.text("unban-command.uzycie-unban"));
             return true;
         }
 
@@ -33,7 +35,7 @@ public final class UnbanCommand implements CommandExecutor {
         if (NetworkAddressUtil.looksLikeIpLiteral(target)) {
             Optional<String> normalizedIp = NetworkAddressUtil.normalizeIpLiteral(target);
             if (normalizedIp.isEmpty()) {
-                sender.sendMessage("§cPodaj prawidłowy adres IP.");
+                sender.sendMessage(Messages.text("unban-command.podaj-prawidlowy-adres-ip"));
                 return true;
             }
             removeBan(sender, normalizedIp.get(), true, normalizedIp.get());
@@ -44,7 +46,7 @@ public final class UnbanCommand implements CommandExecutor {
                 BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof org.bukkit.entity.Player player && !player.isOnline()) return;
                     if (error != null || uuid == null || uuid.isEmpty()) {
-                        sender.sendMessage("§cNie znaleziono gracza: " + target);
+                        sender.sendMessage(Messages.text("unban-command.nie-znaleziono-gracza", target));
                         return;
                     }
                     removeBan(sender, uuid.get().toString(), false, target);
@@ -60,12 +62,12 @@ public final class UnbanCommand implements CommandExecutor {
         }).whenComplete((removed, error) -> BukkitTaskScheduler.execute(plugin, () -> {
             if (sender instanceof org.bukkit.entity.Player player && !player.isOnline()) return;
             if (error != null) {
-                sender.sendMessage("§cNie udało się usunąć bana z Redis.");
+                sender.sendMessage(Messages.text("unban-command.nie-udalo-sie-usunac-bana-z-redis"));
                 plugin.getLogger().warning("Could not unban " + display + ": " + error.getMessage());
             } else if (removed == 0L) {
-                sender.sendMessage("§cNie znaleziono aktywnego bana dla: " + display);
+                sender.sendMessage(Messages.text("unban-command.nie-znaleziono-aktywnego-bana-dla", display));
             } else {
-                sender.sendMessage("§aZdjęto bana: " + display);
+                sender.sendMessage(Messages.text("unban-command.zdjeto-bana", display));
             }
         }));
     }

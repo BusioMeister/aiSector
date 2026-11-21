@@ -1,5 +1,7 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.generators.GeneratorItems;
 import ai.aisector.generators.GeneratorManager;
@@ -60,7 +62,7 @@ public class GeneratorListener implements Listener {
         }
 
         manager.register(e.getBlockPlaced().getLocation(), type); // upsert do Mongo
-        e.getPlayer().sendMessage("§aPostawiono " + (type == GeneratorType.STONE ? "Stoniarkę" : "Obsydianarkę") + "!");
+        e.getPlayer().sendMessage(Messages.text("generator-listener.postawiono", (type == GeneratorType.STONE ? "Stoniarkę" : "Obsydianarkę")));
     }
 
     @EventHandler(ignoreCancelled = true, priority = org.bukkit.event.EventPriority.HIGHEST)
@@ -84,7 +86,7 @@ public class GeneratorListener implements Listener {
                         boolean deleteConfirmed = error == null && Boolean.TRUE.equals(removed);
                         if (!deleteConfirmed) {
                             if (player.isOnline() && player.getUniqueId().equals(playerId)) {
-                                player.sendMessage("§cNie udało się trwale zdemontować generatora; spróbuj ponownie.");
+                                player.sendMessage(Messages.text("generator-listener.nie-udalo-sie-trwale-zdemontowac-generatora-sprobuj"));
                             }
                             return;
                         }
@@ -93,9 +95,7 @@ public class GeneratorListener implements Listener {
                         org.bukkit.inventory.ItemStack drop = GeneratorItems.createItemForType(plugin, type);
                         b.getWorld().dropItemNaturally(b.getLocation().add(0.5, 0.25, 0.5), drop);
                         if (player.isOnline() && player.getUniqueId().equals(playerId)) {
-                            player.sendMessage("§eZdemontowano "
-                                    + (type == GeneratorType.STONE ? "Stoniarkę" : "Obsydianarkę")
-                                    + " – możesz postawić ją ponownie gdzie indziej!");
+                            player.sendMessage(Messages.text("generator-listener.zdemontowano-mozesz-postawic-ja-ponownie-gdzie-indziej", (type == GeneratorType.STONE ? "Stoniarkę" : "Obsydianarkę")));
                         }
                     }));
             return;

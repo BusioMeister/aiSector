@@ -1,5 +1,7 @@
 # aiSector
 
+**Start od zera:** [instrukcja wdrożenia trzech sektorów i własnego silnika](deploy/README.md).
+
 Opcjonalny układ zamkniętego spawna i dwóch sektorów jednej mapy: [SECTOR_LAYOUT.md](SECTOR_LAYOUT.md).
 
 **Pełny aktualny kod, narzędzia i dokumentacja workspace:** [WORKSPACE.md](WORKSPACE.md), katalog [`workspace/`](workspace/). Kod proxy jest w [VelocityPlugin](https://github.com/BusioMeister/VelocityPlugin).

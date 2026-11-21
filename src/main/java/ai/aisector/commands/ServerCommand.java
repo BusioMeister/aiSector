@@ -1,6 +1,8 @@
 // ServerCommand.java
+
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import org.bukkit.command.*;
@@ -16,14 +18,14 @@ public class ServerCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!sender.hasPermission("aisector.server.maintenance")) {
-            sender.sendMessage("§cBrak uprawnień."); return true;
+            sender.sendMessage(Messages.text("server-command.brak-uprawnien")); return true;
         }
         if (args.length < 2 || !"przerwa".equalsIgnoreCase(args[0])) {
-            sender.sendMessage("§eUżycie: /vserver przerwa <on|off>"); return true;
+            sender.sendMessage(Messages.text("server-command.uzycie-vserver-przerwa")); return true;
         }
         String sub = args[1].toLowerCase();
         if (!sub.equals("on") && !sub.equals("off")) {
-            sender.sendMessage("§eUżycie: /vserver przerwa <on|off>"); return true;
+            sender.sendMessage(Messages.text("server-command.uzycie-vserver-przerwa")); return true;
         }
         String by = (sender instanceof Player) ? ((Player) sender).getName() : "Konsola";
         JSONObject req = new JSONObject();
@@ -35,9 +37,9 @@ public class ServerCommand implements CommandExecutor {
                 .whenComplete((subscribers, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (error != null || subscribers == null || subscribers == 0) {
-                        sender.sendMessage("§cBłąd komunikacji z proxy.");
+                        sender.sendMessage(Messages.text("server-command.blad-komunikacji-z-proxy"));
                     } else {
-                        sender.sendMessage("§aTryb przerwy: " + sub.toUpperCase(java.util.Locale.ROOT));
+                        sender.sendMessage(Messages.text("server-command.tryb-przerwy", sub.toUpperCase(java.util.Locale.ROOT)));
                     }
                 }));
         return true;

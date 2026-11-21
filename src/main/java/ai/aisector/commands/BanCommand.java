@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.resolver.NameResolver;
 import ai.aisector.utils.BukkitTaskScheduler;
@@ -18,42 +20,42 @@ public class BanCommand implements CommandExecutor {
     public BanCommand(SectorPlugin plugin) { this.plugin = plugin; }
 
     @Override public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!sender.hasPermission("aisector.ban.use")) { sender.sendMessage("§cBrak uprawnień."); return true; }
-        if (args.length < 3) { sender.sendMessage("§cUżycie: /ban <nick> <minuty|-1> <powód>"); return true; }
+        if (!sender.hasPermission("aisector.ban.use")) { sender.sendMessage(Messages.text("ban-command.brak-uprawnien")); return true; }
+        if (args.length < 3) { sender.sendMessage(Messages.text("ban-command.uzycie-ban")); return true; }
 
         String targetNameArg = args[0];
         String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
         if (targetNameArg.isBlank() || targetNameArg.length() > 16 || reason.length() > 256) {
-            sender.sendMessage("§cNieprawidłowy nick lub powód (maksymalnie 256 znaków).");
+            sender.sendMessage(Messages.text("ban-command.nieprawidlowy-nick-lub-powod-maksymalnie-256-znakow"));
             return true;
         }
         long minutes;
-        try { minutes = Long.parseLong(args[1]); } catch (Exception e) { sender.sendMessage("§cPodaj liczbę minut lub -1."); return true; }
+        try { minutes = Long.parseLong(args[1]); } catch (Exception e) { sender.sendMessage(Messages.text("ban-command.podaj-liczbe-minut-lub-1")); return true; }
 
         boolean isPerm = minutes == -1;
         if (minutes == 0 || minutes < -1) {
-            sender.sendMessage("§cCzas bana musi wynosić co najmniej minutę albo -1.");
+            sender.sendMessage(Messages.text("ban-command.czas-bana-musi-wynosic-co-najmniej-minute"));
             return true;
         }
-        if (isPerm && !sender.hasPermission("aisector.ban.perm")) { sender.sendMessage("§cPerm ban wymaga: aisector.ban.perm"); return true; }
+        if (isPerm && !sender.hasPermission("aisector.ban.perm")) { sender.sendMessage(Messages.text("ban-command.perm-ban-wymaga-aisector-ban-perm")); return true; }
         long max = 3L * 24 * 60; // 3 dni
         if (!isPerm && minutes > max && !sender.hasPermission("aisector.ban.long")) {
-            sender.sendMessage("§cMaksymalnie 3 dni bez aisector.ban.long."); return true;
+            sender.sendMessage(Messages.text("ban-command.maksymalnie-3-dni-bez-aisector-ban-long")); return true;
         }
         if (!isPerm && minutes > (Long.MAX_VALUE - System.currentTimeMillis()) / 60_000L) {
-            sender.sendMessage("§cPodany czas bana jest zbyt długi.");
+            sender.sendMessage(Messages.text("ban-command.podany-czas-bana-jest-zbyt-dlugi"));
             return true;
         }
         String bannedBy = (sender instanceof Player) ? ((Player) sender).getName() : "Konsola";
 
-        sender.sendMessage("§7Wyszukuję gracza i zapisuję bana...");
+        sender.sendMessage(Messages.text("ban-command.wyszukuje-gracza-i-zapisuje-bana"));
         new NameResolver(plugin).resolveUuidAsync(targetNameArg).whenComplete((resolvedUuid, resolveError) ->
                 BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (resolveError != null || resolvedUuid == null || resolvedUuid.isEmpty()) {
                         sender.sendMessage(resolveError == null
-                                ? "§cNie znaleziono gracza: " + targetNameArg
-                                : "§cNie udało się wyszukać gracza.");
+                                ? Messages.text("ban-command.nie-znaleziono-gracza", targetNameArg)
+                                : Messages.text("ban-command.nie-udalo-sie-wyszukac-gracza"));
                         return;
                     }
                     persistBan(sender, targetNameArg, resolvedUuid.get(), reason, bannedBy, minutes, isPerm);
@@ -85,20 +87,21 @@ public class BanCommand implements CommandExecutor {
             if (sender instanceof Player player && !player.isOnline()) return;
             if (error != null) {
                 plugin.getLogger().warning("Could not persist ban for " + uuid + ": " + error.getMessage());
-                sender.sendMessage("§cNie udało się zapisać bana w Redis.");
+                sender.sendMessage(Messages.text("ban-command.nie-udalo-sie-zapisac-bana-w-redis"));
                 return;
             }
             Player online = Bukkit.getPlayer(uuid);
             if (online != null) {
                 online.kick(net.kyori.adventure.text.Component.text(banMessage(targetName, bannedBy, reason, expiresAt)));
             }
-            sender.sendMessage("§aZbanowano " + targetName + " na "
-                    + (permanent ? "permanentnie" : (minutes + " min")) + ".");
+            sender.sendMessage(Messages.text("ban-command.zbanowano-na", targetName, permanent
+                    ? Messages.text("moderation.permanent") : Messages.text("moderation.minutes", minutes)));
         }));
     }
 
     private String banMessage(String name, String by, String reason, long expiresAt) {
-        String time = (expiresAt == -1) ? "permanentnie" : ("do " + Instant.ofEpochMilli(expiresAt));
-        return "§cZostałeś zbanowany!\n§7Nick: §f" + name + "\n§7Powód: §f" + reason + "\n§7Przez: §f" + by + "\n§7Czas: §f" + time;
+        String time = expiresAt == -1 ? Messages.text("moderation.permanent")
+                : Messages.text("moderation.until", Instant.ofEpochMilli(expiresAt));
+        return Messages.text("moderation.ban-screen", name, reason, by, time);
     }
 }

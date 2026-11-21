@@ -1,4 +1,6 @@
 package ai.aisector.commands;
+
+import ai.aisector.utils.Messages;
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
 import ai.aisector.user.PlayerFlight;
@@ -16,20 +18,20 @@ public class FlyCommand implements CommandExecutor {
         if (!(sender instanceof Player)) return true;
         Player player = (Player) sender;
         if (!player.hasPermission("aisector.command.fly")) {
-            player.sendMessage("§cNie masz uprawnień.");
+            player.sendMessage(Messages.text("fly-command.nie-masz-uprawnien"));
             return true;
         }
         User user = plugin.getUserManager().getUser(player);
         if (user == null) {
-            player.sendMessage("§cWystąpił błąd wczytywania Twoich danych.");
+            player.sendMessage(Messages.text("fly-command.wystapil-blad-wczytywania-twoich-danych"));
             return true;
         }
         user.setFlying(!user.isFlying());
         PlayerFlight.resolve(player.getGameMode(), user.isFlying(), user.isFlying()).apply(player);
         if (user.isFlying()) {
-            player.sendMessage("§aLatanie zostało włączone.");
+            player.sendMessage(Messages.text("fly-command.latanie-zostalo-wlaczone"));
         } else {
-            player.sendMessage("§cPrzełącznik /fly wyłączony. Tryb gry nadal może zezwalać na latanie.");
+            player.sendMessage(Messages.text("fly-command.przelacznik-fly-wylaczony-tryb-gry-nadal-moze"));
         }
         return true;
     }

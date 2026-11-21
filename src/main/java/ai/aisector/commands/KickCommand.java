@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.resolver.NameResolver;
@@ -24,29 +26,29 @@ public final class KickCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.kick")) {
-            sender.sendMessage("§cBrak uprawnień.");
+            sender.sendMessage(Messages.text("kick-command.brak-uprawnien"));
             return true;
         }
         if (args.length < 2) {
-            sender.sendMessage("§cUżycie: /kick <nick> <powód>");
+            sender.sendMessage(Messages.text("kick-command.uzycie-kick"));
             return true;
         }
 
         String targetName = args[0];
         String reason = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
         if (targetName.isBlank() || targetName.length() > 16 || reason.length() > 256) {
-            sender.sendMessage("§cNieprawidłowy nick lub powód (maksymalnie 256 znaków).");
+            sender.sendMessage(Messages.text("kick-command.nieprawidlowy-nick-lub-powod-maksymalnie-256-znakow"));
             return true;
         }
         String kickedBy = sender instanceof Player player ? player.getName() : "Konsola";
-        String kickMessage = "§cZostałeś wyrzucony!\n§7Powód: §f" + reason + "\n§7Przez: §f" + kickedBy;
-        sender.sendMessage("§7Wyszukuję gracza i wysyłam kick do proxy...");
+        String kickMessage = Messages.text("kick-command.screen", reason, kickedBy);
+        sender.sendMessage(Messages.text("kick-command.wyszukuje-gracza-i-wysylam-kick-do-proxy"));
 
         new NameResolver(plugin).resolveUuidAsync(targetName).whenComplete((uuid, lookupError) ->
                 BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (lookupError != null || uuid == null || uuid.isEmpty()) {
-                        sender.sendMessage("§cNie znaleziono gracza: " + targetName);
+                        sender.sendMessage(Messages.text("kick-command.nie-znaleziono-gracza", targetName));
                         return;
                     }
                     persistKick(sender, targetName, kickedBy, reason, uuid.get(), kickMessage);
@@ -74,14 +76,14 @@ public final class KickCommand implements CommandExecutor {
             if (sender instanceof Player player && !player.isOnline()) return;
             if (error != null) {
                 plugin.getLogger().warning("Could not publish kick for " + uuid + ": " + error.getMessage());
-                sender.sendMessage("§cNie udało się wysłać kicka przez proxy.");
+                sender.sendMessage(Messages.text("kick-command.nie-udalo-sie-wyslac-kicka-przez-proxy"));
                 return;
             }
             Player localPlayer = Bukkit.getPlayer(uuid);
             if (localPlayer != null) {
                 localPlayer.kick(net.kyori.adventure.text.Component.text(kickMessage));
             }
-            sender.sendMessage("§aWyrzucono " + targetName + " §8- §f" + reason);
+            sender.sendMessage(Messages.text("kick-command.wyrzucono", targetName, reason));
         }));
     }
 }

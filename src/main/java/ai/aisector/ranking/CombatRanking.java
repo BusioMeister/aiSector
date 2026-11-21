@@ -1,5 +1,7 @@
 package ai.aisector.ranking;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.guilds.Guild;
 import ai.aisector.tab.NetworkRanking;
@@ -71,7 +73,7 @@ public final class CombatRanking {
         CompletableFuture.allOf(victimSaved, killerSaved).whenComplete((unused, error) -> {
             if (error != null) {
                 BukkitTaskScheduler.execute(plugin, () -> {
-                    if (active(killer)) killer.sendActionBar(Component.text("Nie udało się potwierdzić zapisu rankingu.", NamedTextColor.RED));
+                    if (active(killer)) killer.sendActionBar(Component.text(Messages.text("combat-ranking.nie-udalo-sie-potwierdzic-zapisu-rankingu"), NamedTextColor.RED));
                 });
                 return;
             }
@@ -110,7 +112,8 @@ public final class CombatRanking {
     private void animate(Player killer, String tag, String victim, int gain, NetworkRanking.Movement position) {
         int delta = position == null ? 0 : position.before() - position.after();
         String rank = delta > 0 ? "  ↑+" + delta : "";
-        plugin.getCombatTitle().show(killer, tag, victim, "+" + gain + " pkt" + rank, NamedTextColor.GREEN, true);
+        plugin.getCombatTitle().show(killer, tag, victim, Messages.text("combat-ranking.gained-points", gain) + rank,
+                NamedTextColor.GREEN, true);
     }
 
     public DeathNotice deathNotice(Player victim, Player killer, Integer loss) {
@@ -134,8 +137,8 @@ public final class CombatRanking {
 
     public String announcement(Player killer, Player victim) {
         var users = plugin.getUserManager();
-        return "§c⚔ " + display(killer, guild(killer, users.getUser(killer)))
-                + " §czabił " + display(victim, guild(victim, users.getUser(victim))) + "§c.";
+        return Messages.text("combat-ranking.global-kill", display(killer, guild(killer, users.getUser(killer))),
+                display(victim, guild(victim, users.getUser(victim))));
     }
 
     private Guild guild(Player player, User user) {

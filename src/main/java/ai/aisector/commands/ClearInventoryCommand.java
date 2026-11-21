@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -11,7 +13,7 @@ public class ClearInventoryCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda musi być wykonana przez gracza.");
+            sender.sendMessage(Messages.text("clear-inventory-command.ta-komenda-musi-byc-wykonana-przez-gracza"));
             return true;
         }
 
@@ -19,7 +21,7 @@ public class ClearInventoryCommand implements CommandExecutor {
 
         // Uprawnienie tylko dla adminów
         if (!player.hasPermission("aisector.command.ci")) {
-            player.sendMessage("§cNie masz uprawnień do tej komendy.");
+            player.sendMessage(Messages.text("clear-inventory-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 
@@ -29,7 +31,7 @@ public class ClearInventoryCommand implements CommandExecutor {
         inventory.setArmorContents(null);
         inventory.setItemInOffHand(null);
 
-        player.sendMessage("§aTwój ekwipunek został wyczyszczony.");
+        player.sendMessage(Messages.text("clear-inventory-command.twoj-ekwipunek-zostal-wyczyszczony"));
         return true;
     }
 }

@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.database.MongoDBManager;
 import com.mongodb.client.model.Filters;
@@ -31,11 +33,11 @@ public final class HomeCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Ta komenda jest tylko dla graczy.");
+            sender.sendMessage(Messages.text("home-command.ta-komenda-jest-tylko-dla-graczy"));
             return true;
         }
         if (!player.hasPermission("aisector.command.home")) {
-            player.sendMessage("§cNie masz uprawnień do tej komendy.");
+            player.sendMessage(Messages.text("home-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 
@@ -45,11 +47,11 @@ public final class HomeCommand implements CommandExecutor {
                     Player currentPlayer = Bukkit.getPlayer(playerUuid);
                     if (currentPlayer != player || !player.isOnline()) return;
                     if (error != null) {
-                        currentPlayer.sendMessage("§cNie udało się wczytać domów.");
+                        currentPlayer.sendMessage(Messages.text("home-command.nie-udalo-sie-wczytac-domow"));
                         plugin.getLogger().warning("Could not load homes for " + playerUuid + ": "
                                 + error.getMessage());
                     } else if (homes == null || homes.isEmpty()) {
-                        currentPlayer.sendMessage("§cNie masz jeszcze ustawionego żadnego domu! Użyj /sethome.");
+                        currentPlayer.sendMessage(Messages.text("home-command.nie-masz-jeszcze-ustawionego-zadnego-domu-uzyj"));
                     } else {
                         openHomes(currentPlayer, homes);
                     }
@@ -58,7 +60,8 @@ public final class HomeCommand implements CommandExecutor {
     }
 
     private void openHomes(Player player, List<Document> homes) {
-        Inventory gui = Bukkit.createInventory(null, 9, "§8Wybierz dom do teleportacji");
+        Inventory gui = new ai.aisector.utils.PluginMenu(ai.aisector.utils.PluginMenu.Kind.HOME, null, 9,
+                Messages.text("home-command.wybierz-dom-do-teleportacji")).getInventory();
         boolean[] rendered = new boolean[6];
         for (Document home : homes) {
             if (home == null) continue;
@@ -70,14 +73,13 @@ public final class HomeCommand implements CommandExecutor {
 
             ItemStack homeItem = new ItemStack(Material.GREEN_CONCRETE);
             ItemMeta meta = homeItem.getItemMeta();
-            meta.setDisplayName("§aDom #" + slot);
+            meta.setDisplayName(Messages.text("home-command.dom", slot));
             List<String> lore = new ArrayList<>();
             String sector = home.getString("sector");
-            lore.add("§7Sektor: §b" + (sector == null ? "?" : sector));
-            lore.add("§7Koordynaty: §f" + intValue(location, "x") + ", "
-                    + intValue(location, "y") + ", " + intValue(location, "z"));
+            lore.add(Messages.text("home-command.sektor", (sector == null ? "?" : sector)));
+            lore.add(Messages.text("home-command.koordynaty", intValue(location, "x"), intValue(location, "y"), intValue(location, "z")));
             lore.add(" ");
-            lore.add("§eKliknij, aby się przeteleportować.");
+            lore.add(Messages.text("home-command.kliknij-aby-sie-przeteleportowac"));
             meta.setLore(lore);
             homeItem.setItemMeta(meta);
             gui.setItem(slot + 1, homeItem);

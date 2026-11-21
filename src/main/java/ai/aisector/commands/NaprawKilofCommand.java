@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -16,13 +18,13 @@ public class NaprawKilofCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda musi być wykonana przez gracza.");
+            sender.sendMessage(Messages.text("napraw-kilof-command.ta-komenda-musi-byc-wykonana-przez-gracza"));
             return true;
         }
         Player player = (Player) sender;
 
         if (!player.hasPermission("aisector.command.naprawkilof")) {
-            player.sendMessage("§cNie masz uprawnień do tej komendy.");
+            player.sendMessage(Messages.text("napraw-kilof-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 
@@ -30,20 +32,20 @@ public class NaprawKilofCommand implements CommandExecutor {
 
         // Sprawdzamy, czy gracz trzyma kilof
         if (itemInHand.getType() == Material.AIR || !itemInHand.getType().name().endsWith("_PICKAXE")) {
-            player.sendMessage("§cMusisz trzymać kilof w ręku, aby go naprawić!");
+            player.sendMessage(Messages.text("napraw-kilof-command.musisz-trzymac-kilof-w-reku-aby-go"));
             return true;
         }
 
         // Sprawdzamy, czy kilof wymaga naprawy
         ItemMeta meta = itemInHand.getItemMeta();
         if (!(meta instanceof Damageable) || !((Damageable) meta).hasDamage()) {
-            player.sendMessage("§eTen kilof jest już w pełni naprawiony.");
+            player.sendMessage(Messages.text("napraw-kilof-command.ten-kilof-jest-juz-w-pelni-naprawiony"));
             return true;
         }
 
         // Sprawdzamy, czy gracz ma wystarczająco diamentów
         if (!player.getInventory().containsAtLeast(new ItemStack(Material.DIAMOND), DIAMOND_COST)) {
-            player.sendMessage("§cNie masz wystarczająco diamentów! Potrzebujesz §e" + DIAMOND_COST + "§c.");
+            player.sendMessage(Messages.text("napraw-kilof-command.nie-masz-wystarczajaco-diamentow-potrzebujesz", DIAMOND_COST));
             return true;
         }
 
@@ -55,7 +57,7 @@ public class NaprawKilofCommand implements CommandExecutor {
         damageable.setDamage(0);
         itemInHand.setItemMeta(meta);
 
-        player.sendMessage("§aTwój kilof został naprawiony za §e" + DIAMOND_COST + " diamentów§a!");
+        player.sendMessage(Messages.text("napraw-kilof-command.twoj-kilof-zostal-naprawiony-za-diamentow", DIAMOND_COST));
         return true;
     }
 }

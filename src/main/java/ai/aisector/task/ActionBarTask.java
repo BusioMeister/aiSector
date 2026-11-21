@@ -1,5 +1,7 @@
 package ai.aisector.task;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.sectors.player.VanishManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -14,7 +16,7 @@ public class ActionBarTask extends BukkitRunnable {
     public void run() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (VanishManager.isVanished(player)) {
-                player.sendActionBar(Component.text("VANISH", NamedTextColor.GREEN, TextDecoration.BOLD));
+                player.sendActionBar(Component.text(Messages.text("action-bar-task.vanish"), NamedTextColor.GREEN, TextDecoration.BOLD));
             } else {
                 // Wysyłamy pustą wiadomość, aby wyczyścić ActionBar.
                 // Jest to bezpieczne i w pełni kompatybilne ze Spigotem i Paper.

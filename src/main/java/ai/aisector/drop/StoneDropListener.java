@@ -1,5 +1,7 @@
 package ai.aisector.drop;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.user.User;
@@ -136,13 +138,13 @@ public class StoneDropListener implements Listener {
     private void sendDropActionBar(Player player, Material material, int amount, int xpGained, boolean dropEnabled) {
         String materialName = material.name().replace("_", " ").toLowerCase();
 
-        Component message = Component.text("Udało Ci się wydobyć: ", NamedTextColor.GRAY)
+        Component message = Component.text(Messages.text("stone-drop-listener.udalo-ci-sie-wydobyc"), NamedTextColor.GRAY)
                 .append(Component.text(materialName.substring(0, 1).toUpperCase() + materialName.substring(1), NamedTextColor.AQUA))
-                .append(Component.text(" (" + amount + " szt) ", NamedTextColor.GRAY))
+                .append(Component.text(Messages.text("stone-drop-listener.szt", amount), NamedTextColor.GRAY))
                 .append(Component.text("+" + xpGained, NamedTextColor.GOLD));
 
         if (!dropEnabled) {
-            message = message.append(Component.text(" (Off)", NamedTextColor.RED));
+            message = message.append(Component.text(Messages.text("stone-drop-listener.off"), NamedTextColor.RED));
         }
 
         player.sendActionBar(message);

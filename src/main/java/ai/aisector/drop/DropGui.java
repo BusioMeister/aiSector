@@ -1,5 +1,7 @@
 package ai.aisector.drop;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.skills.MiningLevelManager;
 import ai.aisector.user.User;
@@ -20,7 +22,6 @@ import java.util.Map;
 public class DropGui {
 
     private final SectorPlugin plugin;
-    public static final String GUI_TITLE = "§8Drop ze Stone'a";
 
     private final Player player;
     private final User user;
@@ -36,7 +37,7 @@ public class DropGui {
 
     public void open() {
         if (user == null) {
-            player.sendMessage("§cWystąpił błąd podczas wczytywania Twoich ustawień dropu.");
+            player.sendMessage(Messages.text("drop-gui.wystapil-blad-podczas-wczytywania-twoich-ustawien-dropu"));
             return;
         }
 
@@ -47,7 +48,8 @@ public class DropGui {
         if (size < 9) size = 9;
         if (size > 54) size = 54; // bezpieczeństwo
 
-        Inventory gui = Bukkit.createInventory(null, size, GUI_TITLE);
+        Inventory gui = new ai.aisector.utils.PluginMenu(ai.aisector.utils.PluginMenu.Kind.STONE, null, size,
+                Messages.text("drop-gui.title")).getInventory();
 
         int slot = 0;
         for (Map.Entry<Material, DropConfig.DropSpec> e : DropConfig.getAll().entrySet()) {
@@ -80,13 +82,13 @@ public class DropGui {
 
         List<String> lore = new ArrayList<>();
         lore.add("§8§m-------------------------");
-        lore.add("§f» §7Szansa na drop: §b" + pct.format(totalChance) + " §aBONUS§7(" + bonus.format(levelBonus) + ")");
-        lore.add("§f» §7Bonus rangi: §a+" + pct.format(rankBonus));
-        lore.add("§f» §7Wypada poniżej: §eY: " + spec.maxYLevel());
-        lore.add("§f» §7Szczęście: §aWłączone");
-        lore.add("§f» §7Drop: " + (isEnabled ? "§aWłączony" : "§cWyłączony"));
-        lore.add("§f» §7Punkty: §e" + spec.xpValue() + " pkt.");
-        lore.add("§f» §7Wykopałeś: §6" + user.getMinedBlockCount(material));
+        lore.add(Messages.text("drop-gui.szansa-na-drop-bonus", pct.format(totalChance), bonus.format(levelBonus)));
+        lore.add(Messages.text("drop-gui.bonus-rangi", pct.format(rankBonus)));
+        lore.add(Messages.text("drop-gui.wypada-ponizej-y", spec.maxYLevel()));
+        lore.add(Messages.text("drop-gui.szczescie-wlaczone"));
+        lore.add(Messages.text("drop-gui.drop", (isEnabled ? "§aWłączony" : "§cWyłączony")));
+        lore.add(Messages.text("drop-gui.punkty-pkt", spec.xpValue()));
+        lore.add(Messages.text("drop-gui.wykopales", user.getMinedBlockCount(material)));
         lore.add("§8§m-------------------------");
 
         meta.setLore(lore);
@@ -98,11 +100,11 @@ public class DropGui {
         boolean enabled = user.isCobblestoneDropEnabled();
         ItemStack item = new ItemStack(Material.COBBLESTONE);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName("§d§lCobblestone");
+        meta.setDisplayName(Messages.text("drop-gui.cobblestone"));
 
         List<String> lore = new ArrayList<>();
         lore.add("§8§m-------------------------");
-        lore.add("§7Status: " + (enabled ? "§aWłączony" : "§cWyłączony"));
+        lore.add(Messages.text("drop-gui.status", (enabled ? "§aWłączony" : "§cWyłączony")));
         lore.add("§8§m-------------------------");
 
         meta.setLore(lore);

@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.database.RedisManager;
@@ -23,16 +25,16 @@ public class TpaCommand implements CommandExecutor {
         if (!(sender instanceof Player)) return true;
 
         if (!sender.hasPermission("aisector.command.tpa")) {
-            sender.sendMessage("§cNie masz uprawnień do tej komendy.");
+            sender.sendMessage(Messages.text("tpa-command.nie-masz-uprawnien-do-tej-komendy"));
             return true;
         }
 
         if (args.length != 1) {
-            sender.sendMessage("§cUżycie: /tpa <gracz>");
+            sender.sendMessage(Messages.text("tpa-command.uzycie-tpa"));
             return true;
         }
         if (args[0].isBlank() || args[0].length() > 16) {
-            sender.sendMessage("§cNieprawidłowa nazwa gracza.");
+            sender.sendMessage(Messages.text("tpa-command.nieprawidlowa-nazwa-gracza"));
             return true;
         }
         JsonObject req = new JsonObject();
@@ -42,7 +44,7 @@ public class TpaCommand implements CommandExecutor {
             if (error != null || subscribers == null || subscribers == 0) {
                 BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
-                    sender.sendMessage("§cNie udało się wysłać prośby TPA przez sieć.");
+                    sender.sendMessage(Messages.text("tpa-command.nie-udalo-sie-wyslac-prosby-tpa-przez"));
                 });
             }
         });

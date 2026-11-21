@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.resolver.NameResolver;
 import ai.aisector.shared.NetworkAddressUtil;
@@ -25,44 +27,44 @@ public final class BanIpCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("aisector.ban.ip")) {
-            sender.sendMessage("§cBrak uprawnień.");
+            sender.sendMessage(Messages.text("ban-ip-command.brak-uprawnien"));
             return true;
         }
         if (args.length < 3) {
-            sender.sendMessage("§cUżycie: /banip <nick|ip> <minuty|-1> <powód>");
+            sender.sendMessage(Messages.text("ban-ip-command.uzycie-banip"));
             return true;
         }
 
         String target = args[0];
         String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
         if (target.isBlank() || target.length() > 128 || reason.length() > 256) {
-            sender.sendMessage("§cNieprawidłowy cel lub powód (maksymalnie 256 znaków).");
+            sender.sendMessage(Messages.text("ban-ip-command.nieprawidlowy-cel-lub-powod-maksymalnie-256-znakow"));
             return true;
         }
         long minutes;
         try {
             minutes = Long.parseLong(args[1]);
         } catch (NumberFormatException exception) {
-            sender.sendMessage("§cPodaj liczbę minut lub -1.");
+            sender.sendMessage(Messages.text("ban-ip-command.podaj-liczbe-minut-lub-1"));
             return true;
         }
 
         boolean permanent = minutes == -1;
         if (minutes == 0 || minutes < -1) {
-            sender.sendMessage("§cCzas bana musi wynosić co najmniej minutę albo -1.");
+            sender.sendMessage(Messages.text("ban-ip-command.czas-bana-musi-wynosic-co-najmniej-minute"));
             return true;
         }
         if (permanent && !sender.hasPermission("aisector.ban.perm")) {
-            sender.sendMessage("§cPerm ban wymaga aisector.ban.perm.");
+            sender.sendMessage(Messages.text("ban-ip-command.perm-ban-wymaga-aisector-ban-perm"));
             return true;
         }
         long maxMinutes = 3L * 24 * 60;
         if (!permanent && minutes > maxMinutes && !sender.hasPermission("aisector.ban.long")) {
-            sender.sendMessage("§cMaksymalnie 3 dni bez aisector.ban.long.");
+            sender.sendMessage(Messages.text("ban-ip-command.maksymalnie-3-dni-bez-aisector-ban-long"));
             return true;
         }
         if (!permanent && minutes > (Long.MAX_VALUE - System.currentTimeMillis()) / 60_000L) {
-            sender.sendMessage("§cPodany czas bana jest zbyt długi.");
+            sender.sendMessage(Messages.text("ban-ip-command.podany-czas-bana-jest-zbyt-dlugi"));
             return true;
         }
 
@@ -72,7 +74,7 @@ public final class BanIpCommand implements CommandExecutor {
         if (NetworkAddressUtil.looksLikeIpLiteral(target)) {
             Optional<String> normalizedIp = NetworkAddressUtil.normalizeIpLiteral(target);
             if (normalizedIp.isEmpty()) {
-                sender.sendMessage("§cPodaj prawidłowy adres IP.");
+                sender.sendMessage(Messages.text("ban-ip-command.podaj-prawidlowy-adres-ip"));
                 return true;
             }
             persistBan(sender, normalizedIp.get(), "(IP ban)", null, reason, bannedBy, minutes, permanent);
@@ -89,7 +91,7 @@ public final class BanIpCommand implements CommandExecutor {
             }
         }
 
-        sender.sendMessage("§7Wyszukuję ostatnie znane IP gracza...");
+        sender.sendMessage(Messages.text("ban-ip-command.wyszukuje-ostatnie-znane-ip-gracza"));
         NameResolver resolver = new NameResolver(plugin);
         resolver.resolveUuidAsync(target)
                 .thenCompose(uuid -> uuid.map(resolver::resolveLastIpAsync)
@@ -98,7 +100,7 @@ public final class BanIpCommand implements CommandExecutor {
                 .whenComplete((resolved, error) -> BukkitTaskScheduler.execute(plugin, () -> {
                     if (sender instanceof Player player && !player.isOnline()) return;
                     if (error != null || resolved == null || resolved.ip() == null) {
-                        sender.sendMessage("§cNie można ustalić IP (gracz offline i brak last_ip). Podaj IP wprost lub gracza online.");
+                        sender.sendMessage(Messages.text("ban-ip-command.nie-mozna-ustalic-ip-gracz-offline-i"));
                         return;
                     }
                     persistBan(sender, resolved.ip(), target, resolved.uuid(), reason, bannedBy, minutes, permanent);
@@ -135,7 +137,7 @@ public final class BanIpCommand implements CommandExecutor {
             if (sender instanceof Player player && !player.isOnline()) return;
             if (error != null) {
                 plugin.getLogger().warning("Could not persist IP ban for " + displayName + ": " + error.getMessage());
-                sender.sendMessage("§cNie udało się zapisać bana IP w Redis.");
+                sender.sendMessage(Messages.text("ban-ip-command.nie-udalo-sie-zapisac-bana-ip-w"));
                 return;
             }
             if (kickUuid != null) {
@@ -145,14 +147,14 @@ public final class BanIpCommand implements CommandExecutor {
                             banMessage(displayName, bannedBy, reason, expiresAt)));
                 }
             }
-            sender.sendMessage("§aZbanowano IP " + displayName + " na "
-                    + (permanent ? "permanentnie" : (minutes + " min")) + ".");
+            sender.sendMessage(Messages.text("ban-ip-command.zbanowano-ip-na", displayName, permanent
+                    ? Messages.text("moderation.permanent") : Messages.text("moderation.minutes", minutes)));
         }));
     }
 
     private String banMessage(String name, String by, String reason, long expiresAt) {
-        String time = expiresAt == -1 ? "permanentnie" : "do " + java.time.Instant.ofEpochMilli(expiresAt);
-        return "§cZostałeś zbanowany IP!\n§7Nick: §f" + name + "\n§7Powód: §f" + reason
-                + "\n§7Przez: §f" + by + "\n§7Czas: §f" + time;
+        String time = expiresAt == -1 ? Messages.text("moderation.permanent")
+                : Messages.text("moderation.until", java.time.Instant.ofEpochMilli(expiresAt));
+        return Messages.text("moderation.ban-ip-screen", name, reason, by, time);
     }
 }

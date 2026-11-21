@@ -11,6 +11,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
+import ai.aisector.utils.PluginMenu;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.EnumSet;
@@ -50,12 +51,17 @@ public class DropGuiListener implements Listener {
         Inventory top = event.getView().getTopInventory();
         if (top == null) return;
 
-        String title = event.getView().getTitle();
+        boolean main = PluginMenu.is(top, PluginMenu.Kind.DROP);
+        boolean stone = PluginMenu.is(top, PluginMenu.Kind.STONE);
+        boolean cobble = PluginMenu.is(top, PluginMenu.Kind.COBBLEX);
+        if (!main && !stone && !cobble) return;
+        event.setCancelled(true);
+        if (event.getClickedInventory() != top || cobble) return;
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.getType() == Material.AIR) return;
 
         // 1) Menu główne /drop
-        if (title.equals(DropMainGui.TITLE)) {
+        if (main) {
             event.setCancelled(true);
             Player p = (Player) event.getWhoClicked();
             Material type = clicked.getType();
@@ -68,13 +74,10 @@ public class DropGuiListener implements Listener {
             }
             return;
         }
-        if (title.equals(CobbleXGui.TITLE)) {
-            event.setCancelled(true);
-        }
 
 
         // 2) Ekran ustawień Stone
-        if (title.equals(DropGui.GUI_TITLE)) {
+        if (stone) {
             event.setCancelled(true);
 
             Player player = (Player) event.getWhoClicked();
@@ -99,8 +102,9 @@ public class DropGuiListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onInventoryDrag(InventoryDragEvent event) {
-        String title = event.getView().getTitle();
-        if (title.equals(DropMainGui.TITLE) || title.equals(DropGui.GUI_TITLE)) {
+        Inventory top = event.getView().getTopInventory();
+        if (PluginMenu.is(top, PluginMenu.Kind.DROP) || PluginMenu.is(top, PluginMenu.Kind.STONE)
+                || PluginMenu.is(top, PluginMenu.Kind.COBBLEX)) {
             event.setCancelled(true);
         }
     }

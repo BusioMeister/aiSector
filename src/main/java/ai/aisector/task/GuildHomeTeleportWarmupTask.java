@@ -28,9 +28,9 @@ public class GuildHomeTeleportWarmupTask {
                 targetLocationJson.get("world").getAsString(),
                 targetSector,
                 5,
-                "§aTeleportacja do domu gildii za: §e",
-                "§cNie ruszaj się! §7Teleportacja za §e",
-                "§aPrzeteleportowano do domu gildii!",
+                ai.aisector.utils.Messages.text("teleport.guild-countdown"),
+                ai.aisector.utils.Messages.text("teleport.stay-still"),
+                ai.aisector.utils.Messages.text("teleport.guild-arrived"),
                 "player:final_teleport_target:" + player.getUniqueId(),
                 60,
                 plugin

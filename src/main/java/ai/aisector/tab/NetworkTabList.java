@@ -1,5 +1,7 @@
 package ai.aisector.tab;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.skills.MiningLevelManager;
 import com.mongodb.client.model.Projections;
@@ -31,19 +33,15 @@ public final class NetworkTabList implements Listener {
     private static final String LAYOUT_CHANNEL = "aisector:tab_panel";
     private static final byte[] HIDE_LISTED_ROWS = {1};
     private static final Component EMPTY = Component.empty();
-    private static final Component BRAND = MiniMessage.miniMessage()
-            .deserialize("<gradient:#ff3838:#ffca55:#ff3838><bold>✦ LASTPLAY.NET ✦</bold></gradient>");
-    private static final Component GRID_FOOTER = Component.text("LastPlay.net  •  Ranking według punktów",
-            NamedTextColor.GRAY);
     private static final TextColor GOLD = TextColor.color(0xffca55);
-    private record Snapshot(NetworkRanking ranking, Component footer) {}
+    private record Snapshot(NetworkRanking ranking) {}
     private record Sent(Component header, Component footer) {}
     private record Stats(String rank, String tag, String role, int members, Integer playerRank, Integer guildRank,
                          Integer kills, Integer deaths, Integer rating, Integer streak) {}
 
     private final SectorPlugin plugin;
     private final MiningLevelManager ranks;
-    private final Component buildLine;
+    private final String buildId;
     private final Map<UUID, Sent> sent = new HashMap<>();
     private final AtomicBoolean refreshing = new AtomicBoolean();
     private volatile Snapshot snapshot;
@@ -51,8 +49,7 @@ public final class NetworkTabList implements Listener {
     public NetworkTabList(SectorPlugin plugin, MiningLevelManager ranks) {
         this.plugin = plugin;
         this.ranks = ranks;
-        this.buildLine = Component.text("aiSector " + plugin.getPluginMeta().getVersion() + "  •  Build ",
-                NamedTextColor.GRAY).append(Component.text(readBuildId(plugin), GOLD));
+        this.buildId = readBuildId(plugin);
     }
 
     private static String readBuildId(SectorPlugin plugin) {
@@ -88,7 +85,7 @@ public final class NetworkTabList implements Listener {
                  var guilds = mongo.getCollection("guilds").find().projection(
                     Projections.include("tag", "ratingPoints")).maxTime(5, TimeUnit.SECONDS).cursor()) {
                 var ranking = NetworkRanking.from(() -> users, () -> guilds);
-                return new Snapshot(ranking, renderFooter(ranking));
+                return new Snapshot(ranking);
             }
         }).whenComplete((value, error) -> {
             if (error == null) snapshot = value;
@@ -100,7 +97,10 @@ public final class NetworkTabList implements Listener {
     private void updatePlayers() {
         if (snapshot == null) refresh();
         Snapshot current = snapshot;
-        Component footer = current == null ? Component.text("Wczytywanie rankingu…", NamedTextColor.GRAY) : current.footer();
+        Component footer = current == null ? Component.text(Messages.text("network-tab-list.wczytywanie-rankingu"), NamedTextColor.GRAY)
+                : renderFooter(current.ranking());
+        Component buildLine = Component.text(Messages.text("network-tab-list.aisector-build", plugin.getPluginMeta().getVersion()),
+                NamedTextColor.GRAY).append(Component.text(buildId, GOLD));
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (plugin.getUserManager().isTransferPending(player)) continue;
             NetworkRanking ranking = current == null ? null : current.ranking();
@@ -119,16 +119,16 @@ public final class NetworkTabList implements Listener {
         var user = plugin.getUserManager().getUser(player);
         String primaryGroup = ranks.getPrimaryGroup(player);
         String rank = primaryGroup == null || primaryGroup.isBlank() || primaryGroup.equalsIgnoreCase("default")
-                ? (player.isOp() ? "Operator" : "Gracz") : primaryGroup;
+                ? Messages.text(player.isOp() ? "network-tab-list.rank-operator" : "network-tab-list.rank-player") : primaryGroup;
         UUID id = player.getUniqueId();
         var guild = user != null && user.hasGuild() ? plugin.getGuildManager().getGuildCached(user.getGuildTag()) : null;
         String role = guild == null ? null : guild.roleOf(id);
         String tag = role == null ? null : guild.getTag().toUpperCase(Locale.ROOT);
         String guildRole = role == null ? "—" : id.equals(guild.getDeputy()) && !"OWNER".equals(role)
-                ? "Zastępca" : switch (role) {
-            case "OWNER" -> "Lider";
-            case "MOD" -> "Moderator";
-            default -> "Członek";
+                ? Messages.text("network-tab-list.role-deputy") : switch (role) {
+            case "OWNER" -> Messages.text("network-tab-list.role-leader");
+            case "MOD" -> Messages.text("network-tab-list.role-moderator");
+            default -> Messages.text("network-tab-list.role-member");
         };
         return new Stats(rank, tag, guildRole, role == null ? 0 : guild.getMembers().size(),
                 ranking == null ? null : ranking.playerPositions().get(id.toString()),
@@ -139,38 +139,38 @@ public final class NetworkTabList implements Listener {
 
     private Component header(Player player, NetworkRanking ranking) {
         Stats stats = stats(player, ranking);
-        return BRAND.append(Component.newline())
-                .append(field("Nick: ", player.getName())).append(separator()).append(field("Ranga: ", stats.rank()))
-                .append(Component.newline()).append(field("Zabójstwa: ", value(stats.kills()))).append(separator())
-                .append(field("Śmierci: ", value(stats.deaths()))).append(separator())
-                .append(field("Ranking: ", position(stats.playerRank())))
-                .append(Component.newline()).append(field("Gildia: ", value(stats.tag())))
-                .append(separator()).append(field("Rola: ", stats.role())).append(separator())
-                .append(field("Członkowie: ", stats.members()))
-                .append(separator()).append(field("Ranking gildii: ", position(stats.guildRank())))
+        return brand().append(Component.newline())
+                .append(field(Messages.text("network-tab-list.nick"), player.getName())).append(separator()).append(field(Messages.text("network-tab-list.ranga"), stats.rank()))
+                .append(Component.newline()).append(field(Messages.text("network-tab-list.zabojstwa"), value(stats.kills()))).append(separator())
+                .append(field(Messages.text("network-tab-list.smierci"), value(stats.deaths()))).append(separator())
+                .append(field(Messages.text("network-tab-list.ranking"), position(stats.playerRank())))
+                .append(Component.newline()).append(field(Messages.text("network-tab-list.gildia"), value(stats.tag())))
+                .append(separator()).append(field(Messages.text("network-tab-list.rola"), stats.role())).append(separator())
+                .append(field(Messages.text("network-tab-list.czlonkowie"), stats.members()))
+                .append(separator()).append(field(Messages.text("network-tab-list.ranking-gildii"), position(stats.guildRank())))
                 .append(Component.newline());
     }
 
     private List<Component> slots(Player player, NetworkRanking ranking) {
         Stats stats = stats(player, ranking);
         var result = new ArrayList<>(java.util.Collections.nCopies(80, EMPTY));
-        result.set(2, field("Nick: ", player.getName()));
-        result.set(3, icon("★", GOLD, field("Ranga: ", clip(stats.rank()))));
-        result.set(4, icon("⚔", TextColor.color(0xff5555), field("Zabójstwa: ", value(stats.kills()))));
-        result.set(5, icon("☠", NamedTextColor.WHITE, field("Śmierci: ", value(stats.deaths()))));
-        result.set(6, icon("▲", GOLD, field("Punkty: ", value(stats.rating()))));
-        result.set(7, field("Pozycja: ", position(stats.playerRank())));
-        result.set(8, field("Killstreak: ", value(stats.streak())));
-        result.set(9, title("TWÓJ SEKTOR"));
-        result.set(10, icon("▲", GOLD, field("Sektor: ", plugin.getConfig().getString("this-sector-name", "—"))));
-        result.set(11, field("Gracze na sektorze: ", Bukkit.getOnlinePlayers().stream().filter(player::canSee).count()));
-        result.set(62, icon("⚑", GOLD, field("Gildia: ", stats.tag() == null ? "Brak" : clip(stats.tag()))));
-        result.set(63, field("Rola: ", stats.role()));
-        result.set(64, field("Członkowie: ", stats.members()));
-        result.set(65, icon("▲", GOLD, field("Ranking gildii: ", position(stats.guildRank()))));
-        result.set(68, title("LASTPLAY.NET"));
-        result.set(70, Component.text("/g info", NamedTextColor.GRAY));
-        result.set(71, Component.text("/spawn", NamedTextColor.GRAY));
+        result.set(2, field(Messages.text("network-tab-list.nick"), player.getName()));
+        result.set(3, icon("★", GOLD, field(Messages.text("network-tab-list.ranga"), clip(stats.rank()))));
+        result.set(4, icon("⚔", TextColor.color(0xff5555), field(Messages.text("network-tab-list.zabojstwa"), value(stats.kills()))));
+        result.set(5, icon("☠", NamedTextColor.WHITE, field(Messages.text("network-tab-list.smierci"), value(stats.deaths()))));
+        result.set(6, icon("▲", GOLD, field(Messages.text("network-tab-list.punkty"), value(stats.rating()))));
+        result.set(7, field(Messages.text("network-tab-list.pozycja"), position(stats.playerRank())));
+        result.set(8, field(Messages.text("network-tab-list.killstreak"), value(stats.streak())));
+        result.set(9, title(Messages.text("network-tab-list.twoj-sektor")));
+        result.set(10, icon("▲", GOLD, field(Messages.text("network-tab-list.sektor"), plugin.getConfig().getString("this-sector-name", "—"))));
+        result.set(11, field(Messages.text("network-tab-list.gracze-na-sektorze"), Bukkit.getOnlinePlayers().stream().filter(player::canSee).count()));
+        result.set(62, icon("⚑", GOLD, field(Messages.text("network-tab-list.gildia"), stats.tag() == null ? Messages.text("network-tab-list.brak") : clip(stats.tag()))));
+        result.set(63, field(Messages.text("network-tab-list.rola"), stats.role()));
+        result.set(64, field(Messages.text("network-tab-list.czlonkowie"), stats.members()));
+        result.set(65, icon("▲", GOLD, field(Messages.text("network-tab-list.ranking-gildii"), position(stats.guildRank()))));
+        result.set(68, title(Messages.text("network-tab-list.lastplay-net-2")));
+        result.set(70, Component.text(Messages.text("network-tab-list.g-info"), NamedTextColor.GRAY));
+        result.set(71, Component.text(Messages.text("network-tab-list.spawn"), NamedTextColor.GRAY));
         for (int i = 0; i < 20; i++) {
             result.set(20 + i, rankingRow(ranking == null ? List.of() : ranking.players(), i));
             result.set(40 + i, rankingRow(ranking == null ? List.of() : ranking.guilds(), i));
@@ -179,15 +179,25 @@ public final class NetworkTabList implements Listener {
     }
 
     static Component renderPanel(List<Component> slots, Component buildLine) {
-        var panel = Component.text().append(BRAND).append(Component.newline());
-        appendPanelRow(panel, List.of(title("GRACZ I SEKTOR"), title("TOP 20 GRACZY"),
-                title("TOP 20 GILDII"), title("TWOJA GILDIA")));
+        var panel = Component.text().append(brand()).append(Component.newline());
+        appendPanelRow(panel, List.of(title(Messages.text("network-tab-list.gracz-i-sektor")), title(Messages.text("network-tab-list.top-20-graczy")),
+                title(Messages.text("network-tab-list.top-20-gildii")), title(Messages.text("network-tab-list.twoja-gildia"))));
         for (int row = 0; row < 20; row++) {
             panel.append(Component.newline());
             appendPanelRow(panel, List.of(slots.get(row), slots.get(20 + row), slots.get(40 + row), slots.get(60 + row)));
         }
-        return panel.append(Component.newline()).append(GRID_FOOTER)
+        return panel.append(Component.newline()).append(Component.text(
+                        Messages.text("network-tab-list.lastplay-net-ranking-wedlug-punktow"), NamedTextColor.GRAY))
                 .append(Component.newline()).append(buildLine).build();
+    }
+
+    private static Component brand() {
+        String template = Messages.text("network-tab-list.lastplay-net");
+        try {
+            return MiniMessage.miniMessage().deserialize(template);
+        } catch (IllegalArgumentException invalid) {
+            return Component.text(template);
+        }
     }
 
     private static void appendPanelRow(net.kyori.adventure.text.TextComponent.Builder panel, List<Component> columns) {
@@ -262,8 +272,8 @@ public final class NetworkTabList implements Listener {
 
     static Component renderFooter(NetworkRanking ranking) {
         var footer = Component.text().append(Component.newline())
-                .append(Component.text("TOP 20 GRACZY", GOLD)).append(separator())
-                .append(Component.text("TOP 20 GILDII", GOLD));
+                .append(Component.text(Messages.text("network-tab-list.top-20-graczy"), GOLD)).append(separator())
+                .append(Component.text(Messages.text("network-tab-list.top-20-gildii"), GOLD));
         int size = Math.max(ranking.players().size(), ranking.guilds().size());
         String[] players = new String[size];
         int width = 0;
@@ -276,8 +286,8 @@ public final class NetworkTabList implements Listener {
             footer.append(Component.newline()).append(Component.text(players[i] + " ".repeat(padding), NamedTextColor.WHITE))
                     .append(separator()).append(Component.text(row(ranking.guilds(), i), NamedTextColor.WHITE));
         }
-        if (size == 0) footer.append(Component.newline()).append(Component.text("Brak wyników", NamedTextColor.GRAY));
-        return footer.append(Component.newline()).append(Component.text("Ranking według punktów", NamedTextColor.GRAY)).build();
+        if (size == 0) footer.append(Component.newline()).append(Component.text(Messages.text("network-tab-list.brak-wynikow"), NamedTextColor.GRAY));
+        return footer.append(Component.newline()).append(Component.text(Messages.text("network-tab-list.ranking-wedlug-punktow"), NamedTextColor.GRAY)).build();
     }
 
     private static String row(java.util.List<NetworkRanking.Entry> entries, int index) {

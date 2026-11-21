@@ -1,5 +1,7 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.database.MongoDBManager;
 import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.SectorManager;
@@ -35,7 +37,7 @@ public class SetHomeGuiListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!event.getView().getTitle().equals("§8Ustaw swój dom")) return;
+        if (!(event.getView().getTopInventory().getHolder() instanceof HomeSlotMenu)) return;
         event.setCancelled(true);
         if (event.getClickedInventory() != event.getView().getTopInventory()
                 || event.getSlot() < 2 || event.getSlot() > 6) return;
@@ -52,7 +54,7 @@ public class SetHomeGuiListener implements Listener {
         String playerName = player.getName();
         String operationKey = playerUuid + ":" + slot;
         if (!pendingHomeOperations.add(operationKey)) {
-            player.sendMessage("§eTa operacja na tym slocie domu jest już zapisywana.");
+            player.sendMessage(Messages.text("set-home-gui-listener.ta-operacja-na-tym-slocie-domu-jest"));
             return;
         }
 
@@ -75,12 +77,12 @@ public class SetHomeGuiListener implements Listener {
                         Player currentPlayer = Bukkit.getPlayer(java.util.UUID.fromString(playerUuid));
                         if (currentPlayer == null || currentPlayer != player || !currentPlayer.isOnline()) return;
                         if (error != null) {
-                            currentPlayer.sendMessage("§cNie udało się zapisać domu.");
+                            currentPlayer.sendMessage(Messages.text("set-home-gui-listener.nie-udalo-sie-zapisac-domu"));
                             plugin.getLogger().warning("Could not save home for " + playerName + ": "
                                     + error.getMessage());
                             return;
                         }
-                        currentPlayer.sendMessage("§aPomyślnie ustawiono dom #" + slot + "!");
+                        currentPlayer.sendMessage(Messages.text("set-home-gui-listener.pomyslnie-ustawiono-dom", slot));
                         currentPlayer.closeInventory();
                     }));
         } else if (clickedItem.getType() == Material.GREEN_CONCRETE && event.isRightClick()) {
@@ -90,12 +92,12 @@ public class SetHomeGuiListener implements Listener {
                         Player currentPlayer = Bukkit.getPlayer(java.util.UUID.fromString(playerUuid));
                         if (currentPlayer == null || currentPlayer != player || !currentPlayer.isOnline()) return;
                         if (error != null) {
-                            currentPlayer.sendMessage("§cNie udało się usunąć domu.");
+                            currentPlayer.sendMessage(Messages.text("set-home-gui-listener.nie-udalo-sie-usunac-domu"));
                             plugin.getLogger().warning("Could not delete home for " + playerName + ": "
                                     + error.getMessage());
                             return;
                         }
-                        currentPlayer.sendMessage("§aPomyślnie usunięto dom #" + slot + "!");
+                        currentPlayer.sendMessage(Messages.text("set-home-gui-listener.pomyslnie-usunieto-dom", slot));
                         currentPlayer.closeInventory();
                     }));
         } else {
@@ -105,7 +107,7 @@ public class SetHomeGuiListener implements Listener {
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
-        if (event.getView().getTitle().equals("§8Ustaw swój dom")) event.setCancelled(true);
+        if (event.getView().getTopInventory().getHolder() instanceof HomeSlotMenu) event.setCancelled(true);
     }
 
     private void scheduleCompletion(String operationKey, Runnable completion) {

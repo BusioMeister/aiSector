@@ -1,5 +1,7 @@
 package ai.aisector.commands;
 
+import ai.aisector.utils.Messages;
+
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -14,7 +16,7 @@ public class RepairCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Ta komenda musi być wykonana przez gracza.");
+            sender.sendMessage(Messages.text("repair-command.ta-komenda-musi-byc-wykonana-przez-gracza"));
             return true;
         }
         Player player = (Player) sender;
@@ -22,7 +24,7 @@ public class RepairCommand implements CommandExecutor {
         // --- Obsługa /repair all ---
         if (args.length == 1 && args[0].equalsIgnoreCase("all")) {
             if (!player.hasPermission("aisector.command.repair.all")) {
-                player.sendMessage("§cNie masz uprawnień do naprawy całego ekwipunku.");
+                player.sendMessage(Messages.text("repair-command.nie-masz-uprawnien-do-naprawy-calego-ekwipunku"));
                 return true;
             }
 
@@ -39,32 +41,32 @@ public class RepairCommand implements CommandExecutor {
                 }
             }
 
-            player.sendMessage("§aNaprawiono §e" + repairedItems + " §aprzedmiotów w Twoim ekwipunku.");
+            player.sendMessage(Messages.text("repair-command.naprawiono-przedmiotow-w-twoim-ekwipunku", repairedItems));
             return true;
         }
 
         // --- Obsługa /repair ---
         if (args.length == 0) {
             if (!player.hasPermission("aisector.command.repair.one")) {
-                player.sendMessage("§cNie masz uprawnień do tej komendy.");
+                player.sendMessage(Messages.text("repair-command.nie-masz-uprawnien-do-tej-komendy"));
                 return true;
             }
 
             ItemStack itemInHand = player.getInventory().getItemInMainHand();
             if (itemInHand.getType() == Material.AIR) {
-                player.sendMessage("§cMusisz trzymać jakiś przedmiot w ręku!");
+                player.sendMessage(Messages.text("repair-command.musisz-trzymac-jakis-przedmiot-w-reku"));
                 return true;
             }
 
             if (repairItem(itemInHand)) {
-                player.sendMessage("§aPrzedmiot w Twojej ręce został naprawiony.");
+                player.sendMessage(Messages.text("repair-command.przedmiot-w-twojej-rece-zostal-naprawiony"));
             } else {
-                player.sendMessage("§cTego przedmiotu nie da się naprawić.");
+                player.sendMessage(Messages.text("repair-command.tego-przedmiotu-nie-da-sie-naprawic"));
             }
             return true;
         }
 
-        player.sendMessage("§cUżycie: /repair [all]");
+        player.sendMessage(Messages.text("repair-command.uzycie-repair-all"));
         return true;
     }
 

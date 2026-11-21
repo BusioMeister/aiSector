@@ -1,4 +1,6 @@
 package ai.aisector.commands;
+
+import ai.aisector.utils.Messages;
 import ai.aisector.SectorPlugin;
 import ai.aisector.user.User;
 import org.bukkit.command.Command;
@@ -15,17 +17,17 @@ public class GodCommand implements CommandExecutor {
         if (!(sender instanceof Player)) return true;
         Player player = (Player) sender;
         if (!player.hasPermission("aisector.command.god")) {
-            player.sendMessage("§cNie masz uprawnień.");
+            player.sendMessage(Messages.text("god-command.nie-masz-uprawnien"));
             return true;
         }
         User user = plugin.getUserManager().getUser(player);
         if (user == null) {
-            player.sendMessage("§cWystąpił błąd wczytywania Twoich danych.");
+            player.sendMessage(Messages.text("god-command.wystapil-blad-wczytywania-twoich-danych"));
             return true;
         }
         user.setGodMode(!user.isGodMode());
         player.setInvulnerable(user.isGodMode());
-        player.sendMessage(user.isGodMode() ? "§aTryb GOD został włączony." : "§cTryb GOD został wyłączony.");
+        player.sendMessage(user.isGodMode() ? Messages.text("god-command.tryb-god-zostal-wlaczony") : Messages.text("god-command.tryb-god-zostal-wylaczony"));
         return true;
     }
 }

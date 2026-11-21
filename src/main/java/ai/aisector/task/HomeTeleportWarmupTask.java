@@ -28,9 +28,9 @@ public class HomeTeleportWarmupTask {
                 targetLocationJson.get("world").getAsString(),
                 targetSector,
                 5,
-                "§aTeleportacja do domu za: §e",
-                "§cNie ruszaj się! §7Teleportacja za §e",
-                "§aPrzeteleportowano do domu #" + homeSlot + "!",
+                ai.aisector.utils.Messages.text("teleport.home-countdown"),
+                ai.aisector.utils.Messages.text("teleport.stay-still"),
+                ai.aisector.utils.Messages.text("teleport.home-arrived", homeSlot),
                 "player:final_teleport_target:" + player.getUniqueId(),
                 60,
                 plugin
