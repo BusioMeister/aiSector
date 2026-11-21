@@ -6,6 +6,7 @@ import ai.aisector.SectorPlugin;
 import ai.aisector.sectors.SectorManager;
 import ai.aisector.user.User;
 import ai.aisector.user.UserManager;
+import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -64,6 +65,8 @@ public class ScoreboardManager {
 
         Scoreboard board = sbMan.getNewScoreboard();
         Objective obj = board.registerNewObjective("aisector", "dummy");
+        // Score values still order the rows, but the client draws no numbers.
+        obj.numberFormat(NumberFormat.blank());
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
         obj.setDisplayName(LOGO_CHAR);
 
