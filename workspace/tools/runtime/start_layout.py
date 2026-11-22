@@ -13,7 +13,7 @@ import time
 import zipfile
 
 from layout_smoke import INPUT, SERVER_HASHES, digest_tree, world_files
-from staging_smoke import JAVA, REPO, TEMP, command, listening, redis
+from staging_smoke import JAVA, REPO, TEMP, listening
 
 
 def main():
@@ -21,11 +21,23 @@ def main():
     parser.add_argument("archive", type=Path)
     parser.add_argument("sha256")
     parser.add_argument("--resume", type=Path, help="Restart an existing stopped local layout without replacing worlds or ops")
+    parser.add_argument("--keep-plugin-jars", action="store_true",
+                        help="Resume with the already deployed aiSector and VelocityPlugin jars")
+    parser.add_argument("--headless", action="store_true", help="Start child processes without Windows console windows")
     parser.add_argument("--instant", action="store_true", help="Opt in to the local 26.3 InstantTransfer prototype")
     parser.add_argument("--update-instant", action="store_true", help="Back up and replace changed local InstantTransfer plugins")
     parser.add_argument("--public-bind", type=ipaddress.IPv4Address,
                         help="Use the LAN address of an already configured online-mode layout")
     args = parser.parse_args()
+    creation_flags = subprocess.CREATE_NO_WINDOW if args.headless and os.name == "nt" else 0
+
+    def command(argv):
+        return subprocess.run(argv, check=True, capture_output=True, text=True, creationflags=creation_flags)
+
+    def redis(*argv):
+        return command(["wsl", "-d", "Ubuntu", "-u", "root", "--", "redis-cli", "-p", "6380", *argv]).stdout.strip()
+    if args.keep_plugin_jars and not args.resume:
+        parser.error("--keep-plugin-jars requires --resume")
     if args.update_instant and not (args.resume and args.instant):
         parser.error("--update-instant requires --resume and --instant")
     if args.public_bind and (not args.resume or not args.public_bind.is_private or args.public_bind.is_loopback
@@ -81,7 +93,8 @@ def main():
         logs[name] = (run / f"{name}.log").open("w", encoding="utf-8")
         processes[name] = subprocess.Popen(
             [JAVA / "java.exe", "-Xms256M", f"-Xmx{memory}M", "-XX:ActiveProcessorCount=4", *jvm_flags, "-jar", jar, *flags],
-            cwd=directory, env=env, stdin=subprocess.PIPE, stdout=logs[name], stderr=subprocess.STDOUT, text=True
+            cwd=directory, env=env, stdin=subprocess.PIPE, stdout=logs[name], stderr=subprocess.STDOUT,
+            text=True, creationflags=creation_flags
         )
 
     try:
@@ -97,8 +110,12 @@ def main():
                     if not all(item in config for item in ('database: "aisector_staging"', 'port: 6380', '127.0.0.1')):
                         raise RuntimeError("Unexpected resume data endpoints")
                     jar = directory / "plugins/aiSector.jar"
-                    shutil.copy2(jar, run / f"{sector}-before-{time.time_ns()}.jar")
-                    shutil.copy2(REPO / "aiSector/target/aiSector-2.0.0-SNAPSHOT.jar", jar)
+                    if args.keep_plugin_jars:
+                        if not jar.is_file():
+                            raise RuntimeError("Missing deployed backend plugin: " + str(jar))
+                    else:
+                        shutil.copy2(jar, run / f"{sector}-before-{time.time_ns()}.jar")
+                        shutil.copy2(REPO / "aiSector/target/aiSector-2.0.0-SNAPSHOT.jar", jar)
                     continue
                 world_files(directory, ports[sector], 31415926 if sector == "Spawn" else 2718281828)
                 props = directory / "server.properties"
@@ -120,7 +137,12 @@ def main():
 
         proxy = run / "proxy"
         (proxy / "plugins").mkdir(parents=True, exist_ok=bool(args.resume))
-        shutil.copy2(REPO / "VelocityPlugin/target/aiSector-Velocity-2.0.0-SNAPSHOT.jar", proxy / "plugins/VelocityPlugin.jar")
+        proxy_plugin = proxy / "plugins/VelocityPlugin.jar"
+        if args.keep_plugin_jars:
+            if not proxy_plugin.is_file():
+                raise RuntimeError("Missing deployed proxy plugin: " + str(proxy_plugin))
+        else:
+            shutil.copy2(REPO / "VelocityPlugin/target/aiSector-Velocity-2.0.0-SNAPSHOT.jar", proxy_plugin)
         proxy_config = ('config-version = "2.9"\nbind = "127.0.0.1:25565"\n'
             'online-mode = false\nforce-key-authentication = false\nplayer-info-forwarding-mode = "none"\n'
             '[servers]\nSpawn = "127.0.0.1:25566"\nGameWest = "127.0.0.1:25567"\n'
@@ -219,16 +241,45 @@ def main():
         (run / "READY.json").write_text(json.dumps({"join": f"{join_host}:25565", "ports": ports, "instant": args.instant,
                                              "pids": {name: p.pid for name, p in processes.items()}}, indent=2))
         print("READY", run, f"{join_host}:25565", flush=True)
-        while not (run / "STOP").exists():
+        stop = run / "STOP"
+        while True:
             if any(p.poll() is not None for p in processes.values()):
                 raise RuntimeError("Server exited unexpectedly; see " + str(run))
+            if stop.exists():
+                baseline = len(log_text("Velocity"))
+                if "Planned shutdown checkpoints enabled." not in log_text("Velocity"):
+                    break
+                processes["Velocity"].stdin.write("redeploy-stop 15\n")
+                processes["Velocity"].stdin.flush()
+                deadline = time.monotonic() + 66
+                while time.monotonic() < deadline:
+                    if any(p.poll() is not None for p in processes.values()):
+                        raise RuntimeError("Server exited during checkpoint; see " + str(run))
+                    outcome = log_text("Velocity")[baseline:]
+                    if "SAFE_SHUTDOWN_READY " in outcome or "SAFE_SHUTDOWN_ABORTED " in outcome: break
+                    time.sleep(.5)
+                if "SAFE_SHUTDOWN_READY " in log_text("Velocity")[baseline:]:
+                    break
+                stop.rename(run / f"STOP.aborted-{time.time_ns()}")
+                print("STOP_ABORTED live sectors were not shut down", flush=True)
             time.sleep(2)
     finally:
-        for name, process in reversed(processes.items()):
+        # Stop Paper first: Bukkit must recognize a planned shutdown before its
+        # players disconnect, so combat logout does not penalize them.
+        for name in ("Spawn", "GameWest", "GameEast"):
+            process = processes.get(name)
+            if process is not None and process.poll() is None:
+                try:
+                    process.stdin.write("stop\n")
+                    process.stdin.flush()
+                except OSError:
+                    print("Could not signal stop", name, flush=True)
+        for name, process in processes.items():
             if process.poll() is None:
                 try:
-                    process.stdin.write(("shutdown" if name == "Velocity" else "stop") + "\n")
-                    process.stdin.flush()
+                    if name == "Velocity":
+                        process.stdin.write("shutdown\n")
+                        process.stdin.flush()
                     process.wait(timeout=80)
                 except (OSError, subprocess.TimeoutExpired):
                     print("Could not stop", name, "PID", process.pid, flush=True)

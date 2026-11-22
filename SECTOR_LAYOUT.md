@@ -96,7 +96,52 @@ oraz informacje o gildii. Puste miejsca zachowują rozmiar panelu.
 Ranga serwerowa pochodzi z głównej grupy LuckPerms (lub Operator/Gracz).
 Rankingi odświeżają się w tle co około 30 sekund.
 
+## Planowane aktualizacje
+
+Plik `STOP` w katalogu uruchomionej sieci uruchamia globalne odliczanie
+na czacie i czerwony tytuł z milisekundami, a potem zapis na trzech sektorach.
+Dopiero po potwierdzeniach Velocity rozłącza
+graczy z informacją o zapisaniu danych, a launcher zatrzymuje procesy.
+Brak potwierdzenia anuluje planowane wyłączenie. Nie zastępuj tej procedury
+samym `shutdown` na proxy.
+
+## Cuboid i panel gildii
+
+`/g zaloz TAG Nazwa` zajmuje cuboid o podstawie **61×61** (30 bloków w każdą
+stronę od bloku środka), od dołu do góry świata. Nowe tereny nie mogą
+nachodzić na inne ani przecinać granicy sektora. Środek starszej gildii
+jest odczytywany z poprzedniego domu, jeśli nie ma osobnego zapisu terenu.
+`/g ustawdom` zmienia wyłącznie cel teleportacji wewnątrz własnego cuboida.
+
+`/g panel` jest dla lidera. Nadawanie rang wyświetla główki członków, również
+offline. Lider zachowuje wyłączność na zarządzanie rangami, rozwiązanie
+gildii i przekazanie przywództwa. Vlider ma pozostałe uprawnienia,
+Mistrz dodatkowo zaprasza, a Rekrut może stawiać i niszczyć bloki.
+Kreator pozwala wybrać uprawnienia własnej rangi.
+
+FAWE 2.16.3 (zamiast WorldEdit) jest dodatkiem Paper na wszystkich sektorach.
+Uprawnienia cuboidów gildii egzekwuje aiSector na podstawie danych z MongoDB.
+Tworzenie cuboida domyślnie nie wkleja schematu ani nie modyfikuje bloków.
+
 ## Punkty PvP
+
+Udane trafienie PvP włącza antylogaut na 20 sekund dla obu stron.
+Rozłączenie przed końcem powoduje śmierć; zwykły restart backendu
+nie nalicza kary. Odliczanie z trzema miejscami po przecinku jest wyświetlane
+nad paskiem przedmiotów i aktualizowane raz na tick. Podczas walki crafting
+i zmiana sektora są zablokowane. `combat.blocked-commands: ["*"]` domyślnie
+wyłącza wszystkie komendy. Zamiast `*` można podać listę prefiksów, np.
+`["spawn", "g dom", "g baza", "home", "sethome", "ec", "enderchest"]`
+(uwzględnij aliasy komend). Edytuj ten klucz w `plugins/aiSECTOR/config.yml`;
+`/core reload` przeładowuje teksty, a nie reguły `config.yml`.
+
+Administrator z `aisector.astats` może przełączyć własne obejście przez
+`/astats bypasscommand` albo ustawić je jawnie: `/astats bypasscommand on|off`.
+`/astats bypasscommand <nick> on|off` robi to dla gracza na tym samym sektorze.
+Ustawienie zapisuje się w profilu i przechodzi między sektorami. Obejście
+wyłącza blokady i karę za rozłączenie, ale nie zmienia zasad zwykłej śmierci
+ani zabezpieczenia ekwipunku w trakcie transferu. Sama komenda zarządzania
+pozostaje dostępna w walce.
 
 Każdy profil zaczyna od 1000 pkt. Przy równym rankingu wygrana daje
 30 pkt, a porażka odbiera 32 pkt. Maksima to +49 i −50. Gdy zwycięzca

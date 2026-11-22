@@ -7,8 +7,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Projectile;
-import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.entity.EntityCombustByEntityEvent;
 
 public class GuildPvpListener implements Listener {
 
@@ -20,30 +22,36 @@ public class GuildPvpListener implements Listener {
         this.userManager = plugin.getUserManager();
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof Player victim)) return;
-        Player attacker;
-        if (event.getDamager() instanceof Player directAttacker) {
-            attacker = directAttacker;
-        } else if (event.getDamager() instanceof Projectile projectile) {
-            ProjectileSource shooter = projectile.getShooter();
-            if (!(shooter instanceof Player projectileAttacker)) return;
-            attacker = projectileAttacker;
-        } else {
-            return;
+        Player attacker = source(event.getDamageSource().getCausingEntity());
+        if (attacker == null) attacker = source(event.getDamager());
+        if (attacker != null && blocked(victim, attacker)) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onCombust(EntityCombustByEntityEvent event) {
+        if (event.getEntity() instanceof Player victim) {
+            Player attacker = source(event.getCombuster());
+            if (attacker != null && blocked(victim, attacker)) event.setCancelled(true);
         }
-        if (!guildManager.isReady()) {
-            event.setCancelled(true);
-            return;
-        }
+    }
+
+    private static Player source(Entity entity) {
+        if (entity instanceof Player player) return player;
+        return entity instanceof Projectile projectile && projectile.getShooter() instanceof Player player ? player : null;
+    }
+
+    private boolean blocked(Player victim, Player attacker) {
+        if (victim.equals(attacker)) return false;
+        if (!guildManager.isReady()) return true;
 
         User vUser = userManager.loadOrGetUser(victim);
         User aUser = userManager.loadOrGetUser(attacker);
         if (vUser == null || aUser == null) {
             // Match the fail-closed policy used while the guild cache is loading.
-            event.setCancelled(true);
-            return;
+            return true;
         }
 
         String vTag = vUser.getGuildTag();
@@ -51,26 +59,15 @@ public class GuildPvpListener implements Listener {
         Guild vGuild = vTag == null ? null : guildManager.getGuild(vTag);
         Guild aGuild = aTag == null ? null : guildManager.getGuild(aTag);
         if (GuildPvpPolicy.hasUnresolvedGuild(vTag, vGuild)
-                || GuildPvpPolicy.hasUnresolvedGuild(aTag, aGuild)) {
-            event.setCancelled(true);
-            return;
-        }
-        if (vTag == null || aTag == null) return;
+                || GuildPvpPolicy.hasUnresolvedGuild(aTag, aGuild)
+                || vGuild != null && guildManager.permissionsRefreshing(vGuild.getTag())
+                || aGuild != null && guildManager.permissionsRefreshing(aGuild.getTag())) return true;
+        if (vGuild == null || aGuild == null || vGuild.roleOf(victim.getUniqueId()) == null
+                || aGuild.roleOf(attacker.getUniqueId()) == null) return false;
 
-        // PvP wewnątrz gildii
-        if (vTag.equalsIgnoreCase(aTag)) {
-            if (!vGuild.isFriendlyFireGuild()) {
-                event.setCancelled(true);
-            }
-            return;
-        }
-
-        // PvP między sojuszami – działa tylko jeśli obie gildie mają FF włączone
-        if (GuildManager.containsTag(vGuild.getAlliedGuilds(), aTag)
-                && GuildManager.containsTag(aGuild.getAlliedGuilds(), vTag)) {
-            if (!(vGuild.isFriendlyFireAllies() && aGuild.isFriendlyFireAllies())) {
-                event.setCancelled(true);
-            }
-        }
+        if (vTag.equalsIgnoreCase(aTag)) return !vGuild.isFriendlyFireGuild();
+        return GuildManager.containsTag(vGuild.getAlliedGuilds(), aTag)
+                && GuildManager.containsTag(aGuild.getAlliedGuilds(), vTag)
+                && !(vGuild.isFriendlyFireAllies() && aGuild.isFriendlyFireAllies());
     }
 }

@@ -25,10 +25,9 @@ public class TeleportWarmupTask {
         this.task = new BaseTeleportWarmupTask(
                 player,
                 targetLocation,
+                targetLocationJson.get("world").getAsString(),
                 targetServerName,
                 5,
-                ai.aisector.utils.Messages.text("teleport.countdown"),
-                ai.aisector.utils.Messages.text("teleport.stay-still"),
                 ai.aisector.utils.Messages.text("teleport.arrived"),
                 "player:final_teleport_target:" + player.getUniqueId(),
                 60,

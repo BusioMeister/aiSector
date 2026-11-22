@@ -2,7 +2,7 @@ name: aiSECTOR
 version: 2.0.0
 main: ai.aisector.SectorPlugin
 api-version: '26.1'
-softdepend: [LuckPerms, WorldEdit]
+softdepend: [LuckPerms, FastAsyncWorldEdit, WorldEdit]
 description: Plugin obsługujący sektory w Minecraft z wykorzystaniem Redis.
 commands:
   pastetest:
@@ -150,6 +150,9 @@ commands:
     permission: aisector.command.home
 
 permissions:
+  aisector.command.spawn.instant:
+    description: Skips the /spawn countdown without bypassing combat restrictions.
+    default: op
   aisector.core.reload:
     description: Allows reloading messages across the sector network.
     default: op

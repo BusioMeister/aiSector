@@ -1,5 +1,7 @@
 package ai.aisector.listeners;
 
+import ai.aisector.utils.Messages;
+
 import ai.aisector.SectorPlugin;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.shared.PacketEnvelope;
@@ -27,11 +29,13 @@ public class CommandResponseListener extends JedisPubSub {
     private static final String SAVE_AND_ACK_SCRIPT = "if redis.call('get', KEYS[2]) ~= ARGV[5] then return -1; end; "
             + "local previous = redis.call('get', KEYS[1]); local previousTtl = redis.call('ttl', KEYS[1]); "
             + "redis.call('setex', KEYS[1], ARGV[1], ARGV[2]); "
+            + "redis.call('setex', KEYS[3], ARGV[1], ARGV[5] .. ':' .. ARGV[2]); "
             + "local subscribers = redis.call('publish', ARGV[3], ARGV[4]); "
             + "if subscribers == 0 then "
             + "if previous then if previousTtl > 0 then redis.call('setex', KEYS[1], previousTtl, previous); "
             + "elseif previousTtl == -1 then redis.call('set', KEYS[1], previous); "
             + "else redis.call('del', KEYS[1]); end else redis.call('del', KEYS[1]); end; "
+            + "redis.call('del', KEYS[3]); "
             + "if redis.call('get', KEYS[2]) == ARGV[5] then redis.call('del', KEYS[2]); end; "
             + "return 0; end; "
             + "if redis.call('get', KEYS[2]) == ARGV[5] then redis.call('del', KEYS[2]); end; "
@@ -45,6 +49,7 @@ public class CommandResponseListener extends JedisPubSub {
     private final SectorManager sectorManager;
     private final WorldBorderManager borderManager;
     private final Gson gson = new Gson();
+    private final java.util.concurrent.ConcurrentMap<String, Player> sealedRequests = new java.util.concurrent.ConcurrentHashMap<>();
 
     public CommandResponseListener(SectorPlugin plugin, SectorManager sectorManager, WorldBorderManager borderManager) {
         this.plugin = plugin;
@@ -78,6 +83,10 @@ public class CommandResponseListener extends JedisPubSub {
         }
         BukkitTaskScheduler.execute(plugin, () -> {
               try {
+            if (channel.equals(ai.aisector.ranking.DeathAnnouncements.CHANNEL)) {
+                ai.aisector.ranking.DeathAnnouncements.broadcast(plugin, message);
+                return;
+            }
             if (channel.equals(RedisChannels.PACKET) || channel.startsWith(RedisChannels.PACKET + ":")) {
                 plugin.getLogger().fine("Redis packet received on " + channel + " (" + message.length() + " chars)");
 
@@ -101,6 +110,17 @@ public class CommandResponseListener extends JedisPubSub {
                 String uuidString = playerUuid.toString();
 
                 Player playerToSave = Bukkit.getPlayer(playerUuid);
+                if (data.has("cancelled") && data.get("cancelled").isJsonPrimitive()
+                        && data.getAsJsonPrimitive("cancelled").isBoolean() && data.get("cancelled").getAsBoolean()) {
+                    if (playerToSave != null && sealedRequests.remove(requestId, playerToSave)) {
+                        plugin.getUserManager().releaseUnpublishedTransfer(playerToSave);
+                        plugin.getLogger().info("Released cancelled transfer " + requestId + " for " + playerToSave.getName());
+                    } else if (playerToSave != null && plugin.getUserManager().abortSectorTransfer(playerToSave, UUID.fromString(requestId))) {
+                        playerToSave.sendMessage(Messages.text("sector-manager.transfer-nie-powiodl-sie-pozostajesz"));
+                        plugin.getLogger().info("Released cancelled sector transfer " + requestId + " for " + playerToSave.getName());
+                    }
+                    return;
+                }
                 // The request is broadcast to every backend; only the backend currently
                 // hosting this player may acknowledge it.
                 if (playerToSave == null || !playerToSave.isOnline()) {
@@ -128,21 +148,22 @@ public class CommandResponseListener extends JedisPubSub {
                 acknowledgement.addProperty("uuid", uuidString);
                 acknowledgement.addProperty("success", true);
                 plugin.getUserManager().prepareTransferProfileAsync(playerToSave)
-                        .thenCompose(saved -> plugin.getRedisManager().executeAsync(jedis -> {
+                        .thenCompose(saved -> {
+                    sealedRequests.put(requestId, playerToSave);
+                    BukkitTaskScheduler.execute(plugin, () -> Bukkit.getScheduler().runTaskLater(plugin,
+                            () -> sealedRequests.remove(requestId, playerToSave), 1200L));
+                    return plugin.getRedisManager().executeAsync(jedis -> {
                     Object result = jedis.eval(SAVE_AND_ACK_SCRIPT,
-                            java.util.List.of("player:data:" + uuidString,
-                                    "player:transfer_save_request:" + uuidString),
+                             java.util.List.of("player:data:" + uuidString,
+                                     "player:transfer_save_request:" + uuidString, "player:data:" + uuidString + ":request"),
                             java.util.List.of("60", snapshot, RedisChannels.SAVE_PLAYER_DATA_ACK,
                                     acknowledgement.toString(), requestId));
                     if (!(result instanceof Number status)) {
                         throw new IllegalStateException("Unexpected transfer save result");
                     }
-                    if (status.longValue() == -1L) return Boolean.FALSE;
-                    if (status.longValue() == 0L) {
-                        throw new IllegalStateException("No proxy subscribed to transfer save acknowledgements");
-                    }
-                    return Boolean.TRUE;
-                })).whenComplete((ignored, error) -> {
+                    return status.longValue() > 0;
+                });
+                }).whenComplete((ignored, error) -> {
                     if (error != null) {
                         plugin.getLogger().severe("Nie udało się zapisać danych transferowych dla "
                                 + playerName + ": " + error.getMessage());
@@ -150,6 +171,10 @@ public class CommandResponseListener extends JedisPubSub {
                     } else if (Boolean.TRUE.equals(ignored)) {
                         plugin.getLogger().info("Zapisano dane transferowe dla " + playerName + ".");
                     } else {
+                        BukkitTaskScheduler.execute(plugin, () -> {
+                            if (sealedRequests.remove(requestId, playerToSave))
+                                plugin.getUserManager().releaseUnpublishedTransfer(playerToSave);
+                        });
                         plugin.getLogger().fine("Ignoring superseded transfer save request " + requestId
                                 + " for " + playerName);
                     }

@@ -22,9 +22,14 @@ public class SectorManager {
     private static final int MAX_TRANSFER_VALUE_CHARS = 2_097_152;
     private static final String PUBLISH_TRANSFER_SCRIPT = "local count = tonumber(ARGV[1]); "
             + "local ttl = tonumber(ARGV[2]); "
+            + "if redis.call('exists', KEYS[count + 1]) ~= 0 then return -1; end; "
+            + "for i = count + 2, count + 5, 2 do "
+            + "if redis.call('exists', KEYS[i]) ~= 0 and redis.call('exists', KEYS[i + 1]) ~= 0 "
+            + "then return -1 end; end; "
             + "for i = 1, count do redis.call('setex', KEYS[i], ttl, ARGV[i + 2]); end; "
+            + "redis.call('setex', KEYS[count + 1], ttl, ARGV[count + 5]); "
             + "local subscribers = redis.call('publish', ARGV[count + 3], ARGV[count + 4]); "
-            + "if subscribers == 0 then "
+            + "if subscribers == 0 then redis.call('del', KEYS[count + 1]); "
             + "for i = 1, count do "
             + "if redis.call('get', KEYS[i]) == ARGV[i + 2] then redis.call('del', KEYS[i]); end; "
             + "end; end; return subscribers";
@@ -341,9 +346,11 @@ public class SectorManager {
             return CompletableFuture.failedFuture(new IllegalArgumentException("Total transfer payload exceeds limit"));
         }
         String playerName = player.getName();
+        String sourceSector = plugin.getConfig().getString("this-sector-name", "");
+        UUID transferId = UUID.randomUUID();
         Map<String, String> keysToWrite = new HashMap<>(transferKeys);
-        CompletableFuture<Void> result = plugin.getUserManager().prepareTransferProfileAsync(player, initialSeamMove)
-                .thenCompose(saved -> redisManager.<Void>executeAsync(jedis -> {
+        CompletableFuture<Void> result = plugin.getUserManager().prepareTransferProfileAsync(player, initialSeamMove, transferId)
+                 .thenCompose(saved -> redisManager.executeAsync(jedis -> {
             List<String> keys = new ArrayList<>();
             List<String> arguments = new ArrayList<>();
             if (playerData != null) {
@@ -357,14 +364,23 @@ public class SectorManager {
             arguments.add(0, Integer.toString(keys.size()));
             arguments.add(1, Integer.toString(ttlSeconds));
             arguments.add(RedisChannels.SECTOR_TRANSFER);
-            arguments.add(playerUuid + ":" + sectorId + (spawnExit == null ? "" : ":" + spawnExit));
-
-            long proxySubscribers = ((Number) jedis.eval(PUBLISH_TRANSFER_SCRIPT, keys, arguments)).longValue();
-            if (proxySubscribers == 0L) {
-                throw new IllegalStateException("No proxy is subscribed to sector transfers");
+            arguments.add(playerUuid + ":" + sectorId + ":" + (spawnExit == null ? "-" : spawnExit) + ":" + transferId);
+            Map<String, String> snapshotKeys = new HashMap<>(keysToWrite);
+            if (playerData != null) snapshotKeys.put("player:data:" + playerUuid, playerData);
+            arguments.add(new org.bson.Document("id", transferId.toString()).append("source", sourceSector)
+                    .append("destination", sectorId).append("state", "pending").append("entries", snapshotKeys).toJson());
+            keys.add("player:sector_transfer:" + playerUuid);
+            for (String target : List.of("player:final_teleport_target:", "player:force_sector_spawn:")) {
+                keys.add(target + playerUuid);
+                keys.add(target + playerUuid + ":request");
             }
-            return null;
-        }));
+            return ((Number) jedis.eval(PUBLISH_TRANSFER_SCRIPT, keys, arguments)).longValue();
+        })).thenCompose(proxySubscribers -> {
+            if (proxySubscribers > 0) return CompletableFuture.completedFuture(null);
+            BukkitTaskScheduler.execute(plugin, () -> plugin.getUserManager().abortSectorTransfer(player, transferId));
+            return CompletableFuture.failedFuture(new IllegalStateException(proxySubscribers == 0
+                    ? "No proxy is subscribed to sector transfers" : "Previous sector transfer is still active"));
+        });
 
         result.whenComplete((ignored, error) -> {
             if (error == null) return;

@@ -13,6 +13,10 @@ public class User {
     private boolean godMode = false;
     private boolean flying = false;
     private boolean vanished = false;
+    private boolean combatBypass;
+
+    public boolean hasCombatBypass() { return combatBypass; }
+    public void setCombatBypass(boolean combatBypass) { this.combatBypass = combatBypass; }
     private float walkSpeed = 0.2f;
     private float flySpeed = 0.1f;
     // Usunęliśmy pole teleportTarget

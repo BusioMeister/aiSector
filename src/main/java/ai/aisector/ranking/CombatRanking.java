@@ -27,6 +27,7 @@ public final class CombatRanking {
         User profile = users.getUser(victim);
         if (profile == null || users.isTransferPending(victim)) return null;
         User attacker = killer == null || killer.equals(victim) ? null : users.getUser(killer);
+        if (sameGuild(guild(killer, attacker), guild(victim, profile))) return null;
         return attacker == null || users.isTransferPending(killer) ? 0
                 : Rating.loss(attacker.getRating(), profile.getRating());
     }
@@ -44,14 +45,19 @@ public final class CombatRanking {
         var users = plugin.getUserManager();
         User dead = users.getUser(victim);
         User attacker = killer == null || killer.equals(victim) ? null : users.getUser(killer);
+        Guild killerGuild = guild(killer, attacker);
+        Guild victimGuild = guild(victim, dead);
+        if (sameGuild(killerGuild, victimGuild)) {
+            plugin.getCombatTitle().show(killer, Messages.text("combat-ranking.you-killed"),
+                    displayTag(victimGuild), victim.getName(), "", NamedTextColor.GREEN, true, true);
+            return CompletableFuture.completedFuture(null);
+        }
         boolean ranked = dead != null && attacker != null
                 && !users.isTransferPending(victim) && !users.isTransferPending(killer);
         Standing previousKiller = ranked ? new Standing(killer, attacker) : null;
         Standing previousVictim = ranked ? new Standing(victim, dead) : null;
         int gain = ranked ? Rating.award(previousKiller.points(), previousVictim.points()) : 0;
         int lost = ranked ? Rating.loss(previousKiller.points(), previousVictim.points()) : 0;
-        Guild killerGuild = guild(killer, attacker);
-        Guild victimGuild = guild(victim, dead);
         if (dead != null && !users.isTransferPending(victim)) {
             dead.setDeaths(Rating.increment(dead.getDeaths()));
             dead.setKillstreak(0);
@@ -112,8 +118,8 @@ public final class CombatRanking {
     private void animate(Player killer, String tag, String victim, int gain, NetworkRanking.Movement position) {
         int delta = position == null ? 0 : position.before() - position.after();
         String rank = delta > 0 ? "  ↑+" + delta : "";
-        plugin.getCombatTitle().show(killer, tag, victim, Messages.text("combat-ranking.gained-points", gain) + rank,
-                NamedTextColor.GREEN, true);
+        plugin.getCombatTitle().show(killer, Messages.text("combat-ranking.you-killed"), tag, victim,
+                "• " + Messages.text("combat-ranking.gained-points", gain) + rank, NamedTextColor.GREEN, true, false);
     }
 
     public DeathNotice deathNotice(Player victim, Player killer, Integer loss) {
@@ -132,13 +138,26 @@ public final class CombatRanking {
             var movement = standings.estimateMovement(before, opponent, after, opponentAfter);
             dropped = Math.max(0, movement.after() - movement.before());
         }
-        return new DeathNotice(displayTag(guild(killer, attacker)), killer.getName(), loss, dropped);
+        Guild killerGuild = guild(killer, attacker);
+        return new DeathNotice(displayTag(killerGuild), killer.getName(), loss, dropped, sameGuild(killerGuild, guild(victim, dead)));
     }
 
-    public String announcement(Player killer, Player victim) {
+    public String announcementPayload(Player killer, Player victim) {
         var users = plugin.getUserManager();
-        return Messages.text("combat-ranking.global-kill", display(killer, guild(killer, users.getUser(killer))),
-                display(victim, guild(victim, users.getUser(victim))));
+        return "[KILL]" + displayTag(guild(killer, users.getUser(killer))) + "|" + killer.getName() + "|"
+                + displayTag(guild(victim, users.getUser(victim))) + "|" + victim.getName();
+    }
+
+    public static void broadcastAnnouncement(SectorPlugin plugin, String payload) {
+        String[] parts = payload.split("\\|", -1);
+        if (parts.length != 4 || !parts[0].matches("[\\p{L}\\p{N}_-]{0,32}")
+                || !parts[2].matches("[\\p{L}\\p{N}_-]{0,32}")
+                || !parts[1].matches("[A-Za-z0-9_]{1,16}") || !parts[3].matches("[A-Za-z0-9_]{1,16}")) return;
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            String ownTag = memberTag(plugin, viewer);
+            viewer.sendMessage(Messages.text("combat-ranking.global-kill",
+                    display(parts[0], parts[1], ownTag), display(parts[2], parts[3], ownTag)));
+        }
     }
 
     private Guild guild(Player player, User user) {
@@ -147,9 +166,19 @@ public final class CombatRanking {
         return guild != null && guild.roleOf(player.getUniqueId()) != null ? guild : null;
     }
 
-    private String display(Player player, Guild guild) {
-        String tag = displayTag(guild);
-        return (tag.isBlank() ? "" : "§6[" + tag + "] §c") + player.getName();
+    static String memberTag(SectorPlugin plugin, Player player) {
+        User profile = plugin.getUserManager().getUser(player);
+        Guild guild = profile == null ? null : plugin.getGuildManager().getGuildCached(profile.getGuildTag());
+        return guild != null && guild.roleOf(player.getUniqueId()) != null ? displayTag(guild) : "";
+    }
+
+    static String display(String tag, String nick, String ownTag) {
+        if (tag.isBlank()) return "§c" + nick;
+        return (tag.equalsIgnoreCase(ownTag) ? "§a[" + tag + "] " : "§6[" + tag + "] §c") + nick;
+    }
+
+    private static boolean sameGuild(Guild first, Guild second) {
+        return first != null && second != null && first.getTag().equalsIgnoreCase(second.getTag());
     }
 
     private static String displayTag(Guild guild) {

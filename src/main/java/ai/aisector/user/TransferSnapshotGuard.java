@@ -24,10 +24,14 @@ import java.util.concurrent.ConcurrentHashMap;
 final class TransferSnapshotGuard implements Listener {
     static final class Seal {
         final Player player;
+        final UUID transferId;
+        final org.bukkit.Location returnLocation;
         PlayerMoveEvent initialSeamMove;
         volatile boolean saved;
-        Seal(Player player, PlayerMoveEvent initialSeamMove) {
+        Seal(Player player, PlayerMoveEvent initialSeamMove, UUID transferId) {
             this.player = player;
+            this.transferId = transferId;
+            this.returnLocation = initialSeamMove == null ? null : initialSeamMove.getFrom().clone();
             this.initialSeamMove = initialSeamMove;
         }
     }
@@ -39,8 +43,8 @@ final class TransferSnapshotGuard implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
-    Seal begin(Player player, PlayerMoveEvent initialSeamMove) {
-        Seal seal = new Seal(player, initialSeamMove);
+    Seal begin(Player player, PlayerMoveEvent initialSeamMove, UUID transferId) {
+        Seal seal = new Seal(player, initialSeamMove, transferId);
         if (seals.putIfAbsent(player.getUniqueId(), seal) != null)
             throw new IllegalStateException("A transfer snapshot is already pending");
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -49,11 +53,21 @@ final class TransferSnapshotGuard implements Listener {
                 // Never release a live source while an already published snapshot may still be consumed.
                 player.kickPlayer(Messages.text("transfer-snapshot-guard.transfer-nie-zostal-zakonczony-polacz-sie-ponownie"));
             }
-        }, 1200L);
+        }, 240L);
         return seal;
     }
 
     void releaseUnpublished(Seal seal) { seals.remove(seal.player.getUniqueId(), seal); }
+
+    boolean abort(Player player, UUID transferId) {
+        Seal seal = seals.get(player.getUniqueId());
+        if (seal == null || seal.player != player || !transferId.equals(seal.transferId)
+                || !seals.remove(player.getUniqueId(), seal)) return false;
+        if (seal.returnLocation != null && !plugin.getSectorManager().owns(player.getLocation())) {
+            player.teleport(seal.returnLocation);
+        }
+        return true;
+    }
     boolean active(Player player) {
         Seal seal = seals.get(player.getUniqueId());
         return seal != null && seal.player == player;
@@ -76,7 +90,9 @@ final class TransferSnapshotGuard implements Listener {
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void swap(PlayerSwapHandItemsEvent e) { if (active(e.getPlayer())) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST) public void slot(PlayerItemHeldEvent e) { if (active(e.getPlayer())) e.setCancelled(true); }
-    @EventHandler(priority = EventPriority.HIGHEST) public void command(PlayerCommandPreprocessEvent e) { if (active(e.getPlayer())) e.setCancelled(true); }
+    @EventHandler(priority = EventPriority.HIGHEST) public void command(PlayerCommandPreprocessEvent e) {
+        if (active(e.getPlayer()) && !ai.aisector.ranking.AdminStatsCommand.isBypassCommand(e.getMessage())) e.setCancelled(true);
+    }
     @EventHandler(priority = EventPriority.HIGHEST) public void pickup(EntityPickupItemEvent e) { if (e.getEntity() instanceof Player p && active(p)) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST) public void damage(EntityDamageEvent e) { if (e.getEntity() instanceof Player p && active(p)) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST) public void food(FoodLevelChangeEvent e) { if (e.getEntity() instanceof Player p && active(p)) e.setCancelled(true); }

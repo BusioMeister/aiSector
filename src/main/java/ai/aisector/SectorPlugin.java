@@ -91,6 +91,32 @@ public class SectorPlugin extends JavaPlugin {
     private ai.aisector.generators.GeneratorManager generatorManager;
     private CobbleXManager cobbleXManager;
     private GuildTagManager guildTagManager;
+    private CombatLogoutListener combatLogout;
+    private ShutdownCheckpoint shutdownCheckpoint;
+    private PlayerDeathListener deathListener;
+
+    public boolean isShutdownDraining() { return shutdownCheckpoint != null && shutdownCheckpoint.draining(); }
+    public boolean isShutdownCheckpointConfirmed() { return shutdownCheckpoint != null && shutdownCheckpoint.confirmed(); }
+    public GeneratorManager getGeneratorManager() { return generatorManager; }
+    public CompletableFuture<Void> pendingDeathBackups() {
+        return deathListener == null ? CompletableFuture.completedFuture(null) : deathListener.checkpoint();
+    }
+
+    public boolean isCombatTagged(Player player) {
+        return combatLogout != null && combatLogout.active(player);
+    }
+
+    public boolean isCombatLogoutDeath(Player player) {
+        return combatLogout != null && combatLogout.isLogoutDeath(player);
+    }
+
+    public Player lastCombatAttacker(Player victim) {
+        return combatLogout == null ? null : combatLogout.lastPlayerToHit(victim);
+    }
+
+    public void refreshCombatBypass(Player player) {
+        if (combatLogout != null) combatLogout.refreshBypass(player);
+    }
 
 
     @Override
@@ -253,7 +279,10 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new DropGuiListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(this, redisManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new VanishPlayerListener(this,vanishManager), this);
-        getServer().getPluginManager().registerEvents(new PlayerDeathListener(this, mongoDBManager, sectorManager), this);
+        deathListener = new PlayerDeathListener(this, mongoDBManager, sectorManager);
+        getServer().getPluginManager().registerEvents(deathListener, this);
+        combatLogout = new CombatLogoutListener(this);
+        getServer().getPluginManager().registerEvents(combatLogout, this);
         getServer().getPluginManager().registerEvents(new BackupGuiListener(this, mongoDBManager, redisManager), this);
         getServer().getPluginManager().registerEvents(new SetHomeGuiListener(this, mongoDBManager, sectorManager), this);
         getServer().getPluginManager().registerEvents(new HomeGuiListener(mongoDBManager, sectorManager, this), this);
@@ -271,7 +300,7 @@ public class SectorPlugin extends JavaPlugin {
         getServer().getScheduler().runTask(this, () -> this.generatorManager.loadAll());
         getServer().getScheduler().runTask(this, sectorManager::warmGameSeam);
         new GlobalChatPlugin(this).register();
-        new ActionBarTask().runTaskTimer(this, 0L, 20L);
+        new ActionBarTask(this).runTaskTimer(this, 0L, 20L);
         startRedisListeners(); // Uruchomienie wszystkich listenerów Redis w osobnych wątkach
         startPlayerPublisher(); // Uruchomienie wysyłania listy graczy
     }
@@ -311,6 +340,9 @@ public class SectorPlugin extends JavaPlugin {
             getLogger().severe("Brak this-sector-name w config.yml; listener komend nie został uruchomiony.");
             return;
         }
+        shutdownCheckpoint = new ShutdownCheckpoint(this);
+        getServer().getPluginManager().registerEvents(shutdownCheckpoint, this);
+        redisManager.subscribe(shutdownCheckpoint, ShutdownCheckpoint.CHANNEL);
 
         redisManager.subscribe(new CommandResponseListener(this, sectorManager, worldBorderManager),
                 RedisChannels.PACKET,
@@ -319,7 +351,7 @@ public class SectorPlugin extends JavaPlugin {
                 RedisChannels.GLOBAL_WEATHER_CHANGE,
                 RedisChannels.GLOBAL_TIME_CHANGE,
                 RedisChannels.GET_LOCATION_FOR_ADMIN_TP,
-                RedisChannels.SAVE_PLAYER_DATA);
+                RedisChannels.SAVE_PLAYER_DATA, ai.aisector.ranking.DeathAnnouncements.CHANNEL);
         redisManager.subscribe(new GlobalPlayerListListener(), RedisChannels.GLOBAL_PLAYER_LIST);
         redisManager.subscribe(new VanishUpdateListener(this, vanishManager),
                 RedisChannels.VANISH_UPDATE, "aisector:admin_chat");
@@ -347,6 +379,18 @@ public class SectorPlugin extends JavaPlugin {
                 }
             }
         }, RedisChannels.GUILD_DELETED);
+        redisManager.subscribe(new JedisPubSub() {
+            @Override public void onMessage(String channel, String message) {
+                if (message == null || !message.matches("[A-Za-z0-9_-]{1,64}:[A-Z0-9]{2,5}")) return;
+                String[] payload = message.split(":", 2);
+                if (thisSectorName.equalsIgnoreCase(payload[0])) return;
+                String tag = payload[1];
+                guildManager.refreshRemoteChange(tag).exceptionally(error -> {
+                    getLogger().warning("Could not refresh guild " + tag + ": " + error.getMessage());
+                    return null;
+                });
+            }
+        }, ai.aisector.guilds.GuildManager.CHANGE_CHANNEL);
         redisManager.psubscribe(new GuiDataListener(this, sectorManager), RedisChannels.GUI_DATA_RESPONSE_PATTERN);
 
         List<String> channels = sectorManager.getSECTORS().stream()

@@ -24,7 +24,7 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
     private final String successMessage;
     private final SectorManager sectorManager;
     private final WorldBorderManager borderManager;
-    private int timeLeft = 5; // 5 sekund odliczania
+    private final TeleportCountdown countdown = new TeleportCountdown(5);
     private final BossBar bossBar;
 
     public LocalTeleportWarmupTask(Player player, Location targetLocation, String successMessage,
@@ -37,21 +37,28 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
         this.successMessage = successMessage;
         this.sectorManager = sectorManager;
         this.borderManager = borderManager;
-        this.bossBar = org.bukkit.Bukkit.createBossBar(Messages.text("local-teleport-warmup-task.teleportacja-za", timeLeft), BarColor.GREEN, BarStyle.SOLID);
+        this.bossBar = Bukkit.createBossBar("", BarColor.GREEN, BarStyle.SOLID);
     }
 
     public void start() {
+        if (plugin.isCombatTagged(player)) {
+            player.sendMessage(Messages.text("combat.command-blocked"));
+            return;
+        }
         if (!TeleportWarmupRegistry.registerWarmup(player, this)) {
             bossBar.removeAll();
             player.sendMessage(Messages.text("local-teleport-warmup-task.poprzednia-teleportacja-jest-juz-w-trakcie-wykonywania"));
             return;
         }
         try {
+            countdown.start();
+            countdown.show(player, bossBar);
             bossBar.addPlayer(player);
-            runTaskTimer(plugin, 0L, 20L);
+            runTaskTimer(plugin, 1L, 1L);
         } catch (RuntimeException exception) {
             TeleportWarmupRegistry.unregister(player, this);
             bossBar.removeAll();
+            countdown.clear(player);
             throw exception;
         }
     }
@@ -74,15 +81,7 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
             return;
         }
 
-        if (timeLeft <= 0) {
-            teleportPlayer();
-            return;
-        }
-
-        bossBar.setTitle(Messages.text("local-teleport-warmup-task.teleportacja-za", timeLeft));
-        bossBar.setProgress((double) timeLeft / 5.0);
-        player.sendActionBar(net.kyori.adventure.text.Component.text(Messages.text("local-teleport-warmup-task.nie-ruszaj-sie-teleportacja-za-s", timeLeft)));
-        timeLeft--;
+        if (!countdown.show(player, bossBar)) teleportPlayer();
     }
 
     @Override
@@ -94,6 +93,7 @@ public class LocalTeleportWarmupTask extends BukkitRunnable {
         } finally {
             TeleportWarmupRegistry.unregister(player, this);
             if (bossBar != null) bossBar.removeAll();
+            countdown.clear(player);
         }
     }
 

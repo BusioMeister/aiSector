@@ -26,6 +26,39 @@ public class Guild {
     private double homeZ;
     private float homeYaw;
     private float homePitch;
+    private GuildTerritory territory;
+    private final java.util.Map<UUID, String> assignedRanks = new java.util.HashMap<>();
+    private final java.util.Map<String, GuildRank> customRanks = new java.util.LinkedHashMap<>();
+
+    GuildTerritory territory() { return territory; }
+    void territory(GuildTerritory value) { territory = value; }
+    java.util.Map<UUID, String> assignedRanks() { return assignedRanks; }
+    java.util.Map<String, GuildRank> customRanks() { return customRanks; }
+
+    GuildRank rank(UUID member) {
+        if (member == null || !members.contains(member)) return null;
+        if (member.equals(owner)) return GuildRank.LEADER;
+        if (member.equals(deputy)) return GuildRank.DEPUTY;
+        return customRanks.getOrDefault(assignedRanks.get(member), mods.contains(member) ? GuildRank.MASTER : GuildRank.RECRUIT);
+    }
+
+    boolean allows(UUID member, GuildRank.Right right) {
+        GuildRank rank = rank(member);
+        return rank != null && rank.rights().contains(right);
+    }
+
+    void clearRank(UUID member) {
+        assignedRanks.remove(member);
+        mods.remove(member);
+        if (member.equals(deputy)) deputy = null;
+    }
+
+    void assignRank(UUID member, GuildRank rank) {
+        clearRank(member);
+        if (rank == GuildRank.DEPUTY) deputy = member;
+        else if (rank == GuildRank.MASTER) mods.add(member);
+        else if (rank != GuildRank.RECRUIT) assignedRanks.put(member, rank.id());
+    }
     // Identity belongs to this snapshot, not to whichever guild later occupies the same tag.
     private String persistenceGeneration;
 

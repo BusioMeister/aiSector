@@ -53,6 +53,11 @@ public class PlayerDataListener implements Listener {
 
     private static final String DELETE_IF_UNCHANGED_SCRIPT = "if redis.call('get', KEYS[1]) == ARGV[1] "
             + "then return redis.call('del', KEYS[1]) else return 0 end";
+    private static final String CONSUME_SNAPSHOT_SCRIPT =
+            "if redis.call('get', KEYS[1]) ~= ARGV[1] then return 0 end; "
+            + "local owner = redis.call('get', KEYS[2]); "
+            + "if owner and string.sub(owner, -(string.len(ARGV[1])+1)) == ':' .. ARGV[1] then "
+            + "redis.call('del', KEYS[2]); end; return redis.call('del', KEYS[1])";
 
     private final SectorPlugin plugin;
     private final UserManager userManager;
@@ -78,13 +83,18 @@ public class PlayerDataListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerConfigure(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        userManager.beginArrival(player);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (isCurrentSession(player) && userManager.isArriving(player)) {
+                plugin.getLogger().warning("Sector arrival did not finish for " + player.getName());
+                player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-bezpiecznie-przywrocic-lokalizacji-polacz"));
+            }
+        }, 240L);
         // Fast arrivals already have the right position. Do not send zero-speed ability packets
         // to a client that stayed in PLAY. A fallback arrival still has a teleport pending.
         player.setInvulnerable(true);
-        if (!preparedLandings.containsKey(player.getUniqueId())) {
-            player.setWalkSpeed(0.0f);
-            player.setFlySpeed(0.0f);
-        }
+        // Do not send zero movement speeds: on a fast switch they can outlive the
+        // profile restore on the client. Transfer eligibility is gated separately.
         CompletableFuture<JoinNetworkState> network = loadNetworkState(player.getUniqueId());
         userManager.loadUserAsync(player).whenComplete((user, loadError) ->
                 scheduleMainThread(() -> {
@@ -97,6 +107,11 @@ public class PlayerDataListener implements Listener {
                     }
                     reconcileGuildMembershipAndConfigure(player, user, network);
                 }));
+    }
+
+    @EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        userManager.finishArrival(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -328,6 +343,7 @@ public class PlayerDataListener implements Listener {
                 restored.flight().apply(player);
             }
             try {
+                userManager.finishArrival(player); // The recovery transfer replaces the failed target atomically.
                 sectorManager.returnAfterFailedRandomArrival(player, sector).whenComplete((ignored, transferError) -> {
                     if (transferError != null) scheduleMainThread(() -> {
                         if (isCurrentSession(player)) player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-wrocic-na-spawn-polacz"));
@@ -349,16 +365,16 @@ public class PlayerDataListener implements Listener {
                 if (user == null) throw new IllegalStateException("Profile cache disappeared during join");
                  applyPersistentData(player, user);
                  if (restored != null) restored.flight().apply(player);
-                 if (state.playerData() != null) {
-                    player.setInvulnerable(true);
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        if (isCurrentSession(player)) {
-                            User current = userManager.getUser(player);
-                            player.setInvulnerable(current != null && current.isGodMode());
-                        }
-                    }, 100L);
-                }
-                clearConsumedJoinKeys(player.getUniqueId(), state, consumedFinal, consumedForced);
+                 clearConsumedJoinKeys(player.getUniqueId(), state, consumedFinal, consumedForced).whenComplete((ignored, error) ->
+                         scheduleMainThread(() -> {
+                             if (!isCurrentSession(player)) return;
+                             if (error == null) userManager.finishArrival(player);
+                             else {
+                                 plugin.getLogger().warning("Could not clear consumed join state for " + player.getUniqueId()
+                                         + ": " + error.getMessage());
+                                 player.kickPlayer(Messages.text("player-data-listener.nie-udalo-sie-bezpiecznie-wczytac-danych-sieciowych"));
+                             }
+                         }));
                 plugin.getGuildTagManager().updateTagsFor(player);
                  if (restored != null) new HotbarSlotSync(plugin).ensureSelectedSlot(player, restored.heldSlot());
                 sendWelcomePackage(player, state.respawnMarker());
@@ -373,14 +389,15 @@ public class PlayerDataListener implements Listener {
                     });
     }
 
-    private void clearConsumedJoinKeys(UUID playerUuid, JoinNetworkState state,
+    private CompletableFuture<Void> clearConsumedJoinKeys(UUID playerUuid, JoinNetworkState state,
                                        boolean consumedFinalTarget, boolean consumedForcedSector) {
-        redisManager.executeAsync(jedis -> {
+        return redisManager.<Void>executeAsync(jedis -> {
             if (state.respawning()) {
                 deleteIfUnchanged(jedis, "player:is_respawning:" + playerUuid, state.respawnMarker());
             }
             if (state.playerData() != null) {
-                deleteIfUnchanged(jedis, "player:data:" + playerUuid, state.playerData());
+                String key = "player:data:" + playerUuid;
+                jedis.eval(CONSUME_SNAPSHOT_SCRIPT, List.of(key, key + ":request"), List.of(state.playerData()));
             }
             if (state.pendingBackup() != null) {
                 deleteIfUnchanged(jedis, "player:pending_backup:" + playerUuid, state.pendingBackup());
@@ -392,10 +409,6 @@ public class PlayerDataListener implements Listener {
             if (consumedForcedSector && state.forcedSector() != null) {
                 deleteIfUnchanged(jedis, "player:force_sector_spawn:" + playerUuid, state.forcedSector());
             }
-            return null;
-        }).exceptionally(error -> {
-            plugin.getLogger().warning("Could not clear consumed join state for " + playerUuid + ": "
-                    + error.getMessage());
             return null;
         });
     }

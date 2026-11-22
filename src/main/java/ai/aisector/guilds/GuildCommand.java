@@ -36,6 +36,7 @@ public class GuildCommand implements CommandExecutor {
     private final SectorPlugin plugin;
     private final GuildManager guildManager;
     private final UserManager userManager;
+    private final GuildPanel panel;
     private final Set<UUID> pendingGuildSyncs = ConcurrentHashMap.newKeySet();
     private final Set<UUID> pendingGuildCreations = ConcurrentHashMap.newKeySet();
     private static final String GLOBAL_CHANNEL = "global:chat";
@@ -44,6 +45,8 @@ public class GuildCommand implements CommandExecutor {
         this.plugin = plugin;
         this.guildManager = plugin.getGuildManager();
         this.userManager = plugin.getUserManager();
+        this.panel = new GuildPanel(plugin);
+        Bukkit.getPluginManager().registerEvents(panel, plugin);
     }
     private void sendGlobal(String message) {
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
@@ -202,7 +205,7 @@ public class GuildCommand implements CommandExecutor {
 
         // A reused tag or refreshed guild cache must not inherit a stale profile's OWNER/MOD role.
         if (user.hasGuild()) {
-            if (guildManager.isPersistencePending(user.getGuildTag())) {
+            if (guildManager.isPersistencePending(user.getGuildTag()) || guildManager.permissionsRefreshing(user.getGuildTag())) {
                 player.sendMessage(Messages.text("guild-command.zmiany-gildii-sa-jeszcze-zapisywane-sprobuj-za", ChatColor.GRAY));
                 return true;
             }
@@ -241,6 +244,9 @@ public class GuildCommand implements CommandExecutor {
         }
 
         switch (sub) {
+            case "panel":
+                panel.open(player, user);
+                break;
             case "zaloz":
             case "create":
                 handleCreate(player, user, args);
@@ -350,7 +356,7 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        if (!hasGuildManagePerm(user)) {
+        if (!hasRight(p, user, GuildRank.Right.ANNOUNCE)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-lub-mistrz-moze-zmieniac-powitanie", ChatColor.RED));
             return;
         }
@@ -395,7 +401,7 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        if (!hasGuildManagePerm(user)) {
+        if (!hasRight(p, user, GuildRank.Right.ANNOUNCE)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-lub-mistrz-moze-wysylac-alerty", ChatColor.RED));
             return;
         }
@@ -439,18 +445,13 @@ public class GuildCommand implements CommandExecutor {
         p.sendMessage(Messages.text("guild-command.wyslano-alert-do-gildii", ChatColor.GREEN));
     }
 
-    private boolean hasGuildManagePerm(User user) {
-        String role = user.getGuildRole();
-        return "OWNER".equalsIgnoreCase(role) || "MOD".equalsIgnoreCase(role);
-    }
-
     // /g pvp
     private void handlePvpToggle(Player p, User user) {
         if (!user.hasGuild()) {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        if (!hasGuildManagePerm(user)) {
+        if (!hasRight(p, user, GuildRank.Right.PVP)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-lub-mistrz-moze-zmieniac-ustawienia", ChatColor.RED));
             return;
         }
@@ -466,7 +467,7 @@ public class GuildCommand implements CommandExecutor {
         guild.setFriendlyFireGuild(newValue);
         persistGuildsThen(p, actor -> {
             guildManager.reloadGuild(tag);
-            actor.sendMessage(Messages.text("guild-command.pvp-wewnatrz-gildii", ChatColor.YELLOW, (newValue ? ChatColor.RED + "WŁĄCZONE" : ChatColor.GREEN + "WYŁĄCZONE"), ChatColor.YELLOW));
+            actor.sendMessage(Messages.text("guild-command.pvp-protection", newValue ? "§cWYŁĄCZONA" : "§aWŁĄCZONA"));
         }, guild);
     }
 
@@ -475,7 +476,7 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        if (!hasGuildManagePerm(user)) {
+        if (!hasRight(p, user, GuildRank.Right.PVP)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-lub-mistrz-moze-zmieniac-ustawienia", ChatColor.RED));
             return;
         }
@@ -535,7 +536,7 @@ public class GuildCommand implements CommandExecutor {
 
         UUID uuid = target.getUniqueId();
         if (guild.getDeputy() != null && guild.getDeputy().equals(uuid)) {
-            guild.setDeputy(null);
+            guild.assignRank(uuid, GuildRank.RECRUIT);
             persistGuildsThen(p, actor -> {
                 guildManager.reloadGuild(tag);
                 plugin.getGuildTagManager().refreshAllOnline();
@@ -546,7 +547,7 @@ public class GuildCommand implements CommandExecutor {
                 }
             }, guild);
         } else {
-            guild.setDeputy(uuid);
+            guild.assignRank(uuid, GuildRank.DEPUTY);
             persistGuildsThen(p, actor -> {
                 guildManager.reloadGuild(tag);
                 plugin.getGuildTagManager().refreshAllOnline();
@@ -599,7 +600,7 @@ public class GuildCommand implements CommandExecutor {
 
         UUID uuid = target.getUniqueId();
         if (guild.getMods().contains(uuid)) {
-            guild.getMods().remove(uuid);
+            guild.assignRank(uuid, GuildRank.RECRUIT);
             persistGuildMemberships(p, guild, Map.of(uuid, "MEMBER"), actor -> {
                 guildManager.reloadGuild(tag);
                 plugin.getGuildTagManager().refreshAllOnline();
@@ -610,7 +611,7 @@ public class GuildCommand implements CommandExecutor {
                 }
             });
         } else {
-            guild.getMods().add(uuid);
+            guild.assignRank(uuid, GuildRank.MASTER);
             persistGuildMemberships(p, guild, Map.of(uuid, "MOD"), actor -> {
                 guildManager.reloadGuild(tag);
                 plugin.getGuildTagManager().refreshAllOnline();
@@ -628,8 +629,7 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        String role = user.getGuildRole();
-        if (!"OWNER".equalsIgnoreCase(role) && !"MOD".equalsIgnoreCase(role)) {
+        if (!hasRight(p, user, GuildRank.Right.KICK)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-lub-mistrz-moze-wyrzucac-graczy", ChatColor.RED));
             return;
         }
@@ -666,9 +666,13 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(Messages.text("guild-command.nie-mozesz-wyrzucic-lidera-gildii", ChatColor.RED));
             return;
         }
+        if (uuid.equals(guild.getDeputy()) && !p.getUniqueId().equals(guild.getOwner())) {
+            p.sendMessage(Messages.text("guild-panel.only-leader"));
+            return;
+        }
 
         guild.getMembers().remove(uuid);
-        guild.getMods().remove(uuid);
+        guild.clearRank(uuid);
         String kickedName = target.getName();
         persistGuildMemberships(p, guild, Map.of(uuid, "NONE"), actor -> {
             guildManager.reloadGuild(tag);
@@ -721,7 +725,7 @@ public class GuildCommand implements CommandExecutor {
         }
 
         guild.setOwner(target.getUniqueId());
-        guild.getMods().remove(target.getUniqueId());
+        guild.clearRank(target.getUniqueId());
 
         UUID currentOwnerUuid = p.getUniqueId();
         UUID newOwnerUuid = target.getUniqueId();
@@ -740,7 +744,7 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        if (!"OWNER".equalsIgnoreCase(user.getGuildRole())) {
+        if (!hasRight(p, user, GuildRank.Right.SET_HOME)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-moze-ustawic-dom-gildii", ChatColor.RED));
             return;
         }
@@ -754,6 +758,10 @@ public class GuildCommand implements CommandExecutor {
 
         Location loc = p.getLocation();
         String sector = plugin.getSectorManager().getSectorForLocation(loc.getBlockX(), loc.getBlockZ());
+        if (guild.territory() == null || !guild.territory().contains(loc.getWorld().getName(), loc.getBlockX(), loc.getBlockZ())) {
+            p.sendMessage(Messages.text("guild-panel.home-in-territory"));
+            return;
+        }
 
         guild.setHomeSector(sector);
         guild.setHomeWorld(loc.getWorld().getName());
@@ -817,7 +825,7 @@ public class GuildCommand implements CommandExecutor {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        if (!"OWNER".equalsIgnoreCase(user.getGuildRole())) {
+        if (!hasRight(p, user, GuildRank.Right.ALLIANCE)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-gildii-moze-zarzadzac-sojuszami", ChatColor.RED));
             return;
         }
@@ -965,14 +973,18 @@ public class GuildCommand implements CommandExecutor {
                 }));
     }
 
+    private boolean hasRight(Player player, User user, GuildRank.Right right) {
+        Guild guild = guildManager.getGuild(user.getGuildTag());
+        return guild != null && guild.allows(player.getUniqueId(), right);
+    }
+
     // /gildia zapros GRACZ
     private void handleInvite(Player p, User user, String[] args) {
         if (!user.hasGuild()) {
             p.sendMessage(Messages.text("guild-command.nie-masz-gildii", ChatColor.RED));
             return;
         }
-        if (!"OWNER".equalsIgnoreCase(user.getGuildRole())
-                && !"MOD".equalsIgnoreCase(user.getGuildRole())) {
+        if (!hasRight(p, user, GuildRank.Right.INVITE)) {
             p.sendMessage(Messages.text("guild-command.tylko-lider-lub-moderator-moze-zapraszac", ChatColor.RED));
             return;
         }
@@ -1076,7 +1088,19 @@ public class GuildCommand implements CommandExecutor {
             return;
         }
         Location loc = p.getLocation();
+        String sector = plugin.getSectorManager().getSectorForLocation(loc.getBlockX(), loc.getBlockZ());
+        var localSector = sector == null ? null : plugin.getSectorManager().getSectorByName(sector);
+        int radius = GuildTerritory.RADIUS;
+        if (plugin.getSectorManager().isLockedSpawnBackend() || localSector == null
+                || !plugin.getSectorManager().owns(loc)
+                || !localSector.isInside(loc.getBlockX() - radius, loc.getBlockZ() - radius)
+                || !localSector.isInside(loc.getBlockX() + radius, loc.getBlockZ() + radius)) {
+            p.sendMessage(Messages.text("guild-panel.territory-outside"));
+            return;
+        }
         Guild guild = new Guild(tag, name, p.getUniqueId());
+        guild.territory(new GuildTerritory(loc.getWorld().getName(), loc.getBlockX(), loc.getBlockZ()));
+        guild.setHomeSector(sector);
         guild.getMembers().add(p.getUniqueId());
         guild.setHomeWorld(loc.getWorld().getName());
         guild.setHomeX(loc.getX());
@@ -1110,6 +1134,12 @@ public class GuildCommand implements CommandExecutor {
                         return;
                     }
                     if (error != null) {
+                        Throwable cause = error;
+                        while (cause.getCause() != null && cause.getCause() != cause) cause = cause.getCause();
+                        if (cause instanceof GuildManager.TerritoryOccupied) {
+                            owner.sendMessage(Messages.text("guild-panel.territory-overlap"));
+                            return;
+                        }
                         plugin.getLogger().warning("Could not create guild " + tag + " for " + ownerName
                                 + ": " + error.getMessage());
                         owner.sendMessage(Messages.text("guild-command.nie-udalo-sie-utworzyc-gildii-sprobuj-ponownie", ChatColor.RED));
@@ -1151,6 +1181,7 @@ public class GuildCommand implements CommandExecutor {
         sendGlobal(Messages.text("guild-command.gildia-gracz-stworzyl-gildie", owner.getName(), guild.getTag(), guild.getName()));
         plugin.getScoreboardManager().updateBoard(owner);
         plugin.getGuildTagManager().refreshAllOnline();
+        if (!plugin.getConfig().getBoolean("guild.placement.paste-schematic", false)) return;
 
         Location center = new Location(
                 Bukkit.getWorld(guild.getHomeWorld()),
@@ -1254,7 +1285,7 @@ public class GuildCommand implements CommandExecutor {
         }
 
         guild.getMembers().remove(uuid);
-        guild.getMods().remove(uuid);
+        guild.clearRank(uuid);
         persistGuildMemberships(p, guild, Map.of(uuid, "NONE"), actor -> {
             plugin.getGuildTagManager().refreshAllOnline();
             plugin.getScoreboardManager().updateBoard(actor);

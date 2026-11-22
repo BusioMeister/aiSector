@@ -54,7 +54,7 @@
     "tools/runtime/official_client.py": "0b36bb9080ded6057d5b2418c18c43c65221046cad997298b5d89455919a858c",
     "tools/runtime/package_layout_worlds.py": "6e1e80a9c93a7c7339522dcce9b91b8f97c83d14db7f341c6ded2de3ff052b87",
     "tools/runtime/staging_smoke.py": "d8b3b6af884fdb4603f8368eb6b92eb741cee89a1279cd41d3e8461c7297f0a8",
-    "tools/runtime/start_layout.py": "4588ea3c515bc9625bd29b6aef4e063654189b8d4ce905a52a80ab77a776bb7c",
+    "tools/runtime/start_layout.py": "abb0c4b1a0641f29cc23af8889a204f982afe4490c229f98491f9356d7b74ba4",
     "tools/runtime/test_official_client.py": "9d810cc57dfd4340c194921f71804ead5624366614d7690520fce9e40d6f3ab0",
     "tools/runtime/verify_instant_layout.py": "b24d2d5596caa50db5d72136dec1e05054d3574012ae0e927b917a96be0cea1e",
     "tools/test_audit_rewrite_baseline.py": "9d25b4e12ac0718ed36ea1525a27276fe1ba84d357dcefdb746ac69307620136",

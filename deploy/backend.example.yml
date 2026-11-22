@@ -2,6 +2,10 @@
 # Set this to the corresponding name from velocity.example.toml.
 this-sector-name: "Spawn"
 
+combat:
+  # Replace '*' with commands or prefixes (e.g. 'spawn', 'g dom', 'home', 'sethome', 'ec').
+  blocked-commands: ["*"]
+
 redis:
   host: "127.0.0.1"
   port: 6380

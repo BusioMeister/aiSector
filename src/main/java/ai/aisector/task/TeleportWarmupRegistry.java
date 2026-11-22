@@ -60,4 +60,10 @@ public final class TeleportWarmupRegistry {
         }
         ACTIVE.clear();
     }
+
+    public static void cancelWarmup(Player player) {
+        UUID id = player.getUniqueId();
+        Object operation = ACTIVE.get(id);
+        if (operation instanceof BukkitRunnable task && ACTIVE.remove(id, operation)) task.cancel();
+    }
 }

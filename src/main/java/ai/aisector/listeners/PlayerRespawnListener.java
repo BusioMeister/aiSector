@@ -6,13 +6,16 @@ import ai.aisector.ranking.DeathNotice;
 import ai.aisector.shared.RedisChannels;
 import ai.aisector.sectors.SectorManager;
 import com.google.gson.JsonObject;
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import java.util.Map;
@@ -28,6 +31,9 @@ public class PlayerRespawnListener implements Listener {
     private volatile String cachedGlobalSpawn;
     private final AtomicBoolean spawnRefreshInFlight = new AtomicBoolean();
     private final AtomicLong lastRefreshWarningNanos = new AtomicLong();
+    private record RespawnTransfer(Player player, String sector, Location destination,
+                                   Map<String, String> keys, DeathNotice notice) {}
+    private final Map<UUID, RespawnTransfer> pendingRespawns = new java.util.HashMap<>();
 
     public PlayerRespawnListener(SectorPlugin plugin, RedisManager redisManager, SectorManager sectorManager) {
         this.plugin = plugin;
@@ -45,6 +51,18 @@ public class PlayerRespawnListener implements Listener {
 
     private void enableImmediateRespawn(World world) {
         world.setGameRule(GameRules.IMMEDIATE_RESPAWN, true);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        // Let Paper finish the death (drops and stats) first. Some clients defer
+        // their vanilla respawn request while another screen, such as chat, is open.
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (Bukkit.getPlayer(player.getUniqueId()) == player && player.isOnline() && player.isDead()) {
+                player.spigot().respawn();
+            }
+        });
     }
 
     @EventHandler
@@ -109,17 +127,36 @@ public class PlayerRespawnListener implements Listener {
                 Map<String, String> transferKeys = Map.of(
                         "player:final_teleport_target:" + player.getUniqueId(), locationJson.toString(),
                         "player:is_respawning:" + player.getUniqueId(), notice == null ? "true" : notice.marker());
-                sectorManager.transferPlayerAsync(player, targetSector, null, transferKeys).whenComplete((ignored, error) -> {
-                    if (error != null) ai.aisector.utils.BukkitTaskScheduler.execute(plugin, () -> {
-                        if (Bukkit.getPlayer(player.getUniqueId()) == player) showLocalNotice(player, notice);
-                    });
-                });
+                pendingRespawns.put(player.getUniqueId(), new RespawnTransfer(player, targetSector,
+                        respawnLocation, transferKeys, notice));
             }
         } catch (RuntimeException exception) {
             showLocalNotice(player, notice);
             plugin.getLogger().warning("Could not prepare the global respawn for " + player.getName()
                     + ": " + exception.getMessage());
         }
+    }
+
+    @EventHandler
+    public void onPostRespawn(PlayerPostRespawnEvent event) {
+        Player player = event.getPlayer();
+        RespawnTransfer transfer = pendingRespawns.remove(player.getUniqueId());
+        if (transfer == null || transfer.player() != player) return;
+        try {
+            // Capture the new, post-death inventory, never the old inventory cached on Spawn.
+            String snapshot = plugin.getUserManager().serializePlayerDataForTransfer(player, transfer.destination());
+            sectorManager.transferPlayerAsync(player, transfer.sector(), snapshot, transfer.keys()).whenComplete((ignored, error) -> {
+                if (error != null) ai.aisector.utils.BukkitTaskScheduler.execute(plugin, () -> showLocalNotice(player, transfer.notice()));
+            });
+        } catch (RuntimeException error) {
+            plugin.getLogger().warning("Could not capture post-death inventory for " + player.getName() + ": " + error.getMessage());
+            showLocalNotice(player, transfer.notice());
+        }
+    }
+
+    @EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        pendingRespawns.remove(event.getPlayer().getUniqueId());
     }
 
     private void showLocalNotice(Player player, DeathNotice notice) {

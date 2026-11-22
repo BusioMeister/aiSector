@@ -1,6 +1,18 @@
 # Each Paper instance uses one sector name. Server addresses are configured on Velocity.
 this-sector-name: "Sector1"
 
+# "*" blocks every player command during the 20-second PvP timer.
+# To block only selected commands, replace "*" with one rule per line.
+# Prefix rules also cover subcommands; include aliases used on your network.
+# Example: ['spawn', 'g dom', 'g baza', 'home', 'sethome', 'ec', 'enderchest', 'crafting', 'ct']
+combat:
+  blocked-commands: ["*"]
+
+guild:
+  placement:
+    # Claims themselves do not change any blocks.
+    paste-schematic: false
+
 redis:
   host: "127.0.0.1"
   port: 6379

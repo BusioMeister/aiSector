@@ -97,7 +97,7 @@ public class PlayerListener implements Listener {
             event.setCancelled(true);
             return;
         }
-        if (pendingSectorTransfers.containsKey(player.getUniqueId()) || userManager.isTransferPending(player)) {
+        if (userManager.isTransferPending(player)) {
             if (from.getBlockX() != to.getBlockX() || from.getBlockZ() != to.getBlockZ()) event.setCancelled(true);
             return;
         }
@@ -121,6 +121,15 @@ public class PlayerListener implements Listener {
         Sector destination = sectorManager.getSectorAt(to);
         if (destination == null) {
             event.setCancelled(true);
+            return;
+        }
+        if (userManager.isArriving(player)) {
+            event.setCancelled(true);
+            return;
+        }
+        if (plugin.isCombatTagged(player)) {
+            event.setCancelled(true);
+            queueBoundaryPush(player, SectorEdge.backInside(previous, to.getBlockX(), to.getBlockZ()), previous);
             return;
         }
         UUID playerUuid = player.getUniqueId();

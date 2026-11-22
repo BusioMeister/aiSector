@@ -265,7 +265,13 @@ public class GeneratorManager {
         }
     }
 
-    // Snapshot na wyłączeniu – czyści kolekcję i wrzuca aktualny stan z pamięci
+    public CompletableFuture<Void> checkpoint() {
+        return CompletableFuture.runAsync(() -> {
+            if (!initialLoadComplete || !pendingRemovals.isEmpty()) throw new IllegalStateException("Generator state is not ready");
+        }, mongoWriter);
+    }
+
+    // Zakończ oczekujące zapisy; kolekcja nie jest przepisywana.
     public void saveAll() {
         mongoWriter.shutdown();
         try {

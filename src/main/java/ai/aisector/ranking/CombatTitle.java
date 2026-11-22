@@ -30,12 +30,22 @@ public final class CombatTitle {
     private record Glyph(String text, NamedTextColor color) {}
 
     public void show(Player player, String tag, String nick, String suffix, NamedTextColor accent, boolean sound) {
+        show(player, tag, nick, suffix, accent, sound, false);
+    }
+
+    public void show(Player player, String tag, String nick, String suffix, NamedTextColor accent, boolean sound, boolean guildmate) {
+        show(player, "", tag, nick, suffix, accent, sound, guildmate);
+    }
+
+    public void show(Player player, String prefix, String tag, String nick, String suffix,
+                     NamedTextColor accent, boolean sound, boolean guildmate) {
         UUID id = player.getUniqueId();
         cancel(id);
         var glyphs = new ArrayList<Glyph>();
-        if (!tag.isEmpty()) append(glyphs, "[" + tag + "] ", accent);
-        append(glyphs, nick, NamedTextColor.GRAY);
-        append(glyphs, "  " + suffix, accent);
+        if (!prefix.isEmpty()) append(glyphs, prefix + " ", accent);
+        if (!tag.isEmpty()) append(glyphs, "[" + tag + "] ", guildmate ? NamedTextColor.GREEN : accent);
+        append(glyphs, nick, guildmate ? NamedTextColor.GREEN : NamedTextColor.GRAY);
+        if (!suffix.isEmpty()) append(glyphs, "  " + suffix, accent);
         var line = Component.text();
         player.sendTitlePart(TitlePart.TIMES, TIMES);
         player.sendTitlePart(TitlePart.SUBTITLE, Component.empty());

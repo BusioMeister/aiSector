@@ -142,6 +142,10 @@ public class GlobalChatPlugin implements Listener, PluginMessageListener {
             return;
         }
 
+        if (msg.startsWith("[KILL]")) {
+            scheduleMainThread(() -> ai.aisector.ranking.CombatRanking.broadcastAnnouncement(plugin, msg.substring(6)));
+            return;
+        }
         // fallback (gdyby przyszły stare wiadomości w starym formacie)
         Bukkit.broadcastMessage(msg);
     }

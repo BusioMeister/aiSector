@@ -29,6 +29,11 @@ public class UserManager {
     private record PendingLoad(Player player, CompletableFuture<User> future) { }
 
     private final Map<UUID, User> onlineUsers = new ConcurrentHashMap<>();
+    private final Map<UUID, Player> arrivingPlayers = new ConcurrentHashMap<>();
+
+    public void beginArrival(Player player) { arrivingPlayers.put(player.getUniqueId(), player); }
+    public void finishArrival(Player player) { arrivingPlayers.remove(player.getUniqueId(), player); }
+    public boolean isArriving(Player player) { return arrivingPlayers.get(player.getUniqueId()) == player; }
     private final SectorPlugin plugin;
     private final MongoDBManager mongoDBManager;
     private final Gson gson = new Gson();
@@ -186,6 +191,7 @@ public class UserManager {
             user.setGodMode(userDoc.getBoolean("godMode", false));
             user.setFlying(userDoc.getBoolean("flying", false));
             user.setVanished(userDoc.getBoolean("vanished", false));
+            user.setCombatBypass(userDoc.getBoolean("combatBypass", false));
 // ====== GILDIA ======
             user.setGuildTag(userDoc.getString("guildTag"));
             user.setGuildRole(userDoc.getString("guildRole"));
@@ -440,6 +446,18 @@ public class UserManager {
     }
 
     public CompletableFuture<Void> prepareTransferProfileAsync(Player player, org.bukkit.event.player.PlayerMoveEvent initialSeamMove) {
+        return prepareTransferProfileAsync(player, initialSeamMove, null);
+    }
+
+    public CompletableFuture<Void> prepareTransferProfileAsync(Player player,
+            org.bukkit.event.player.PlayerMoveEvent initialSeamMove, UUID transferId) {
+        if (plugin.isShutdownDraining()) return CompletableFuture.failedFuture(new IllegalStateException("Server is saving"));
+        if (isArriving(player)) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Previous sector arrival is still being finalized"));
+        }
+        if (plugin.isCombatTagged(player)) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Player is in combat"));
+        }
         if (closing || !player.isOnline() || Bukkit.getPlayer(player.getUniqueId()) != player) {
             return CompletableFuture.failedFuture(new IllegalStateException("Inactive player session"));
         }
@@ -447,7 +465,7 @@ public class UserManager {
         if (user == null) return CompletableFuture.failedFuture(new IllegalStateException("Profile is not loaded"));
         UUID uuid = player.getUniqueId();
         final TransferSnapshotGuard.Seal seal;
-        try { seal = transferGuard.begin(player, initialSeamMove); }
+        try { seal = transferGuard.begin(player, initialSeamMove, transferId); }
         catch (RuntimeException error) { return CompletableFuture.failedFuture(error); }
         Document update = createUserUpdate(player, user);
         CompletableFuture<Void> write = queueProfileWrite(uuid,
@@ -463,6 +481,11 @@ public class UserManager {
 
     public boolean isTransferPending(Player player) { return transferGuard.active(player); }
 
+    /** Only call after the publisher positively confirmed that the snapshot was not published. */
+    public void releaseUnpublishedTransfer(Player player) { transferGuard.finish(player); }
+
+    public boolean abortSectorTransfer(Player player, UUID transferId) { return transferGuard.abort(player, transferId); }
+
     public CompletableFuture<Void> saveCombatStats(Player player, User user) {
         if (closing || onlineUsers.get(player.getUniqueId()) != user || isTransferPending(player))
             return CompletableFuture.failedFuture(new IllegalStateException("Profile unavailable or transfer pending"));
@@ -477,6 +500,15 @@ public class UserManager {
             if (error != null) plugin.getLogger().warning("Could not persist combat statistics for " + uuid
                     + ": " + error.getMessage());
         });
+        return write.copy();
+    }
+
+    public CompletableFuture<Void> saveCombatBypass(UUID uuid, boolean enabled) {
+        if (closing) return CompletableFuture.failedFuture(new IllegalStateException("UserManager is shutting down"));
+        var write = queueProfileWrite(uuid, () -> persistUserUpdateWithGuildLock(uuid,
+                new Document("$set", new Document("combatBypass", enabled))));
+        pendingWrites.add(write);
+        write.whenComplete((ignored, error) -> pendingWrites.remove(write));
         return write.copy();
     }
 
@@ -576,6 +608,26 @@ public class UserManager {
             }
             unloadUser(player);
         }
+    }
+
+    public CompletableFuture<Void> checkpoint() {
+        var saves = new ArrayList<CompletableFuture<Void>>(pendingWrites);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            User user = getUser(player);
+            if (user == null || isArriving(player) || isTransferPending(player)) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Player data is in transit: " + player.getName()));
+            }
+        }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            User user = getUser(player);
+            Document update = createUserUpdate(player, user);
+            long started = user.getSessionStartMillis();
+            if (started > 0L) update.get("$set", Document.class).put("playTimeSeconds",
+                    user.getPlayTimeSeconds() + Math.max(0L, (System.currentTimeMillis() - started) / 1000L));
+            UUID id = player.getUniqueId();
+            saves.add(queueProfileWrite(id, () -> persistUserUpdateWithGuildLock(id, update)));
+        }
+        return CompletableFuture.allOf(saves.toArray(CompletableFuture[]::new));
     }
 
     private List<Map<String, Object>> serializePotionEffects(Collection<PotionEffect> effects) {

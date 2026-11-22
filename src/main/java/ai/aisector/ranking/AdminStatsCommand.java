@@ -22,6 +22,48 @@ public final class AdminStatsCommand implements TabExecutor {
 
     public AdminStatsCommand(SectorPlugin plugin) { this.plugin = plugin; }
 
+    public static boolean isBypassCommand(String command) {
+        String[] words = command.strip().split("\\s+", 3);
+        String name = words[0].replaceFirst("^/", "");
+        return (name.equalsIgnoreCase("astats") || name.equalsIgnoreCase("aisector:astats"))
+                && words.length >= 2 && words[1].equalsIgnoreCase("bypasscommand");
+    }
+
+    private void bypass(CommandSender sender, String[] args) {
+        Player target = args.length == 1 || args.length == 2 && isSwitch(args[1])
+                ? (sender instanceof Player p ? p : null)
+                : Bukkit.getPlayerExact(args[1]);
+        String mode = args.length == 3 ? args[2] : args.length == 2 && isSwitch(args[1]) ? args[1] : null;
+        if (args.length > 3 || mode != null && !isSwitch(mode)) {
+            sender.sendMessage(Messages.text("combat.bypass-usage"));
+            return;
+        }
+        var users = plugin.getUserManager();
+        User user = target == null ? null : users.getUser(target);
+        if (user == null) {
+            sender.sendMessage(Messages.text("admin-stats-command.gracz-musi-byc-na-tym-sektorze-z"));
+            return;
+        }
+        boolean enabled = mode == null ? !user.hasCombatBypass() : mode.equalsIgnoreCase("on");
+        users.saveCombatBypass(target.getUniqueId(), enabled).whenComplete((ignored, error) ->
+                BukkitTaskScheduler.execute(plugin, () -> {
+                    if (error != null) {
+                        sender.sendMessage(Messages.text("admin-stats-command.nie-udalo-sie-potwierdzic-zapisu-statystyk"));
+                        return;
+                    }
+                    if (Bukkit.getPlayer(target.getUniqueId()) == target && users.getUser(target) == user) {
+                        user.setCombatBypass(enabled);
+                        plugin.refreshCombatBypass(target);
+                    }
+                    sender.sendMessage(Messages.text(enabled ? "combat.bypass-on" : "combat.bypass-off", target.getName()));
+                    plugin.getLogger().info(sender.getName() + " set combat bypass for " + target.getName() + " to " + enabled);
+                }));
+    }
+
+    private static boolean isSwitch(String value) {
+        return value.equalsIgnoreCase("on") || value.equalsIgnoreCase("off");
+    }
+
     enum Stat {
         KILLS(User::getKills, User::setKills, Integer.MAX_VALUE),
         DEATHS(User::getDeaths, User::setDeaths, Integer.MAX_VALUE),
@@ -46,6 +88,10 @@ public final class AdminStatsCommand implements TabExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission(PERMISSION)) return true;
+        if (args.length > 0 && args[0].equalsIgnoreCase("bypasscommand")) {
+            bypass(sender, args);
+            return true;
+        }
         if (args.length != 1 && args.length != 4) {
             sender.sendMessage(Messages.text("admin-stats-command.statystyki-set-ustaw-add-zmien-np-1"));
             sender.sendMessage(Messages.text("admin-stats-command.astats-nick-podglad"));
@@ -94,10 +140,19 @@ public final class AdminStatsCommand implements TabExecutor {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (!sender.hasPermission(PERMISSION) || args.length == 0) return List.of();
-        List<String> values = switch (args.length) {
-            case 1 -> Bukkit.getOnlinePlayers().stream()
+        if (args[0].equalsIgnoreCase("bypasscommand") && args.length > 1) {
+            var values = new java.util.ArrayList<>(List.of("on", "off"));
+            if (args.length == 2) Bukkit.getOnlinePlayers().stream()
                     .filter(player -> !(sender instanceof Player viewer) || viewer.canSee(player))
-                    .map(Player::getName).toList();
+                    .map(Player::getName).forEach(values::add);
+            String prefix = args[args.length - 1].toLowerCase(Locale.ROOT);
+            return args.length > 3 ? List.of() : values.stream()
+                    .filter(v -> v.toLowerCase(Locale.ROOT).startsWith(prefix)).toList();
+        }
+        List<String> values = switch (args.length) {
+            case 1 -> java.util.stream.Stream.concat(java.util.stream.Stream.of("bypasscommand"), Bukkit.getOnlinePlayers().stream()
+                    .filter(player -> !(sender instanceof Player viewer) || viewer.canSee(player))
+                    .map(Player::getName)).toList();
             case 2 -> List.of("set", "add");
             case 3 -> List.of("kills", "deaths", "ranking", "killstreak");
             default -> List.of();

@@ -29,6 +29,38 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class GuildManager {
+    public static final String CHANGE_CHANNEL = "aisector:guild:changed";
+
+    private void announceChange(String tag) {
+        String sector = plugin.getConfig().getString("this-sector-name", "");
+        plugin.getRedisManager().publishAsync(CHANGE_CHANNEL, sector + ":" + tag).exceptionally(error -> {
+            plugin.getLogger().warning("Could not refresh guild " + tag + " on other sectors: " + error.getMessage());
+            return null;
+        });
+    }
+
+    public static final class TerritoryOccupied extends IllegalStateException {}
+
+    private final Map<String, Object> refreshingPermissions = new ConcurrentHashMap<>();
+
+    public boolean permissionsRefreshing(String tag) { return refreshingPermissions.containsKey(tag); }
+
+    public CompletableFuture<Guild> refreshRemoteChange(String tag) {
+        Object token = new Object();
+        refreshingPermissions.put(tag, token);
+        var current = pendingReloads.get(tag);
+        var wait = current == null ? CompletableFuture.completedFuture(null) : current.handle((guild, error) -> null);
+        return wait.thenCompose(ignored -> {
+            if (current != null) pendingReloads.remove(tag, current);
+            lastRefreshByTag.remove(tag);
+            return reloadGuildAsync(tag);
+        }).whenComplete((guild, error) -> {
+            if (error == null) refreshingPermissions.remove(tag, token);
+            else Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (refreshingPermissions.get(tag) == token) refreshRemoteChange(tag);
+            }, 40L);
+        });
+    }
     private static final long RELOAD_CACHE_TTL_NANOS = 2_000_000_000L;
 
     private static final class MissingGuildException extends RuntimeException {
@@ -277,7 +309,7 @@ public class GuildManager {
         }
         if (initialLoad.isCompletedExceptionally()) return initialLoad.thenApply(ignored -> null);
 
-        String lockKey = "aisector:guild:create:" + key;
+        String lockKey = "aisector:guild:territory-create";
         String token = UUID.randomUUID().toString();
         return plugin.getRedisManager().executeAsync(jedis ->
                         jedis.set(lockKey, token, SetParams.setParams().nx().px(120_000)))
@@ -304,7 +336,14 @@ public class GuildManager {
                                         .append("_id", "guild:" + key)
                                         .append("_version", 0L)
                                         .append("_generation", generation);
-                                return mongo.insertOneAsync("guilds", snapshot)
+                                 return mongo.findManyAsync("guilds", new Document()).thenCompose(all -> {
+                                     if (guild.territory() != null && all.stream().map(this::fromDocument)
+                                             .filter(Objects::nonNull).map(Guild::territory).filter(Objects::nonNull)
+                                             .anyMatch(guild.territory()::overlaps)) {
+                                         return CompletableFuture.failedFuture(new TerritoryOccupied());
+                                     }
+                                     return mongo.insertOneAsync("guilds", snapshot);
+                                 })
                                         .thenApply(ignored -> {
                                             long version = cacheVersions.merge(key, 1L, Long::sum);
                                             persistedVersions.put(key, version);
@@ -312,7 +351,8 @@ public class GuildManager {
                                             mongoGenerationsByTag.put(key, generation);
                                             guild.setPersistenceGeneration(generation);
                                             guildsByTag.put(key, guild);
-                                            lastRefreshByTag.put(key, System.nanoTime());
+                                             lastRefreshByTag.put(key, System.nanoTime());
+                                             announceChange(key);
                                             return guild;
                                         });
                             });
@@ -360,7 +400,7 @@ public class GuildManager {
                 throw new GuildVersionConflictException(guild.getTag(), expectedMongoVersion);
             }
             mongoVersionsByTag.put(key, expectedMongoVersion + 1L);
-        }));
+         })).thenRun(() -> announceChange(key));
     }
 
     public CompletableFuture<Boolean> deleteGuildAsync(Guild guild) {
@@ -719,6 +759,30 @@ public class GuildManager {
         guild.setHomeX(doc.getDouble("homeX") != null ? doc.getDouble("homeX") : 0.0);
         guild.setHomeY(doc.getDouble("homeY") != null ? doc.getDouble("homeY") : 0.0);
         guild.setHomeZ(doc.getDouble("homeZ") != null ? doc.getDouble("homeZ") : 0.0);
+        Document territory = doc.get("territory", Document.class);
+        if (territory != null && territory.getString("world") != null) {
+            guild.territory(new GuildTerritory(territory.getString("world"), territory.getInteger("x"), territory.getInteger("z")));
+        } else if (guild.getHomeWorld() != null && doc.get("homeX") != null && doc.get("homeZ") != null) {
+            guild.territory(new GuildTerritory(guild.getHomeWorld(), (int) Math.floor(guild.getHomeX()), (int) Math.floor(guild.getHomeZ())));
+        }
+        for (Document rank : doc.getList("customRanks", Document.class, List.of())) {
+            String id = rank.getString("id");
+            String rankName = rank.getString("name");
+            if (id == null || !id.matches("[a-z0-9_]{1,24}") || rankName == null || rankName.isBlank()) continue;
+            var rights = EnumSet.noneOf(GuildRank.Right.class);
+            for (String right : rank.getList("rights", String.class, List.of())) {
+                try { rights.add(GuildRank.Right.valueOf(right)); } catch (IllegalArgumentException ignored) {}
+            }
+            guild.customRanks().put(id, new GuildRank(id, rankName, rights));
+        }
+        Document assignments = doc.get("assignedRanks", new Document());
+        assignments.forEach((member, rank) -> {
+            try {
+                UUID id = UUID.fromString(member);
+                if (guild.getMembers().contains(id) && rank instanceof String key && guild.customRanks().containsKey(key))
+                    guild.assignedRanks().put(id, key);
+            } catch (IllegalArgumentException ignored) {}
+        });
         Double yaw = doc.getDouble("homeYaw");
         Double pitch = doc.getDouble("homePitch");
         guild.setHomeYaw(yaw != null ? yaw.floatValue() : 0.0f);
@@ -737,7 +801,16 @@ public class GuildManager {
 
 
     private Document toDocument(Guild guild) {
+        GuildTerritory area = guild.territory();
+        Document assignments = new Document();
+        guild.assignedRanks().forEach((id, rank) -> {
+            if (guild.getMembers().contains(id)) assignments.put(id.toString(), rank);
+        });
         return new Document("tag", guild.getTag())
+                .append("territory", area == null ? null : new Document("world", area.world()).append("x", area.x()).append("z", area.z()))
+                .append("customRanks", guild.customRanks().values().stream().map(rank -> new Document("id", rank.id())
+                        .append("name", rank.name()).append("rights", rank.rights().stream().map(Enum::name).sorted().toList())).toList())
+                .append("assignedRanks", assignments)
                 .append("name", guild.getName())
                 .append("owner", guild.getOwner() != null ? guild.getOwner().toString() : null)
                 .append("members", toStringList(guild.getMembers()))
@@ -776,6 +849,14 @@ public class GuildManager {
             Thread.currentThread().interrupt();
             persistenceExecutor.shutdownNow();
         }
+    }
+
+    public CompletableFuture<Void> checkpoint() {
+        return initialLoad.thenCompose(ignored -> CompletableFuture.runAsync(() -> {
+            if (cacheVersions.keySet().stream().anyMatch(this::isPersistencePending)) {
+                throw new IllegalStateException("Guild writes are still pending");
+            }
+        }, persistenceExecutor));
     }
 
 
